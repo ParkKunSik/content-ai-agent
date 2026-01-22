@@ -12,9 +12,11 @@ class ContentAnalysisAgent:
     Serves as the main entry point, delegating logic to the Orchestrator.
     """
     
-    def __init__(self, model_pro: str, model_flash: str):
-        self.model_pro = model_pro
-        self.model_flash = model_flash
+    def __init__(self):
+        """
+        Constructor for the agent. 
+        Model configuration is handled via settings and ModelFactory during set_up.
+        """
         self.orchestrator = None
 
     def set_up(self):
@@ -33,8 +35,8 @@ class ContentAnalysisAgent:
 
     async def query(
         self, 
-        project_id: str,
-        analysis_mode: AnalysisMode,
+        project_id: str, 
+        analysis_mode: AnalysisMode, 
         contents: List[str]
     ) -> Dict[str, Any]:
         """

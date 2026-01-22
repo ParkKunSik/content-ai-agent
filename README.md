@@ -42,7 +42,7 @@ Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용�
 
 ```
 src/
-├── agent/          # Agent 진입점 (Vertex AI Reasoning Engine 호환)
+├── agent/          # Agent 진입점 및 코어 클래스 정의
 ├── api/            # API 라우터 및 엔드포인트 정의
 ├── core/           # 설정(Config), 모델 팩토리(ModelFactory), 상수
 ├── loaders/        # 데이터 수집 (GCS, Local File)
@@ -51,6 +51,15 @@ src/
 ├── services/       # 핵심 로직 (Orchestrator, LLMService, Memory)
 └── utils/          # 공통 유틸리티 (PromptManager, PromptRenderer)
 ```
+
+---
+
+## 📦 의존성 관리 (Dependency Management)
+
+프로젝트는 용도에 따라 두 가지 의존성 파일을 제공합니다.
+
+*   **`requirements.txt`**: 운영 환경 및 배포용 필수 패키지 목록. (Vertex AI SDK, Pydantic, Redis, Elasticsearch, FastAPI 등)
+*   **`requirements-dev.txt`**: 로컬 개발 및 테스트를 위한 추가 패키지 포함. (pytest, ruff, black 등)
 
 ---
 
@@ -70,13 +79,17 @@ cp .env.local.example .env.local
 docker-compose up -d
 ```
 
-### 3. 서버 실행
-가상환경을 구축하고 종속성을 설치한 후 FastAPI 서버를 가동합니다.
+### 3. 서버 실행 (로컬 개발 모드)
+가상환경을 구축하고 **개발용 의존성**을 설치한 후 FastAPI 서버를 가동합니다.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+
+# 개발용 패키지 포함 설치
+pip install -r requirements-dev.txt
+
+# 서버 실행
 uvicorn src.main:app --reload
 ```
 

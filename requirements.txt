@@ -10,15 +10,11 @@ pydantic-settings
 # Infrastructure & Memory
 redis
 elasticsearch
+python-dotenv
+tenacity
+jinja2
 
-# Interface (Local Dev & Test Wrapper)
+# Interface (FastAPI is needed if used as a local wrapper in container, but for RE it's handled by runtime)
+# We keep fastapi/uvicorn for hybrid cloud run deployment capability
 fastapi
 uvicorn[standard]
-python-dotenv
-
-# Testing & Quality
-pytest
-pytest-asyncio
-ruff
-black
-jinja2
