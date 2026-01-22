@@ -1,0 +1,24 @@
+# Core Agent & Google Cloud
+google-cloud-aiplatform>=1.60.0
+google-cloud-storage
+google-cloud-secret-manager
+
+# Data Validation & Settings
+pydantic>=2.0.0
+pydantic-settings
+
+# Infrastructure & Memory
+redis
+elasticsearch
+
+# Interface (Local Dev & Test Wrapper)
+fastapi
+uvicorn[standard]
+python-dotenv
+
+# Testing & Quality
+pytest
+pytest-asyncio
+ruff
+black
+jinja2

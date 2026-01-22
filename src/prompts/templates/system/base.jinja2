@@ -1,0 +1,14 @@
+{#
+    [System Base Template]
+    Defines the base structure and common rules for all system instructions.
+    
+    번역:
+    글로벌 언어 요구 사항:
+    - 결과는 반드시 입력 콘텐츠와 동일한 언어로 작성되어야 합니다.
+    - 입력 콘텐츠에 여러 언어가 섞여 있는 경우, 입력 내용 중 비중이 가장 높은 언어로 작성해야 합니다.
+#}
+{% block system_instruction %}{% endblock %}
+
+# Global Language Requirement
+- The result MUST be written in the SAME language as the input contents.
+- If the input contents contain mixed languages, the output MUST be written in the language that constitutes the majority of the input.
