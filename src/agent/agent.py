@@ -1,6 +1,7 @@
 import logging
-from typing import List, Dict, Any
-from src.schemas.enums import AnalysisMode
+from typing import List, Dict, Any, Union
+from src.schemas.enums.analysis_mode import AnalysisMode
+from src.schemas.models.common.content_item import ContentItem
 from src.services.orchestrator import AgentOrchestrator
 from src.core.model_factory import ModelFactory
 
@@ -55,4 +56,27 @@ class ContentAnalysisAgent:
             
         except Exception as e:
             logger.error(f"Error during agent query: {e}")
+            raise
+
+    async def detailed_analysis(
+        self,
+        project_id: int,
+        contents: List[Union[str, ContentItem]],
+        analysis_mode: AnalysisMode = AnalysisMode.DATA_ANALYST
+    ) -> Dict[str, Any]:
+        """
+        Executes the detailed analysis pipeline (2-step).
+        """
+        if not self.orchestrator:
+            raise RuntimeError("Agent not set up. Call set_up() before detailed_analysis().")
+
+        try:
+            response_model = await self.orchestrator.detailed_analysis(
+                project_id=project_id,
+                contents=contents,
+                analysis_mode=analysis_mode
+            )
+            return response_model.model_dump()
+        except Exception as e:
+            logger.error(f"Error during detailed analysis: {e}")
             raise

@@ -1,0 +1,160 @@
+{% extends "task/base.jinja2" %}
+
+{% block content %}
+{#
+    [상세 분석 메인 프롬프트 - 1단계: 구조화 및 추출]
+    
+    설명:
+    콘텐츠 상세 분석의 첫 번째 단계로, 입력받은 콘텐츠 아이템들을
+    카테고리별로 분류하고 감정 분석을 수행하여 구조화된 인사이트를 생성합니다.
+    PRO_DATA_ANALYST 페르소나를 사용하며, 정확성을 최우선으로 합니다.
+    
+    번역:
+    # 작업: 포괄적인 콘텐츠 분석 및 분류
+    
+    제공된 콘텐츠 아이템들을 분석하고 명확한 분류와 감정 분석을 통해 구조화된 인사이트를 만드십시오.
+    
+    ## 입력 데이터 구조
+    JSON 배열 형태의 콘텐츠 아이템들을 받게 됩니다:
+    ```json
+    [
+      {"content_id": 1, "content": "...", "has_image": true},
+      {"content_id": 2, "content": "...", "has_image": false}
+    ]
+    ```
+    
+    ## 분석 요구사항
+    
+    ### 1. 카테고리 클러스터링
+    - 유사한 주제들을 의미있는 카테고리로 그룹화 (최대 20개 카테고리)
+    - 카테고리 명명: 사용자가 이해할 수 있는 명확하고 설명적인 이름 사용
+    - 검증 원칙: 여러 콘텐츠 아이템이 같은 주제를 공유할 때만 카테고리 생성
+    - 우선 주제: 자주 언급되는 측면에 집중
+    - **중요**: 각 content_id는 정확히 하나의 카테고리에만 속하며, harmful_contents나 etc_contents에 포함된 경우 카테고리 분류에서 완전히 제외됨
+    
+    ### 2. 감정 분석 (0.0~1.0 수치화)
+    - 0.0에 가까울수록 부정적, 1.0에 가까울수록 긍정적으로 수치화
+    - 분류 기준: 0.5 이상은 긍정 콘텐츠, 0.5 미만은 부정 콘텐츠
+    - **중요**: 각 content_id를 한 번만 분류 - 카테고리 내에서도 positive_contents와 negative_contents 간 중복 불가
+    - 카테고리별 상세 저장: positive_contents, negative_contents에 content_id와 sentiment_score를 페어로 저장
+    - 카테고리별 감정 유형: 해당 카테고리 평균 점수에 따라 sentiment_type 결정 
+      (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
+    
+    ### 3. 카테고리 키 생성
+    - snake_case 형태로 변환: 카테고리명을 프로그래밍에서 사용 가능한 키 형태로 변환
+    - 예시: "Product Quality" → "product_quality"
+    
+    ### 4. 핵심 인사이트 추출 (주요 통찰)
+    - 대표 인용문: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 그대로 유지)
+    - 원본 키워드: 각 핵심 사항을 뒷받침하는 특정 용어/구문 식별 (번역하지 않음)
+    - 콘텐츠 추적가능성: 각 핵심 사항을 그 출처 content_id에 연결
+    - 품질 필터: 카테고리를 잘 대표하는 핵심 사항만 포함
+    - **이미지 우선 타겟팅**: has_image가 true인 콘텐츠를 하이라이트 선정 시 우선적으로 고려
+    - **수량 제한**: 카테고리당 최대 4개의 핵심 인사이트만 선별
+    
+    ### 5. 유해한 콘텐츠 처리
+    - 유해한 콘텐츠 식별: 욕설, 비난, 비방, 혐오 표현 등이 포함된 콘텐츠
+    - 분석 대상에서 완전 제외: 유해한 콘텐츠는 카테고리 분류 및 감정 분석에서 완전히 제외
+    - 별도 추적: harmful_contents 배열에 해당 content_id들을 기록
+    - **중요**: harmful_contents에 포함된 content_id는 어떤 카테고리나 감정 분석에도 포함되지 않음
+    
+    ### 6. 기타 콘텐츠 처리
+    - 분석 영향 없는 콘텐츠: 유해하지 않으나 분석에 도움이 되지 않는 콘텐츠 식별
+    - 예시: 단순 인사말, 의미 없는 반복, 관련 없는 내용 등
+    - etc_contents에 content_id와 제외 이유를 함께 기록
+    - **중요**: etc_contents에 포함된 content_id는 어떤 카테고리나 감정 분석에도 포함되지 않음
+    
+    ### 7. 요약 생성
+    - 포괄적 개요: 모든 주요 주제를 다루는 상세한 요약 생성
+    - 데이터 기반 통찰: 실제 콘텐츠 패턴에 기반한 결론
+    - 전문적 어조: 객관적이고 분석적인 언어 유지
+    - 길이 제약 없음: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
+    
+    ## 출력 형식
+    다음 구조를 가진 유효한 JSON 객체여야 합니다:
+    
+    ## 분석할 콘텐츠
+    프로젝트 ID: {{ project_id }}
+    
+    콘텐츠 아이템들:
+    
+    **중요**: JSON 객체만 반환하십시오. 추가 텍스트, 설명, 마크다운 형식 없이.
+#}
+
+# Task: Comprehensive Content Analysis and Categorization
+
+Analyze the provided content items and create structured insights with clear categorization and sentiment analysis.
+
+## Input Data Structure
+You will receive a JSON array of content items:
+```json
+[
+  {"content_id": 1, "content": "...", "has_image": true},
+  {"content_id": 2, "content": "...", "has_image": false}
+]
+```
+
+## Analysis Requirements
+
+### 1. Category Clustering (Maximum 20 Categories)
+- **Theme grouping**: Group similar topics into meaningful categories
+- **Clear naming**: Use descriptive names users can understand
+- **Quality threshold**: Only create categories when multiple content items share themes
+- **Frequency focus**: Prioritize commonly mentioned aspects
+- **CRITICAL**: Each content_id belongs to exactly ONE category. Content in harmful_contents or etc_contents must be completely excluded from categorization
+
+### 2. Sentiment Analysis (0.0~1.0 Numerical Scale)
+- **Sentiment scoring**: Quantify sentiment where 0.0 = most negative, 1.0 = most positive
+- **Classification threshold**: 0.5 or above = positive content, below 0.5 = negative content
+- **CRITICAL: Classify each content_id only once** - no duplicate between positive_contents and negative_contents within the same category
+- **Category detailed storage**: Store content_id and sentiment_score as pairs in positive_contents and negative_contents arrays
+- **Category sentiment type**: Determine sentiment_type based on category average score 
+  (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
+
+### 3. Category Key Generation
+- **Convert to snake_case**: Transform category names into programming-friendly key format
+- **CRITICAL**: Do NOT translate the category name. Use the original language (e.g., Korean) and simply replace spaces/special characters with underscores.
+- **Example**: "Product Quality" → "product_quality", "제품 품질" → "제품_품질"
+
+### 4. Highlight Extraction (Key Insights)
+- **Representative quotes**: Extract meaningful phrases that capture category essence (keep in original language)
+- **Original keywords**: Identify specific terms/phrases that support each highlight (do not translate)
+- **Content traceability**: Link each highlight to its source content_id
+- **Quality filter**: Only include highlights that represent the category well
+- **Image content prioritization**: When selecting highlights, prioritize content items where has_image is true
+- **Quantity limit**: Select maximum 4 key insights per category
+
+### 5. Harmful Content Processing
+- **Identify harmful content**: Content containing profanity, abuse, slander, hate speech, etc.
+- **Completely exclude from analysis**: Remove harmful content entirely from categorization and sentiment analysis
+- **Track separately**: Record the content_ids in harmful_contents array
+- **CRITICAL: content_ids in harmful_contents must not appear in any category or sentiment analysis**
+
+### 6. Other Content Processing
+- **Identify non-influential content**: Content that is not harmful but does not contribute to analysis
+- **Examples**: Simple greetings, meaningless repetitions, irrelevant content, etc.
+- **Record with reason**: Store content_id and exclusion reason in etc_contents array
+- **CRITICAL: content_ids in etc_contents must not appear in any category or sentiment analysis**
+
+### 7. Summary Generation
+- **Comprehensive overview**: Create a detailed summary covering all major themes
+- **Data-driven insights**: Base conclusions on actual content patterns
+- **Professional tone**: Maintain objective, analytical language
+- **No length constraints**: Focus on accuracy and completeness (refinement happens in Step 2)
+
+## Output Format
+
+Output must be a valid JSON object with the following structure:
+{{ response_schema }}
+
+## Content to Analyze
+
+Project ID: {{ project_id }}
+
+Content Items:
+```json
+{{ content_items }}
+```
+
+**Important**: Return ONLY the JSON object. No additional text, explanations, or markdown formatting.
+{% endblock %}

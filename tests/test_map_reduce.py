@@ -1,5 +1,5 @@
 import pytest
-from src.schemas.enums import PersonaType
+from src.schemas.enums.persona_type import PersonaType
 
 # Map-Reduce는 시간이 오래 걸리므로 주요 모드만 테스트하거나 필요시 전체 확장
 @pytest.mark.asyncio

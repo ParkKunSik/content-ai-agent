@@ -1,0 +1,70 @@
+{#
+    [상세 분석 메인 프롬프트용 JSON 스키마 - Step 1]
+    
+    설명:
+    상세 분석의 첫 번째 단계에서 사용되는 JSON 응답 스키마입니다.
+    컨텐츠 항목들을 카테고리별로 분류하고 감정 분석을 수행하여
+    구조화된 인사이트를 생성합니다.
+    
+    번역:
+    - summary: 발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약
+      (길이 제약 없음, 정확성 중심. Step 2에서 300자로 제한)
+    - categorys: 카테고리별 상세 분석 결과 배열 (최대 20개)
+      - category: 사용자가 이해할 수 있는 명확하고 설명적인 카테고리명
+      - category_key: 카테고리를 snake_case 형태로 변환한 키값
+      - sentiment_type: 카테고리별 감정 유형 (negative: 평균 < 0.4, positive: 평균 ≥ 0.6, neutral: 0.4 ≤ 평균 < 0.6)
+      - summary: 상세한 카테고리 분석 및 인사이트 (길이 제약 없음. Step 2에서 50자로 제한)
+      - positive_contents: 이 카테고리 내 긍정적 콘텐츠 배열 (감정 점수 0.5 이상)
+        - content_id: content_id 값
+        - sentiment_score: 감정 점수 (0.0~1.0)
+      - negative_contents: 이 카테고리 내 부정적 콘텐츠 배열 (감정 점수 0.5 미만)
+        - content_id: content_id 값
+        - sentiment_score: 감정 점수 (0.0~1.0)
+      - highlights: 핵심 하이라이트 배열
+        - content_id: 이 하이라이트 항목의 출처가 되는 content_id
+        - org_keyword: 하이라이트의 근거가 되는 원본 키워드/구문 (번역하지 않은 원문)
+        - highlight: 카테고리의 본질을 포착하는 핵심 인사이트 또는 대표적 진술 (번역하지 않은 원문)
+    - harmful_contents: 유해한 콘텐츠 content_id 리스트 (욕설, 비난, 비방 등 포함 콘텐츠)
+    - etc_contents: 분석에 영향을 주지 않는 기타 콘텐츠 배열
+      - content_id: content_id 값
+      - reason: 제외 이유 설명
+#}
+{
+  "summary": "String (Comprehensive analysis summary covering all key themes and insights discovered)",
+  "categorys": [
+    {
+      "category": "String (Clear, descriptive category name that users can understand)",
+      "category_key": "String (Category name converted to snake_case format for use as key)",
+      "sentiment_type": "String (Category sentiment type: negative if avg < 0.4, positive if avg ≥ 0.6, neutral if 0.4 ≤ avg < 0.6)",
+      "summary": "String (Detailed category analysis and insights - no length constraints at this step)",
+      "positive_contents": [
+        {
+          "content_id": "Integer (content_id value)",
+          "sentiment_score": "Number (sentiment score 0.0~1.0)"
+        }
+      ],
+      "negative_contents": [
+        {
+          "content_id": "Integer (content_id value)",
+          "sentiment_score": "Number (sentiment score 0.0~1.0)"
+        }
+      ],
+      "highlights": [
+        {
+          "content_id": "Integer (Source content_id for this highlight item)",
+          "org_keyword": "String (Original keyword/phrase in source language - do not translate)",
+          "highlight": "String (Key insight or representative statement in source language - do not translate)"
+        }
+      ]
+    }
+  ],
+  "harmful_contents": [
+    "Integer (List of content_ids containing harmful content like profanity, abuse, slander, etc.)"
+  ],
+  "etc_contents": [
+    {
+      "content_id": "Integer (content_id value)",
+      "reason": "String (Reason for exclusion from analysis)"
+    }
+  ]
+}

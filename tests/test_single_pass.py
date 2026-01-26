@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from src.schemas.enums import PersonaType
+from src.schemas.enums.persona_type import PersonaType
 
 # 모든 페르소나 타입에 대해 테스트 수행
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ if os.path.exists(env_path):
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
 from src.core.model_factory import ModelFactory
-from tests.test_contents import POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT
+from tests.data.test_contents import POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT
 
 # 로깅 필터 설정
 class VertexLogFilter(logging.Filter):

@@ -1,8 +1,9 @@
-import logging
-import json
 import asyncio
-from typing import List
+import json
+import logging
+from typing import List, Dict, Any
 
+from google.api_core import exceptions
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -10,10 +11,11 @@ from tenacity import (
     wait_random_exponential,
     retry_if_exception
 )
-from google.api_core import exceptions
 
 from src.core.model_factory import ModelFactory
-from src.schemas.enums import AnalysisMode, PersonaType
+from src.schemas.enums.persona_type import PersonaType
+from src.schemas.models.prompt.detailed_analysis_refined_response import DetailedAnalysisRefinedResponse
+from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,11 @@ class LLMService:
                 logger.warning(f"Failed to count tokens: {e}")
                 total += len(text) // 2
         return total
+
+    async def generate(self, prompt: str, persona_type: PersonaType) -> str:
+        """Generic method to generate content using a specific persona."""
+        model = ModelFactory.get_model(persona_type)
+        return await self._safe_generate_content(model, prompt)
 
     async def run_single_pass_analysis(
         self, 
@@ -119,6 +126,41 @@ class LLMService:
 
         return await self._safe_generate_content(pro_model, final_prompt)
 
+    async def perform_detailed_analysis(
+        self,
+        project_id: int,
+        content_items: List[Dict[str, Any]]
+    ) -> DetailedAnalysisResponse:
+        """
+        상세 분석 수행 (Main Analysis)
+        PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
+        """
+        prompt = self.prompt_manager.get_detailed_analysis_prompt(
+            project_id=project_id,
+            content_items=json.dumps(content_items, ensure_ascii=False)
+        )
+
+        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST)
+        return self._parse_detailed_analysis_response(response_str)
+
+    async def refine_analysis_summary(
+        self,
+        project_id: int,
+        raw_analysis_data: str,
+        persona_type: PersonaType
+    ) -> DetailedAnalysisRefinedResponse:
+        """
+        분석 요약 정제 (Refinement)
+        분석된 데이터를 바탕으로 요약의 길이를 최적화하고 정제합니다.
+        """
+        prompt = self.prompt_manager.get_detailed_analysis_summary_refine_prompt(
+            project_id=project_id,
+            raw_analysis_data=raw_analysis_data
+        )
+
+        response_str = await self.generate(prompt, persona_type)
+        return self._parse_refined_response(response_str)
+
     @retry(
         retry=retry_if_exception(is_quota_error),
         wait=wait_exponential(multiplier=60, min=60, max=600),
@@ -150,3 +192,31 @@ class LLMService:
             return data.get("summary", json_str)
         except Exception:
             return json_str
+
+    def _parse_detailed_analysis_response(self, response_str: str) -> DetailedAnalysisResponse:
+        """Parses and validates Step 1 response."""
+        try:
+            cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
+            data = json.loads(cleaned)
+            return DetailedAnalysisResponse(**data)
+        except Exception as e:
+            logger.error(f"Failed to parse Step 1 response: {e}")
+            logger.debug(f"Raw response: {response_str}")
+            raise ValueError(f"Step 1 analysis failed: {str(e)}")
+
+    def _parse_refined_response(self, response_str: str) -> DetailedAnalysisRefinedResponse:
+        """Parses and validates Step 2 response."""
+        try:
+            cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
+            data = json.loads(cleaned)
+            
+            # Robustness: Handle if LLM returns a list containing the object
+            if isinstance(data, list) and len(data) > 0:
+                logger.warning("Step 2 response returned as a list, extracting the first element.")
+                data = data[0]
+                
+            return DetailedAnalysisRefinedResponse(**data)
+        except Exception as e:
+            logger.error(f"Failed to parse Step 2 response: {e}")
+            logger.debug(f"Raw response: {response_str}")
+            raise ValueError(f"Step 2 refinement failed: {str(e)}")

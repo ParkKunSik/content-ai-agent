@@ -4,7 +4,7 @@ import vertexai
 from vertexai.generative_models import GenerativeModel
 
 from src.core.config import settings
-from src.schemas.enums import PersonaType
+from src.schemas.enums.persona_type import PersonaType
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
