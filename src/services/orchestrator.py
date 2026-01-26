@@ -29,7 +29,7 @@ class AgentOrchestrator:
 
     async def orchestrate_analysis(
         self,
-        project_id: str,
+        project_id: int,
         analysis_mode: AnalysisMode,
         content_sources: List[str]
     ) -> AnalyzeResponse:
@@ -132,9 +132,9 @@ class AgentOrchestrator:
         # 5. Archive final merged result
         try:
             self.memory.save_history(
-                project_id=str(project_id), 
-                persona=analysis_mode.value, 
-                content=base_analysis.model_dump()
+                project_id=project_id, 
+                persona_type=analysis_mode.value, 
+                result_data=base_analysis.model_dump()
             )
         except Exception as e:
             logger.warning(f"Failed to save detailed analysis history: {e}")

@@ -36,7 +36,7 @@ class ContentAnalysisAgent:
 
     async def query(
         self, 
-        project_id: str, 
+        project_id: int, 
         analysis_mode: AnalysisMode, 
         contents: List[str]
     ) -> Dict[str, Any]:

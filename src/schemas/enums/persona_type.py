@@ -24,7 +24,7 @@ class PersonaType(Enum):
         self.model_name_getter = model_name_getter
         self.role_description = role_description
 
-    def get_instruction(self, pm: PromptRenderer) -> str:
+    def get_instruction(self, pm: PromptRenderer) -> Optional[str]:
         if self.role_description is None:
             return None
         return pm.render(

@@ -25,7 +25,7 @@ class PromptManager:
         """Access the underlying PromptRenderer instance."""
         return self._renderer
 
-    def get_contents_analysis_prompt(self, project_id: str, combined_summary: str) -> str:
+    def get_contents_analysis_prompt(self, project_id: int, combined_summary: str) -> str:
         """
         Constructs the prompt for comprehensive contents analysis.
         Injects the JSON schema automatically.

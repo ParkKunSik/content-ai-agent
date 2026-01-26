@@ -41,7 +41,7 @@ class MemoryService:
             logger.error(f"Failed to connect to Elasticsearch: {e}")
             self.es_client = None
 
-    def _get_redis_key(self, project_id: str) -> str:
+    def _get_redis_key(self, project_id: int) -> str:
         """
         Generates a key prefixed with the environment profile and internal agent ID.
         Format: {ENV}:{AGENT_ID}:proj:{PROJECT_ID}:context
@@ -50,7 +50,7 @@ class MemoryService:
 
     # --- Redis: Project Context Management ---
 
-    def save_project_context(self, project_id: str, context_data: Dict[str, Any], ttl_seconds: int = 86400):
+    def save_project_context(self, project_id: int, context_data: Dict[str, Any], ttl_seconds: int = 86400):
         """Saves analysis context to Redis with a default 24h TTL."""
         if not self.redis_client:
             return
@@ -61,7 +61,7 @@ class MemoryService:
         except Exception as e:
             logger.error(f"Error saving context to Redis: {e}")
 
-    def get_project_context(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project_context(self, project_id: int) -> Optional[Dict[str, Any]]:
         """Retrieves project context from Redis."""
         if not self.redis_client:
             return None
@@ -74,14 +74,14 @@ class MemoryService:
             logger.error(f"Error reading context from Redis: {e}")
             return None
 
-    def clear_project_context(self, project_id: str):
+    def clear_project_context(self, project_id: int):
         """Force deletes the project context."""
         if self.redis_client:
             self.redis_client.delete(self._get_redis_key(project_id))
 
     # --- Elasticsearch: History Management ---
 
-    def save_history(self, project_id: str, persona_type: str, result_data: Dict[str, Any]):
+    def save_history(self, project_id: int, persona_type: str, result_data: Dict[str, Any]):
         """Archives the final analysis result to Elasticsearch."""
         if not self.es_client:
             logger.warning("History not saved: Elasticsearch client not initialized.")
@@ -89,7 +89,7 @@ class MemoryService:
 
         doc = {
             "agent_id": settings.INTERNAL_AGENT_ID,  # Explicitly store Agent ID
-            "project_id": project_id,
+            "project_id": str(project_id),
             "persona_type": persona_type,
             "env": settings.ENV,
             "timestamp": "now",

@@ -75,7 +75,7 @@ class LLMService:
         self, 
         contents: List[str],
         persona_type: PersonaType,
-        project_id: str
+        project_id: int
     ) -> str:
         """단일 패스 분석 수행"""
         model = ModelFactory.get_model(persona_type)
@@ -92,7 +92,7 @@ class LLMService:
         self,
         contents: List[str],
         persona_type: PersonaType,
-        project_id: str
+        project_id: int
     ) -> str:
         """Map-Reduce 분석 수행 (청킹 단계에서도 동일한 템플릿 사용)"""
         # Map Phase: Flash 모델로 각 콘텐츠 요약
@@ -102,9 +102,9 @@ class LLMService:
         for i, chunk in enumerate(contents):
             logger.info(f"Processing chunk {i+1}/{len(contents)}")
 
-            # Use high-level method for chunks
+            # Use high-level method for chunks (use base project_id for chunks)
             chunk_prompt = self.prompt_manager.get_contents_analysis_prompt(
-                project_id=f"{project_id}_chunk_{i+1}",
+                project_id=project_id,
                 combined_summary=chunk
             )
 
