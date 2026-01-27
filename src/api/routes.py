@@ -31,6 +31,7 @@ async def analyze(request: AnalyzeRequest):
         # Wrap the agent's query method (now async)
         result = await agent.query(
             project_id=request.project_id,
+            project_type=request.project_type,
             analysis_mode=request.analysis_mode,
             contents=request.contents
         )
@@ -49,6 +50,7 @@ async def detailed_analysis(request: AnalyzeRequest):
     try:
         result = await agent.detailed_analysis(
             project_id=request.project_id,
+            project_type=request.project_type,
             contents=request.contents,
             analysis_mode=request.analysis_mode
         )

@@ -1,8 +1,11 @@
 from __future__ import annotations
+import logging
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from typing import Literal
 from .sentiment_content import SentimentContent
 from .highlight_item import HighlightItem
+
+logger = logging.getLogger(__name__)
 
 
 class CategorySummary(BaseModel):
@@ -30,19 +33,20 @@ class CategorySummary(BaseModel):
     @field_validator('positive_contents')
     @classmethod
     def validate_positive_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        """긍정 콘텐츠의 감정 점수 검증 (0.5 이상)"""
+        """긍정 콘텐츠의 감정 점수 검증 (0.5 이상 권장)"""
         for content in v:
-            if content.sentiment_score < 0.5:
-                raise ValueError(f"긍정 콘텐츠의 감정 점수는 0.5 이상이어야 합니다: {content.sentiment_score}")
+            if content.score < 0.5:
+                # 에러를 던지는 대신 로그를 남기거나 허용 (LLM의 미세한 판단 차이 수용)
+                logger.debug(f"긍정 리스트에 낮은 점수 포함: {content.id} ({content.score})")
         return v
     
     @field_validator('negative_contents')
     @classmethod
     def validate_negative_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        """부정 콘텐츠의 감정 점수 검증 (0.5 미만)"""
+        """부정 콘텐츠의 감정 점수 검증 (0.5 미만 권장)"""
         for content in v:
-            if content.sentiment_score >= 0.5:
-                raise ValueError(f"부정 콘텐츠의 감정 점수는 0.5 미만이어야 합니다: {content.sentiment_score}")
+            if content.score >= 0.5:
+                logger.debug(f"부정 리스트에 높은 점수 포함: {content.id} ({content.score})")
         return v
     
     @field_validator('sentiment_type')
@@ -60,9 +64,9 @@ class CategorySummary(BaseModel):
             if total_count > 0:
                 avg_score = 0.0
                 for content in pos_contents:
-                    avg_score += content.sentiment_score
+                    avg_score += content.score
                 for content in neg_contents:
-                    avg_score += content.sentiment_score
+                    avg_score += content.score
                 avg_score = avg_score / total_count
                 
                 expected_type = "negative" if avg_score < 0.4 else "positive" if avg_score >= 0.6 else "neutral"

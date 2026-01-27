@@ -13,12 +13,29 @@ from tenacity import (
 )
 
 from src.core.model_factory import ModelFactory
+from src.core.config import settings
 from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.detailed_analysis_refined_response import DetailedAnalysisRefinedResponse
 from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
+from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
+
+# Shared GenerationConfig instance (immutable, thread-safe)
+_generation_config = None
+
+def get_generation_config():
+    """싱글톤 GenerationConfig 인스턴스 반환"""
+    global _generation_config
+    if _generation_config is None:
+        from vertexai.generative_models import GenerationConfig
+        _generation_config = GenerationConfig(
+            max_output_tokens=settings.MAX_OUTPUT_TOKENS,
+            temperature=settings.TEMPERATURE,
+        )
+    return _generation_config
 
 
 def is_quota_error(exception):
@@ -75,7 +92,8 @@ class LLMService:
         self, 
         contents: List[str],
         persona_type: PersonaType,
-        project_id: int
+        project_id: int,
+        project_type: ProjectType
     ) -> str:
         """단일 패스 분석 수행"""
         model = ModelFactory.get_model(persona_type)
@@ -83,6 +101,7 @@ class LLMService:
         # Use high-level PromptManager method
         prompt = self.prompt_manager.get_contents_analysis_prompt(
             project_id=project_id,
+            project_type=project_type,
             combined_summary="\n\n".join(contents)
         )
         
@@ -92,7 +111,8 @@ class LLMService:
         self,
         contents: List[str],
         persona_type: PersonaType,
-        project_id: int
+        project_id: int,
+        project_type: ProjectType
     ) -> str:
         """Map-Reduce 분석 수행 (청킹 단계에서도 동일한 템플릿 사용)"""
         # Map Phase: Flash 모델로 각 콘텐츠 요약
@@ -105,6 +125,7 @@ class LLMService:
             # Use high-level method for chunks (use base project_id for chunks)
             chunk_prompt = self.prompt_manager.get_contents_analysis_prompt(
                 project_id=project_id,
+                project_type=project_type,
                 combined_summary=chunk
             )
 
@@ -121,23 +142,42 @@ class LLMService:
         pro_model = ModelFactory.get_model(persona_type)
         final_prompt = self.prompt_manager.get_contents_analysis_prompt(
             project_id=project_id,
+            project_type=project_type,
             combined_summary="\n---\n".join(chunk_summaries)
         )
 
         return await self._safe_generate_content(pro_model, final_prompt)
 
+    def _convert_to_analysis_items(self, content_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        content_items를 AnalysisContentItem으로 변환하여 프롬프트 최적화된 딕셔너리 리스트 반환
+        """
+        analysis_items = []
+        for item in content_items:
+            content_item = AnalysisContentItem(
+                id=item.get("content_id") or item.get("id"),  # Support both keys
+                content=item.get("content"),
+                has_image=None if item.get("has_image") is False else item.get("has_image")  # 삼항연산자 활용
+            )
+            analysis_items.append(content_item.model_dump(exclude_none=True))  # None 필드 제외
+        return analysis_items
+
     async def perform_detailed_analysis(
         self,
         project_id: int,
+        project_type: ProjectType,
         content_items: List[Dict[str, Any]]
     ) -> DetailedAnalysisResponse:
         """
         상세 분석 수행 (Main Analysis)
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
         """
+        analysis_items = self._convert_to_analysis_items(content_items)
+
         prompt = self.prompt_manager.get_detailed_analysis_prompt(
             project_id=project_id,
-            content_items=json.dumps(content_items, ensure_ascii=False)
+            project_type=project_type,
+            content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
         )
 
         response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST)
@@ -146,6 +186,7 @@ class LLMService:
     async def refine_analysis_summary(
         self,
         project_id: int,
+        project_type: ProjectType,
         raw_analysis_data: str,
         persona_type: PersonaType
     ) -> DetailedAnalysisRefinedResponse:
@@ -155,6 +196,7 @@ class LLMService:
         """
         prompt = self.prompt_manager.get_detailed_analysis_summary_refine_prompt(
             project_id=project_id,
+            project_type=project_type,
             raw_analysis_data=raw_analysis_data
         )
 
@@ -175,11 +217,39 @@ class LLMService:
     )
     async def _safe_generate_content(self, model, prompt: str) -> str:
         """안전한 모델 호출 및 재시도"""
+        generation_config = get_generation_config()
+
         try:
-            response = await model.generate_content_async(prompt)
-            if hasattr(response, 'text'):
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=generation_config
+            )
+            
+            # Check for truncation or safety filters first
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                finish_reason = getattr(candidate, 'finish_reason', None)
+                
+                if finish_reason == 'MAX_TOKENS':
+                    prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 'unknown')
+                    total_tokens = getattr(response.usage_metadata, 'total_token_count', 'unknown')
+                    logger.warning(
+                        f"Response generation stopped due to MAX_TOKENS. "
+                        f"Prompt tokens: {prompt_tokens}, Total tokens: {total_tokens}. "
+                        f"Response might be incomplete."
+                    )
+                    # Truncation is critical for JSON parsing, so we treat it as an error to trigger retry
+                    # or allow caller to handle. For now, raising ValueError.
+                    raise ValueError(f"Response truncated due to MAX_TOKENS limit ({settings.MAX_OUTPUT_TOKENS}).")
+                
+                if finish_reason == 'SAFETY':
+                     raise ValueError(f"Response blocked by safety filters: {candidate.safety_ratings}")
+
+            # Try to get text from response
+            try:
                 return response.text
-            raise ValueError("Invalid response format")
+            except (ValueError, AttributeError) as text_error:
+                raise ValueError(f"Cannot extract text from response: {text_error}")
         except Exception as e:
             logger.error(f"Model call failed: {e}")
             raise
@@ -195,13 +265,63 @@ class LLMService:
 
     def _parse_detailed_analysis_response(self, response_str: str) -> DetailedAnalysisResponse:
         """Parses and validates Step 1 response."""
+        data = None
+        cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
+        
         try:
-            cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
             return DetailedAnalysisResponse(**data)
-        except Exception as e:
+        except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Step 1 response: {e}")
-            logger.debug(f"Raw response: {response_str}")
+
+            # 파싱 오류 위치 전후 컨텍스트 로깅 (디버깅용)
+            error_pos = getattr(e, 'pos', 0)
+            context_start = max(0, error_pos - 100)
+            context_end = min(len(cleaned), error_pos + 100)
+            error_context = cleaned[context_start:context_end]
+            logger.debug(f"Error context around position {error_pos}: ...{error_context}...")
+
+            # 일반적인 JSON 오류 패턴 자동 수정 시도
+            try:
+                import re
+                # 시도 1: Trailing comma 제거 (가장 흔한 오류)
+                # , } -> }
+                # , ] -> ]
+                # \s*는 공백 문자를 포함
+                attempt = re.sub(r',\s*}', '}', cleaned)
+                attempt = re.sub(r',\s*]', ']', attempt)
+                
+                data = json.loads(attempt)
+                logger.warning("Successfully parsed after removing trailing commas")
+                return DetailedAnalysisResponse(**data)
+
+            except Exception as comma_error:
+                logger.debug(f"Trailing comma correction failed: {comma_error}")
+                
+                try:
+                    # 시도 2: 연속된 공백 정리 (기존 로직 유지)
+                    import re
+                    attempt = re.sub(r'\s+', ' ', cleaned)
+                    data = json.loads(attempt)
+                    logger.warning("Successfully parsed after whitespace normalization")
+                    return DetailedAnalysisResponse(**data)
+                except Exception as ws_error:
+                    logger.error(f"Whitespace correction failed: {ws_error}")
+
+            # 원본 에러 정보로 최종 실패 처리
+            logger.debug(f"Raw response (first 1000 chars): {response_str[:1000]}")
+            logger.debug(f"Raw response (last 1000 chars): {response_str[-1000:]}")
+            raise ValueError(f"Step 1 analysis failed: JSON parsing error at position {error_pos}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to validate Step 1 response: {e}")
+
+            # Validation 에러 시 파싱된 데이터 전체 로깅
+            if data is not None:
+                logger.error(f"Parsed data that failed validation:")
+                logger.error(json.dumps(data, indent=2, ensure_ascii=False))
+            else:
+                logger.debug(f"Raw response: {response_str}")
+
             raise ValueError(f"Step 1 analysis failed: {str(e)}")
 
     def _parse_refined_response(self, response_str: str) -> DetailedAnalysisRefinedResponse:

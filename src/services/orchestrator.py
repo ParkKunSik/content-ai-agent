@@ -3,6 +3,7 @@ from typing import List, Union
 
 from src.core.config import settings
 from src.schemas.enums.analysis_mode import AnalysisMode
+from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.api.analyze_response import AnalyzeResponse
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
@@ -30,6 +31,7 @@ class AgentOrchestrator:
     async def orchestrate_analysis(
         self,
         project_id: int,
+        project_type: ProjectType,
         analysis_mode: AnalysisMode,
         content_sources: List[str]
     ) -> AnalyzeResponse:
@@ -58,10 +60,10 @@ class AgentOrchestrator:
         # 4. Routing & Analysis
         if total_tokens < ROUTING_THRESHOLD:
             logger.info("Strategy: Single Pass")
-            result_raw = await self.llm_service.run_single_pass_analysis(contents, analysis_mode.persona_type, project_id)
+            result_raw = await self.llm_service.run_single_pass_analysis(contents, analysis_mode.persona_type, project_id, project_type)
         else:
             logger.info("Strategy: Map-Reduce")
-            result_raw = await self.llm_service.run_map_reduce_analysis(contents, analysis_mode.persona_type, project_id)
+            result_raw = await self.llm_service.run_map_reduce_analysis(contents, analysis_mode.persona_type, project_id, project_type)
 
         # 5. Extract Summary from JSON
         summary_text = self.llm_service._parse_summary(result_raw)
@@ -69,6 +71,7 @@ class AgentOrchestrator:
         # 6. Structure Response
         response = AnalyzeResponse(
             project_id=project_id,
+            project_type=project_type,
             analysis_mode=analysis_mode,
             summary=summary_text,
             keywords=[], 
@@ -87,7 +90,8 @@ class AgentOrchestrator:
 
     async def detailed_analysis(
         self, 
-        project_id: int, 
+        project_id: int,
+        project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
         analysis_mode: AnalysisMode
     ) -> DetailedAnalysisResponse:
@@ -106,6 +110,7 @@ class AgentOrchestrator:
         logger.info("Executing Step 1: Main Analysis")
         base_analysis = await self.llm_service.perform_detailed_analysis(
             project_id=project_id,
+            project_type=project_type,
             content_items=[item.model_dump() for item in content_items]
         )
         logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categorys)}")
@@ -115,6 +120,7 @@ class AgentOrchestrator:
         logger.info(f"Executing Step 2: Refinement with persona {analysis_mode.persona_type}")
         refinement_result = await self.llm_service.refine_analysis_summary(
             project_id=project_id,
+            project_type=project_type,
             raw_analysis_data=base_analysis.model_dump_json(),
             persona_type=analysis_mode.persona_type
         )

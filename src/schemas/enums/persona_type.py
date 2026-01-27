@@ -18,7 +18,7 @@ class PersonaType(Enum):
     # 3. Persona Models
     CUSTOMER_FACING_ANALYST = (lambda s: s.VERTEX_AI_MODEL_PRO, "Customer-Facing Data Analyst")
     PRO_DATA_ANALYST = (lambda s: s.VERTEX_AI_MODEL_PRO, "Precise Data Analyst")
-    CUSTOMER_FACING_SMART_BOT = (lambda s: s.VERTEX_AI_MODEL_PRO, "Smart AI Review Analyst")
+    CUSTOMER_FACING_SMART_BOT = (lambda s: s.VERTEX_AI_MODEL_FLASH, "Smart AI Review Analyst")
 
     def __init__(self, model_name_getter: Callable[[Any], str], role_description: Optional[str]):
         self.model_name_getter = model_name_getter

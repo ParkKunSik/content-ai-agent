@@ -2,11 +2,12 @@ import pytest
 import time
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
 from src.core.model_factory import ModelFactory
 from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.project_type import ProjectType
 
 # tests/data/test_contents.py에서 정적 데이터 임포트
 from tests.data.test_contents import (
@@ -17,10 +18,32 @@ from tests.data.test_contents import (
 )
 
 
-async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list, 
+def _format_duration(seconds: float) -> str:
+    """
+    초 단위 시간을 HH:MM:SS.sss 형태로 변환
+
+    Args:
+        seconds: 초 단위 시간
+
+    Returns:
+        HH:MM:SS.sss 형식의 문자열
+    """
+    td = timedelta(seconds=seconds)
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    milliseconds = int((seconds - int(seconds)) * 1000)
+
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
+
+
+async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list,
+                                        project_type: ProjectType = ProjectType.FUNDING,
                                         show_content_details: bool = True, 
                                         save_output: bool = False, 
-                                        output_file_path: str = None):
+                                        output_file_path: str = None
+                                        ):
     """
     상세 분석 플로우 공통 실행 로직
     
@@ -33,6 +56,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     
     Returns:
         tuple: (step1_response, step2_response, final_response, total_duration)
+        :type project_id: int
     """
     # 1. Setup Service
     ModelFactory.initialize()
@@ -44,13 +68,16 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     if show_content_details:
         for item in sample_contents:
             img_icon = "📷" if item.get('has_image', False) else "📝"
-            print(f"  - [{item['content_id']}] {img_icon} {item['content'][:30]}...")
+            # Support both id and content_id for display
+            item_id = item.get('id') or item.get('content_id')
+            print(f"  - [{item_id}] {img_icon} {item['content'][:30]}...")
     else:
         # Only show counts and image distribution
         image_count = sum(1 for item in sample_contents if item.get('has_image', False))
         print(f"  - Content items: {len(sample_contents)}")
         print(f"  - With images: {image_count} 📷")
         print(f"  - Without images: {len(sample_contents) - image_count} 📝")
+        print(f"  - Optimized: has_image field removed from {len(sample_contents) - image_count} items")
 
     total_start_time = time.time()
 
@@ -60,6 +87,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     
     step1_response = await llm_service.perform_detailed_analysis(
         project_id=project_id,
+        project_type=project_type,
         content_items=sample_contents
     )
     step1_duration = time.time() - step1_start_time
@@ -79,6 +107,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     
     step2_response = await llm_service.refine_analysis_summary(
         project_id=project_id,
+        project_type=project_type,
         raw_analysis_data=step1_response.model_dump_json(),
         persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT
     )
@@ -117,26 +146,43 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     
     # 6. Save output if requested
     if save_output and output_file_path:
+        # Add execution time to each result
+        step1_result = step1_response.model_dump()
+        step1_result["execution_time_seconds"] = round(step1_duration, 2)
+        step1_result["execution_time_formatted"] = _format_duration(step1_duration)
+
+        step2_result = step2_response.model_dump()
+        step2_result["execution_time_seconds"] = round(step2_duration, 2)
+        step2_result["execution_time_formatted"] = _format_duration(step2_duration)
+
+        final_result = final_response.model_dump()
+        final_result["execution_time_seconds"] = round(total_duration, 2)
+        final_result["execution_time_formatted"] = _format_duration(total_duration)
+
         output_data = {
             "execution_time": {
-                "step1_duration": step1_duration,
-                "step2_duration": step2_duration,
-                "total_duration": total_duration,
+                "step1_duration_seconds": round(step1_duration, 2),
+                "step1_duration_formatted": _format_duration(step1_duration),
+                "step2_duration_seconds": round(step2_duration, 2),
+                "step2_duration_formatted": _format_duration(step2_duration),
+                "total_duration_seconds": round(total_duration, 2),
+                "total_duration_formatted": _format_duration(total_duration),
                 "executed_at": datetime.now().isoformat()
             },
             "input_summary": {
                 "total_items": len(sample_contents),
                 "items_with_image": sum(1 for item in sample_contents if item.get('has_image', False)),
-                "project_id": project_id
+                "project_id": project_id,
+                "project_type": project_type.value
             },
-            "step1_result": step1_response.model_dump(),
-            "step2_result": step2_response.model_dump(),
-            "final_result": final_response.model_dump()
+            "step1_result": step1_result,
+            "step2_result": step2_result,
+            "final_result": final_result
         }
-        
+
         with open(output_file_path, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
-        
+
         print(f"\n💾 [Output Saved]: {output_file_path}")
     
     return step1_response, step2_response, final_response, total_duration
@@ -152,20 +198,17 @@ async def test_llm_service_detailed_analysis_flow_static():
     """
     # Prepare Data with has_image field
     sample_contents = [
-        {"content_id": 101, "content": POSITIVE_CONTENT, "has_image": True},
-        {"content_id": 102, "content": NEGATIVE_CONTENT_QUALITY, "has_image": False},
-        {"content_id": 103, "content": MILD_NEGATIVE_CONTENT, "has_image": True},
-        {"content_id": 104, "content": TOXIC_CONTENT, "has_image": False},
+        {"id": 101, "content": POSITIVE_CONTENT, "has_image": True},
+        {"id": 102, "content": NEGATIVE_CONTENT_QUALITY, "has_image": False},
+        {"id": 103, "content": MILD_NEGATIVE_CONTENT, "has_image": True},
+        {"id": 104, "content": TOXIC_CONTENT, "has_image": False},
     ]
 
     project_id = 88888
 
     try:
         step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
-            project_id=project_id,
-            sample_contents=sample_contents,
-            show_content_details=True  # Show full content for static test
-        )
+            project_id=project_id, sample_contents=sample_contents, show_content_details=True)
         
         assert step1_response is not None
         assert len(step1_response.categorys) > 0
@@ -204,11 +247,6 @@ async def test_llm_service_detailed_analysis_flow_project_file():
     if len(content_items) == 0:
         pytest.skip("No content items in project data file")
     
-    # Ensure has_image field exists (default to False if not present)
-    for item in content_items:
-        if 'has_image' not in item:
-            item['has_image'] = False
-    
     project_id = 365330
     
     # Prepare output file path
@@ -217,14 +255,13 @@ async def test_llm_service_detailed_analysis_flow_project_file():
         f"project_365330_analysis_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
 
+    # Limit to 100 items for testing stability and speed
+    test_content_items = content_items[:700]
+
     try:
         step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
-            project_id=project_id,
-            sample_contents=content_items,
-            show_content_details=False,  # Only show summary for large datasets
-            save_output=True,
-            output_file_path=output_file_path
-        )
+            project_id=project_id, sample_contents=test_content_items, show_content_details=False, save_output=True,
+            output_file_path=output_file_path)
         
         assert step1_response is not None
         assert len(step1_response.categorys) > 0

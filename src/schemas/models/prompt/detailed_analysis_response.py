@@ -47,33 +47,48 @@ class DetailedAnalysisResponse(BaseModel):
         
         if 'etc_contents' in data and field_name != 'etc_contents':
             for etc_content in data['etc_contents']:
-                used_content_ids.add(etc_content.content_id)
+                used_content_ids.add(etc_content.id)
         
         if 'categorys' in data and field_name != 'categorys':
              for category in data['categorys']:
                 for content in category.positive_contents + category.negative_contents:
-                    used_content_ids.add(content.content_id)
+                    used_content_ids.add(content.id)
 
         # 2. 현재 검증 중인 필드(v) 내에서 중복 및 기존 데이터와의 중복 검사
         if field_name == 'harmful_contents':
             for content_id in v:
                 if content_id in used_content_ids:
-                    raise ValueError(f"content_id {content_id}이 중복되었습니다")
+                    raise ValueError(
+                        f"content_id {content_id}이 중복되었습니다. 현재 필드: harmful_contents"
+                    )
                 used_content_ids.add(content_id)
-        
+
         elif field_name == 'etc_contents':
             for etc_content in v:
-                if etc_content.content_id in used_content_ids:
-                    raise ValueError(f"content_id {etc_content.content_id}이 중복되었습니다")
-                used_content_ids.add(etc_content.content_id)
-        
+                if etc_content.id in used_content_ids:
+                    raise ValueError(
+                        f"content_id {etc_content.id}이 중복되었습니다. 현재 필드: etc_contents"
+                    )
+                used_content_ids.add(etc_content.id)
+
         elif field_name == 'categorys':
             for category in v:
-                for content in category.positive_contents + category.negative_contents:
-                    if content.content_id in used_content_ids:
-                        raise ValueError(f"content_id {content.content_id}이 중복되었습니다")
-                    used_content_ids.add(content.content_id)
-                
+                for content in category.positive_contents:
+                    if content.id in used_content_ids:
+                        raise ValueError(
+                            f"content_id {content.id}이 중복되었습니다. "
+                            f"현재 필드: categorys.{category.category_key}.positive_contents"
+                        )
+                    used_content_ids.add(content.id)
+
+                for content in category.negative_contents:
+                    if content.id in used_content_ids:
+                        raise ValueError(
+                            f"content_id {content.id}이 중복되었습니다. "
+                            f"현재 필d: categorys.{category.category_key}.negative_contents"
+                        )
+                    used_content_ids.add(content.id)
+
                 # highlights는 참조용이므로 중복 검사 제외
         
         return v

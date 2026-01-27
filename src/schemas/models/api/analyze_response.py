@@ -3,9 +3,11 @@ from typing import List, Any, Dict
 from pydantic import BaseModel, Field
 
 from src.schemas.enums.analysis_mode import AnalysisMode
+from src.schemas.enums.project_type import ProjectType
 
 class AnalyzeResponse(BaseModel):
     project_id: int
+    project_type: ProjectType
     analysis_mode: AnalysisMode
     summary: str = Field(..., description="Natural language summary of the analysis")
     keywords: List[str] = Field(default_factory=list, description="Extracted key topics")

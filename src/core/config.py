@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     ENV: str = "local"
 
     # [GCP Configuration]
-    GCP_PROJECT_ID: str
+    GCP_PROJECT_ID: str = "local-development"
     GCP_REGION: str = "asia-northeast3"
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
 
@@ -64,8 +64,16 @@ class Settings(BaseSettings):
     ELASTICSEARCH_INDEX_HISTORY: str = "local-content-ai-history"
 
     # [Model Configuration]
-    VERTEX_AI_MODEL_PRO: str = "gemini-1.5-pro-002"
-    VERTEX_AI_MODEL_FLASH: str = "gemini-2.0-flash-001"
+    VERTEX_AI_MODEL_PRO: str = "gemini-2.5-pro"
+    VERTEX_AI_MODEL_FLASH: str = "gemini-2.5-flash"
+
+    # [Analysis Configuration]
+    MAX_MAIN_SUMMARY_CHARS: int = 300
+    MAX_CATEGORY_SUMMARY_CHARS: int = 50
+
+    # [LLM Generation Configuration]
+    MAX_OUTPUT_TOKENS: int = 32000
+    TEMPERATURE: float = 0.3
 
     model_config = SettingsConfigDict(
         env_file=ENV_LOCAL_PATH, 

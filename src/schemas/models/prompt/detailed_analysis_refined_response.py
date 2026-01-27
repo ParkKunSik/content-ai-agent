@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
+from src.core.config import settings
 
 
 class RefinedCategorySummary(BaseModel):
@@ -11,9 +12,10 @@ class RefinedCategorySummary(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
-        """요약 길이 제한 검증 (50자)"""
-        if len(v) > 50:
-            raise ValueError(f"카테고리 요약은 최대 50자까지 허용됩니다. 현재: {len(v)}자")
+        """요약 길이 제한 검증 (설정값 기반)"""
+        max_chars = settings.MAX_CATEGORY_SUMMARY_CHARS
+        if len(v) > max_chars:
+            raise ValueError(f"카테고리 요약은 최대 {max_chars}자까지 허용됩니다. 현재: {len(v)}자")
         return v
 
 
@@ -26,7 +28,8 @@ class DetailedAnalysisRefinedResponse(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
-        """전체 요약 길이 제한 검증 (300자)"""
-        if len(v) > 300:
-            raise ValueError(f"전체 요약은 최대 300자까지 허용됩니다. 현재: {len(v)}자")
+        """전체 요약 길이 제한 검증 (설정값 기반)"""
+        max_chars = settings.MAX_MAIN_SUMMARY_CHARS
+        if len(v) > max_chars:
+            raise ValueError(f"전체 요약은 최대 {max_chars}자까지 허용됩니다. 현재: {len(v)}자")
         return v

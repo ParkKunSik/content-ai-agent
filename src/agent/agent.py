@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Any, Union
 from src.schemas.enums.analysis_mode import AnalysisMode
+from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.services.orchestrator import AgentOrchestrator
 from src.core.model_factory import ModelFactory
@@ -36,7 +37,8 @@ class ContentAnalysisAgent:
 
     async def query(
         self, 
-        project_id: int, 
+        project_id: int,
+        project_type: ProjectType,
         analysis_mode: AnalysisMode, 
         contents: List[str]
     ) -> Dict[str, Any]:
@@ -49,6 +51,7 @@ class ContentAnalysisAgent:
         try:
             response_model = await self.orchestrator.orchestrate_analysis(
                 project_id=project_id,
+                project_type=project_type,
                 analysis_mode=analysis_mode,
                 content_sources=contents
             )
@@ -61,6 +64,7 @@ class ContentAnalysisAgent:
     async def detailed_analysis(
         self,
         project_id: int,
+        project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
         analysis_mode: AnalysisMode = AnalysisMode.DATA_ANALYST
     ) -> Dict[str, Any]:
@@ -73,6 +77,7 @@ class ContentAnalysisAgent:
         try:
             response_model = await self.orchestrator.detailed_analysis(
                 project_id=project_id,
+                project_type=project_type,
                 contents=contents,
                 analysis_mode=analysis_mode
             )
