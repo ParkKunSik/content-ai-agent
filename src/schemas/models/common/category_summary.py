@@ -15,8 +15,8 @@ class CategorySummary(BaseModel):
     category_key: str = Field(..., description="카테고리를 snake_case 형태로 변환한 키값")
     sentiment_type: Literal["negative", "positive", "neutral"] = Field(..., description="카테고리별 감정 유형")
     summary: str = Field(..., description="상세한 카테고리 분석 및 인사이트")
-    positive_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 긍정적 콘텐츠 배열 (감정 점수 0.5 이상)")
-    negative_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 부정적 콘텐츠 배열 (감정 점수 0.5 미만)")
+    positive_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 긍정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 0.5 이상)")
+    negative_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 부정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 0.5 미만)")
     highlights: list[HighlightItem] = Field(default_factory=list, description="핵심 하이라이트 배열")
     
     @field_validator('category_key')
@@ -33,26 +33,37 @@ class CategorySummary(BaseModel):
     @field_validator('positive_contents')
     @classmethod
     def validate_positive_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        """긍정 콘텐츠의 감정 점수 검증 (0.5 이상 권장)"""
+        """긍정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 이상 필수)"""
+        invalid_contents = []
         for content in v:
             if content.score < 0.5:
-                # 에러를 던지는 대신 로그를 남기거나 허용 (LLM의 미세한 판단 차이 수용)
-                logger.debug(f"긍정 리스트에 낮은 점수 포함: {content.id} ({content.score})")
+                invalid_contents.append(f"id {content.id} (score: {content.score})")
+        
+        if invalid_contents:
+            logger.warning(f"긍정 리스트에 0.5 미만 점수 포함: {', '.join(invalid_contents)}")
+            # 프로덕션에서는 에러를 발생시키지 않지만 경고를 남김
+        
         return v
     
     @field_validator('negative_contents')
     @classmethod
     def validate_negative_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        """부정 콘텐츠의 감정 점수 검증 (0.5 미만 권장)"""
+        """부정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 미만 필수)"""
+        invalid_contents = []
         for content in v:
             if content.score >= 0.5:
-                logger.debug(f"부정 리스트에 높은 점수 포함: {content.id} ({content.score})")
+                invalid_contents.append(f"id {content.id} (score: {content.score})")
+        
+        if invalid_contents:
+            logger.warning(f"부정 리스트에 0.5 이상 점수 포함: {', '.join(invalid_contents)}")
+            # 프로덕션에서는 에러를 발생시키지 않지만 경고를 남김
+        
         return v
     
     @field_validator('sentiment_type')
     @classmethod
     def validate_sentiment_type(cls, v: str, info: ValidationInfo) -> str:
-        """감정 타입과 콘텐츠 일관성 검증"""
+        """감정 타입과 평가 대상에 대한 콘텐츠 감정 점수 일관성 검증"""
         data = info.data
         if 'positive_contents' in data and 'negative_contents' in data:
             pos_contents = data['positive_contents']

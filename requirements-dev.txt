@@ -6,3 +6,8 @@ pytest-asyncio
 pytest-cov
 ruff
 black
+
+# PDF Generation (Optional)
+# Install one of these for PDF output:
+weasyprint>=62.0  # Recommended for better CSS support
+pdfkit>=1.0.0     # Alternative, requires wkhtmltopdf binary

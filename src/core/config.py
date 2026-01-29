@@ -72,7 +72,23 @@ class Settings(BaseSettings):
     MAX_CATEGORY_SUMMARY_CHARS: int = 50
 
     # [LLM Generation Configuration]
-    MAX_OUTPUT_TOKENS: int = 32000
+    # 입력/출력 토큰 제한 가이드 (Vertex AI 기준):
+    # - Gemini 2.5 Pro/Flash:
+    #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
+    #   * 출력 토큰 제한: 최대 65,535 토큰
+    # - Gemini 3.0 Pro/Flash Preview:
+    #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
+    #   * 출력 토큰 제한 (Output Token Limit): 공식 사양은 65,536을 명시하나, 
+    #     Vertex AI Preview 환경 실제 호출 시 32,768 토큰까지만 안정적으로 반환되는 제약이 확인됨.
+    #   * [중요] Preview 안정성 특성: 
+    #     - 32,768 미만에서도 불안정한 경우가 있으며, GA(General Availability) 전 자원 보호를 위한 엄격한 가드레일이 존재함.
+    #     - 특히 입력 토큰이 매우 큰 경우, 전체 리소스 사용량에 비례하여 출력 토큰 한도가 유동적으로 줄어들 수 있음.
+    #     - 출력이 짧더라도 finish_reason='MAX_TOKENS'가 반환되는 현상이 발생할 수 있음.
+    # - 현재 설정값: 65,000 (설정은 최대치로 하되, Preview 모델 사용 시 안정성을 위해 입력을 적절히 청킹하는 전략 권장)
+    MAX_OUTPUT_TOKENS: int = 65000
+    
+    # 모델 창의성 조절: 0.0(결정적) ~ 1.0(창의적)
+    # - 0.3: 분석 작업에 적합한 일관성과 약간의 유연성 균형
     TEMPERATURE: float = 0.3
 
     model_config = SettingsConfigDict(

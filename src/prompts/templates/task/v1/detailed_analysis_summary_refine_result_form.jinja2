@@ -7,14 +7,14 @@
     토큰 효율성을 위해 간소화된 스키마를 사용합니다.
     
     번역:
-    - summary: 전체 요약 - 최대 300자로 정제됨 (특수문자 escape 필수: \" for 따옴표, \\ for 백슬래시, \\n for 줄바꿈)
-    - categorys: 카테고리별 상세 분석 결과 배열 (요약만 정제, 나머지 데이터 제거)
-      - category_key: 카테고리 키 (snake_case) - 입력값과 완전히 동일하게 유지 (번역하거나 수정하지 않음)
-      - summary: 카테고리 요약 - 최대 50자로 정제됨 (특수문자 escape 필수)
+    - summary: 문자열 (메인 요약을 최대 300자로 정제. 특수문자 escape 필수: \" for 따옴표, \\ for 백슬래시, \\n for 줄바꿈)
+    - categories: 카테고리별 상세 분석 결과 배열
+      - category_key: 문자열 (snake_case 카테고리 키 - 입력값과 정확히 동일하게 유지, 번역하거나 수정하지 않음)
+      - summary: 문자열 (카테고리 요약을 최대 50자로 정제. 특수문자 escape 필수)
 #}
 {
   "summary": "String (Main summary refined to maximum 300 characters. MUST escape special characters: \\\" for quotes, \\\\ for backslashes, \\\\n for newlines)",
-  "categorys": [
+  "categories": [
     {
       "category_key": "String (Category key in snake_case - MUST keep exactly as provided in input, do NOT translate or modify)",
       "summary": "String (Category summary refined to maximum 50 characters. MUST escape special characters)"

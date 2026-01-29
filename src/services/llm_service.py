@@ -16,6 +16,7 @@ from src.core.model_factory import ModelFactory
 from src.core.config import settings
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.enums.finish_reason import FinishReason
 from src.schemas.models.prompt.detailed_analysis_refined_response import DetailedAnalysisRefinedResponse
 from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
@@ -226,11 +227,21 @@ class LLMService:
             )
             
             # Check for truncation or safety filters first
+            if hasattr(response, 'usage_metadata'):
+                logger.info(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+                logger.info(f"Output tokens: {response.usage_metadata.candidates_token_count}")
+                logger.info(f"Total tokens: {response.usage_metadata.total_token_count}")
+
             if hasattr(response, 'candidates') and response.candidates:
                 candidate = response.candidates[0]
-                finish_reason = getattr(candidate, 'finish_reason', None)
-                
-                if finish_reason == 'MAX_TOKENS':
+                finish_reason_code = getattr(candidate, 'finish_reason', None)
+                finish_reason = FinishReason.from_value(finish_reason_code)
+
+                logger.info(f"Response candidates: {len(response.candidates) if hasattr(response, 'candidates') else 0}")
+                logger.info(f"Response finish_reason: {finish_reason.name} ({finish_reason.value})")
+                logger.info(f"Response text length: {len(response.text)} chars")
+
+                if finish_reason == FinishReason.MAX_TOKENS:
                     prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 'unknown')
                     total_tokens = getattr(response.usage_metadata, 'total_token_count', 'unknown')
                     logger.warning(
@@ -242,7 +253,7 @@ class LLMService:
                     # or allow caller to handle. For now, raising ValueError.
                     raise ValueError(f"Response truncated due to MAX_TOKENS limit ({settings.MAX_OUTPUT_TOKENS}).")
                 
-                if finish_reason == 'SAFETY':
+                if finish_reason == FinishReason.SAFETY:
                      raise ValueError(f"Response blocked by safety filters: {candidate.safety_ratings}")
 
             # Try to get text from response
@@ -274,6 +285,9 @@ class LLMService:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Step 1 response: {e}")
 
+            # 원본 응답 전체 로깅 (디버깅용)
+            logger.error(f"Raw Step 1 response_str:\n{response_str}")
+
             # 파싱 오류 위치 전후 컨텍스트 로깅 (디버깅용)
             error_pos = getattr(e, 'pos', 0)
             context_start = max(0, error_pos - 100)
@@ -290,14 +304,14 @@ class LLMService:
                 # \s*는 공백 문자를 포함
                 attempt = re.sub(r',\s*}', '}', cleaned)
                 attempt = re.sub(r',\s*]', ']', attempt)
-                
+
                 data = json.loads(attempt)
                 logger.warning("Successfully parsed after removing trailing commas")
                 return DetailedAnalysisResponse(**data)
 
             except Exception as comma_error:
                 logger.debug(f"Trailing comma correction failed: {comma_error}")
-                
+
                 try:
                     # 시도 2: 연속된 공백 정리 (기존 로직 유지)
                     import re
@@ -315,12 +329,13 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to validate Step 1 response: {e}")
 
+            # 원본 응답 전체 로깅 (Validation 에러 시)
+            logger.error(f"Raw Step 1 response_str (validation error):\n{response_str}")
+
             # Validation 에러 시 파싱된 데이터 전체 로깅
             if data is not None:
                 logger.error(f"Parsed data that failed validation:")
                 logger.error(json.dumps(data, indent=2, ensure_ascii=False))
-            else:
-                logger.debug(f"Raw response: {response_str}")
 
             raise ValueError(f"Step 1 analysis failed: {str(e)}")
 
@@ -329,14 +344,17 @@ class LLMService:
         try:
             cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned)
-            
+
             # Robustness: Handle if LLM returns a list containing the object
             if isinstance(data, list) and len(data) > 0:
                 logger.warning("Step 2 response returned as a list, extracting the first element.")
                 data = data[0]
-                
+
             return DetailedAnalysisRefinedResponse(**data)
         except Exception as e:
             logger.error(f"Failed to parse Step 2 response: {e}")
-            logger.debug(f"Raw response: {response_str}")
+
+            # 원본 응답 전체 로깅 (Step 2 에러 시)
+            logger.error(f"Raw Step 2 response_str:\n{response_str}")
+
             raise ValueError(f"Step 2 refinement failed: {str(e)}")

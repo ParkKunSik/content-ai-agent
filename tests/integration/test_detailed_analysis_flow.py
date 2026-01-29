@@ -2,6 +2,7 @@ import pytest
 import time
 import json
 import os
+import random
 from datetime import datetime, timedelta
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
@@ -98,7 +99,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
         print(step1_response.model_dump_json(indent=2, ensure_ascii=False))
         print("=" * 80)
     else:
-        print(f"  - Categories found: {len(step1_response.categorys)}")
+        print(f"  - Categories found: {len(step1_response.categories)}")
         print(f"  - Summary length: {len(step1_response.summary)} chars")
 
     # 4. Step 2: Refinement with CUSTOMER_FACING_SMART_BOT
@@ -120,7 +121,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
         print("=" * 80)
     else:
         print(f"  - Refined summary length: {len(step2_response.summary)} chars")
-        print(f"  - Refined categories: {len(step2_response.categorys)}")
+        print(f"  - Refined categories: {len(step2_response.categories)}")
 
     # 5. Merge & Print Final Result
     print(f"\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
@@ -129,8 +130,8 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     final_response = step1_response.model_copy(deep=True)
     final_response.summary = step2_response.summary
     
-    refined_map = {cat.category_key: cat.summary for cat in step2_response.categorys}
-    for category in final_response.categorys:
+    refined_map = {cat.category_key: cat.summary for cat in step2_response.categories}
+    for category in final_response.categories:
         if category.category_key in refined_map:
             category.summary = refined_map[category.category_key]
             
@@ -211,7 +212,7 @@ async def test_llm_service_detailed_analysis_flow_static():
             project_id=project_id, sample_contents=sample_contents, show_content_details=True)
         
         assert step1_response is not None
-        assert len(step1_response.categorys) > 0
+        assert len(step1_response.categories) > 0
         assert step2_response is not None
         assert len(step2_response.summary) > 0
         
@@ -255,8 +256,17 @@ async def test_llm_service_detailed_analysis_flow_project_file():
         f"project_365330_analysis_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
 
-    # Limit to 100 items for testing stability and speed
-    test_content_items = content_items[:700]
+    is_all = False
+    # Sample items for testing (랜덤 또는 순차 선택)
+    sample_size = 500
+
+    if is_all:
+        use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
+        if use_random_sampling:
+            random.shuffle(content_items)
+            print(f"\n📊 Shuffled and sampled {min(sample_size, len(content_items))} items from {len(content_items)} total items")
+
+    test_content_items = content_items if is_all else content_items[:sample_size]
 
     try:
         step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
@@ -264,7 +274,7 @@ async def test_llm_service_detailed_analysis_flow_project_file():
             output_file_path=output_file_path)
         
         assert step1_response is not None
-        assert len(step1_response.categorys) > 0
+        assert len(step1_response.categories) > 0
         assert step2_response is not None
         assert len(step2_response.summary) > 0
         assert os.path.exists(output_file_path), "Output file should be created"

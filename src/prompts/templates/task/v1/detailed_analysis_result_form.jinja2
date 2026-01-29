@@ -10,32 +10,32 @@
     - summary: 발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약
       (길이 제약 없음, 정확성 중심. Step 2에서 300자로 제한)
       (필수: 특수문자 escape 처리 - \" for 따옴표, \\ for 백슬래시, \\n for 줄바꿈)
-    - categorys: 카테고리별 상세 분석 결과 배열 (최대 20개)
+    - categories: 카테고리별 상세 분석 결과 배열 (최대 20개)
       - category: 사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠의 주요 언어와 동일한 언어 사용, 특수문자 escape 필수)
       - category_key: category에서 공백을 '_'로 대체하고 소문자로 변환한 키값
         (예: "Product Quality" → "product_quality", "제품 품질" → "제품_품질")
       - sentiment_type: 카테고리별 감정 유형 (negative: 평균 < 0.4, positive: 평균 ≥ 0.6, neutral: 0.4 ≤ 평균 < 0.6)
       - summary: 상세한 카테고리 분석 및 인사이트 (길이 제약 없음. Step 2에서 50자로 제한. 특수문자 escape 필수)
-      - positive_contents: 이 카테고리 내 긍정적 콘텐츠 배열 (감정 점수 0.5 이상, ≥0.5)
-        (주의: 토큰 제한을 고려하여 대표적인 콘텐츠 ID만 최대 20개까지만 포함하십시오)
-        - id: id 값
-        - score: 감정 점수 (0.0~1.0)
-      - negative_contents: 이 카테고리 내 부정적 콘텐츠 배열 (감정 점수 0.5 미만, <0.5)
-        (주의: 토큰 제한을 고려하여 대표적인 콘텐츠 ID만 최대 20개까지만 포함하십시오)
-        - id: id 값
-        - score: 감정 점수 (0.0~1.0)
+      - positive_contents: 이 카테고리 내 긍정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 **정확히 0.5 이상**, ≥0.5)
+        (중요: 0.5는 긍정으로 분류. 점수를 정확히 계산하여 기준에 맞게 분류)
+        - id: 정수 (id 값)
+        - score: 숫자 (평가 대상에 대한 감정 점수 0.0~1.0, 긍정적 콘텐츠는 반드시 ≥0.5)
+      - negative_contents: 이 카테고리 내 부정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 **정확히 0.5 미만**, <0.5)
+        (중요: 0.49 이하만 부정으로 분류. 애매한 경우 정확히 점수 계산 후 분류)
+        - id: 정수 (id 값)
+        - score: 숫자 (평가 대상에 대한 감정 점수 0.0~1.0, 부정적 콘텐츠는 반드시 <0.5)
       - highlights: 핵심 하이라이트 배열
-        - id: 이 하이라이트 항목의 출처가 되는 id
-        - keyword: 하이라이트의 근거가 되는 원본 키워드/구문 (번역하지 않은 원문. 특수문자 escape 필수)
-        - highlight: 카테고리의 본질을 포착하는 핵심 인사이트 또는 대표적 진술 (번역하지 않은 원문. 특수문자 escape 필수)
-    - harmful_contents: 유해한 콘텐츠 id 리스트 (욕설, 비난, 비방 등 포함 콘텐츠)
-    - etc_contents: 분석에 영향을 주지 않는 기타 콘텐츠 배열
-      - id: id 값
-      - reason: 제외 이유 설명 (특수문자 escape 필수)
+        - id: 정수 (이 하이라이트 항목의 출처 id)
+        - keyword: 문자열 (원본 언어의 키워드/구문 - 번역하지 않음. 특수문자 escape 필수)
+        - highlight: 문자열 (원본 언어의 핵심 인사이트 또는 대표적 진술 - 번역하지 않음. 특수문자 escape 필수)
+    - harmful_contents: 정수 리스트 (욕설, 비난, 비방 등 유해한 콘텐츠가 포함된 id 목록)
+    - etc_contents: 기타 콘텐츠 배열
+      - id: 정수 (id 값)
+      - reason: 문자열 (분석에서 제외한 이유. 특수문자 escape 필수)
 #}
 {
   "summary": "String (Comprehensive analysis summary covering all key themes and insights discovered. MUST escape special characters: \\\" for quotes, \\\\ for backslashes, \\\\n for newlines)",
-  "categorys": [
+  "categories": [
     {
       "category": "String (Clear, descriptive category name in the SAME language as the content items. MUST escape special characters)",
       "category_key": "String (Category name with spaces replaced by '_' and converted to lowercase. Example: 'Product Quality' → 'product_quality', '제품 품질' → '제품_품질')",
@@ -44,13 +44,13 @@
       "positive_contents": [
         {
           "id": "Integer (id value)",
-          "score": "Number (sentiment score 0.0~1.0, positive content ≥0.5)"
+          "score": "Number (sentiment score toward evaluation target 0.0~1.0, MUST be ≥0.5 for positive content)"
         }
       ],
       "negative_contents": [
         {
           "id": "Integer (id value)",
-          "score": "Number (sentiment score 0.0~1.0, negative content <0.5)"
+          "score": "Number (sentiment score toward evaluation target 0.0~1.0, MUST be <0.5 for negative content)"
         }
       ],
       "highlights": [

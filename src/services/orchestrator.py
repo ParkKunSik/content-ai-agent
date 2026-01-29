@@ -113,7 +113,7 @@ class AgentOrchestrator:
             project_type=project_type,
             content_items=[item.model_dump() for item in content_items]
         )
-        logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categorys)}")
+        logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categories)}")
         
         # 3. Step 2: Refine Summary
         # Uses the persona defined in AnalysisMode for refinement
@@ -129,9 +129,9 @@ class AgentOrchestrator:
         base_analysis.summary = refinement_result.summary
         
         # Create a lookup map for refined category summaries
-        refined_map = {cat.category_key: cat.summary for cat in refinement_result.categorys}
+        refined_map = {cat.category_key: cat.summary for cat in refinement_result.categories}
         
-        for category in base_analysis.categorys:
+        for category in base_analysis.categories:
             if category.category_key in refined_map:
                 category.summary = refined_map[category.category_key]
         

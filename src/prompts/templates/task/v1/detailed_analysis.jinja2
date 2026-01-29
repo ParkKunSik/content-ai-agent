@@ -26,18 +26,30 @@
     
     ## 분석 요구사항
     
-    ### 1. 카테고리 클러스터링
-    - 유사한 주제들을 의미있는 카테고리로 그룹화 (최대 20개 카테고리)
-    - 카테고리 명명: 사용자가 이해할 수 있는 명확하고 설명적인 이름 사용
+    ### 1. 카테고리 클러스터링 (최대 20개 카테고리)
+    - **주제 그룹화**: 유사한 주제들을 의미있는 카테고리로 그룹화
+    - **명확한 명명**: 사용자가 이해할 수 있는 설명적인 이름 사용
     - **언어 일관성**: 콘텐츠의 주요 언어를 감지하여 카테고리명에도 동일한 언어 사용 (예: 한글 콘텐츠면 한글 카테고리명)
-    - 검증 원칙: 여러 콘텐츠 아이템이 같은 주제를 공유할 때만 카테고리 생성
-    - 우선 주제: 자주 언급되는 측면에 집중
-    - **중요**: 각 id는 정확히 하나의 카테고리에만 속하며, harmful_contents나 etc_contents에 포함된 경우 카테고리 분류에서 완전히 제외됨
+    - **품질 기준**: 여러 콘텐츠 아이템이 주제를 공유할 때만 카테고리 생성
+    - **빈도 집중**: 자주 언급되는 측면에 우선순위 부여
+    - **핵심 규칙**: 각 id는 정확히 하나의 카테고리에만 속함. harmful_contents나 etc_contents에 포함된 콘텐츠는 카테고리 분류에서 완전히 제외됨
     
-    ### 2. 감정 분석 (0.0~1.0 수치화)
-    - 0.0에 가까울수록 부정적, 1.0에 가까울수록 긍정적으로 수치화
-    - 분류 기준: 0.5 이상은 긍정 콘텐츠 (≥0.5), 0.5 미만은 부정 콘텐츠 (<0.5)
-    - **중요**: 각 id를 한 번만 분류 - 카테고리 내에서도 positive_contents와 negative_contents 간 중복 불가
+    ### 2. 감정 분석 (0.0~1.0 수치화) - 평가 대상 기준
+    - **평가 대상 명확화**: 글 자체의 감정이 아니라 **글이 평가하고 있는 대상(제품/서비스)에 대한 감정**을 분석
+    - **예시**: "배송이 너무 늦어서 화가 났다" → 배송 서비스에 대한 부정적 감정 (0.2)
+    - **예시**: "이 제품 덕분에 기분이 좋아졌다" → 제품에 대한 긍정적 감정 (0.8)
+    - 0.0에 가까울수록 평가 대상에 대해 부정적, 1.0에 가까울수록 평가 대상에 대해 긍정적으로 수치화
+    
+    - **긍부정 분류 규칙 (엄격 준수)**:
+      - **positive_contents**: 감정 점수 **0.5 이상 (≥0.5)**인 id만 포함
+      - **negative_contents**: 감정 점수 **0.5 미만 (<0.5)**인 id만 포함
+      - **핵심**: 0.5는 긍정으로 분류. 애매한 경우 점수를 정확히 계산하여 기준에 맞게 분류
+    
+    - **분류 정확성 보장**:
+      - 각 콘텐츠의 감정 점수를 먼저 정확히 계산한 후, 기준에 따라 positive_contents 또는 negative_contents에 배치
+      - 예시: score 0.5 → positive_contents, score 0.49 → negative_contents
+      - **절대 규칙**: 각 id를 한 번만 분류 - 카테고리 내에서도 positive_contents와 negative_contents 간 중복 불가
+    
     - 카테고리별 상세 저장: positive_contents, negative_contents에 id와 score를 페어로 저장
     - 카테고리별 감정 유형: 해당 카테고리 평균 점수에 따라 sentiment_type 결정
       (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
@@ -46,34 +58,35 @@
     - **규칙**: category에서 공백을 '_'로 대체하고 모든 문자를 소문자로 변환하여 category_key 생성
     - **예시**: "Product Quality" → "product_quality", "제품 품질" → "제품_품질"
     
-    ### 4. 핵심 인사이트 추출 (주요 통찰)
-    - 대표 인용문: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 그대로 유지)
-    - 원본 키워드: 각 핵심 사항을 뒷받침하는 특정 용어/구문 식별 (번역하지 않음)
-    - 콘텐츠 추적가능성: 각 핵심 사항을 그 출처 id에 연결
-    - 품질 필터: 카테고리를 잘 대표하는 핵심 사항만 포함
-    - **이미지 우선 타겟팅**: has_image가 true인 콘텐츠를 하이라이트 선정 시 우선적으로 고려
-    - **수량 제한**: 카테고리당 최대 4개의 핵심 인사이트만 선별
+    ### 4. 하이라이트 추출 (핵심 인사이트)
+    - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 언어 그대로 유지)
+    - **원본 키워드**: 각 하이라이트를 뒷받침하는 특정 용어/구문 식별 (번역하지 않음)
+    - **콘텐츠 추적가능성**: 각 하이라이트를 그 출처 id에 연결
+    - **품질 필터**: 카테고리를 잘 대표하는 하이라이트만 포함
+    - **이미지 콘텐츠 우선순위**: 하이라이트 선택 시 has_image가 true인 콘텐츠를 우선적으로 고려
+    - **수량 제한**: 카테고리당 최대 4개의 핵심 인사이트 선별
     
     ### 5. 유해한 콘텐츠 처리
-    - 유해한 콘텐츠 식별: 욕설, 비난, 비방, 혐오 표현 등이 포함된 콘텐츠
-    - 분석 대상에서 완전 제외: 유해한 콘텐츠는 카테고리 분류 및 감정 분석에서 완전히 제외
-    - 별도 추적: harmful_contents 배열에 해당 id들을 기록
-    - **중요**: harmful_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 포함되지 않음
+    - **유해 콘텐츠 식별**: 욕설, 비난, 비방, 혐오 표현 등이 포함된 콘텐츠
+    - **분석에서 완전 제외**: 유해한 콘텐츠는 카테고리 분류 및 감정 분석에서 완전히 제거
+    - **별도 추적**: harmful_contents 배열에 해당 id들을 기록
+    - **핵심: harmful_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 나타나지 않아야 함**
     
     ### 6. 기타 콘텐츠 처리
-    - 분석 영향 없는 콘텐츠: 유해하지 않으나 분석에 도움이 되지 않는 콘텐츠 식별
-    - 예시: 단순 인사말, 의미 없는 반복, 관련 없는 내용 등
-    - etc_contents에 id와 제외 이유를 함께 기록
-    - **중요**: etc_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 포함되지 않음
+    - **비영향 콘텐츠 식별**: 유해하지 않으나 분석에 기여하지 않는 콘텐츠
+    - **예시**: 단순 인사말, 무의미한 반복, 관련 없는 내용 등
+    - **이유와 함께 기록**: etc_contents에 id와 제외 이유를 저장
+    - **핵심: etc_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 나타나지 않아야 함**
     
     ### 7. 요약 생성
-    - 포괄적 개요: 모든 주요 주제를 다루는 상세한 요약 생성
-    - 데이터 기반 통찰: 실제 콘텐츠 패턴에 기반한 결론
-    - 전문적 어조: 객관적이고 분석적인 언어 유지
-    - 길이 제약 없음: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
+    - **포괄적 개요**: 모든 주요 주제를 다루는 상세한 요약 작성
+    - **데이터 기반 통찰**: 실제 콘텐츠 패턴에 기반한 결론 도출
+    - **전문적 어조**: 객관적이고 분석적인 언어 유지
+    - **길이 제약 없음**: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
 
     ## 출력 형식
     다음 구조를 가진 유효한 JSON 객체여야 합니다:
+    {{ response_schema }}
 
     **필수 JSON 생성 규칙**:
     1. **문자열 Escape 처리**: 모든 문자열 값은 특수문자를 반드시 escape 처리해야 함:
@@ -83,25 +96,8 @@
        - 탭: `\t` → `\\t` (또는 공백으로 대체)
        - 캐리지 리턴: `\r` → `\\r` (또는 제거)
     2. **문자열 값에 줄바꿈 금지**: 모든 문자열 값을 한 줄로 유지
-    3. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
-
-    **올바른 Escape 처리 예시**:
-    ```json
-    {
-      "summary": "이것은 \\\"인용된\\\" 텍스트이며 줄바꿈 문자가 제거되었습니다",
-      "categorys": [
-        {
-          "category": "제품 품질",
-          "category_key": "제품_품질",
-          "highlights": [
-            {
-              "highlight": "사용자가 말하길: \\\"훌륭한 제품!\\\""
-            }
-          ]
-        }
-      ]
-    }
-    ```
+    3. **JSON 압축 형식**: 불필요한 공백, 줄바꿈, 들여쓰기 제거하여 minify된 형태로 출력 (위의 response_schema 구조를 엄격히 준수)
+    4. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
 
     **중요**: category_key는 category에서 공백을 '_'로 대체하고 소문자로 변환한 결과입니다
     
@@ -110,6 +106,14 @@
     프로젝트 타입: {{ project_type }}
     
     콘텐츠 아이템들:
+    ```json
+    {{ content_items }}
+    ```
+    
+    **핵심 리마인더**:
+    1. **감정 분류**: 0.5 기준을 엄격히 준수 - 점수 ≥0.5는 positive_contents, 점수 <0.5는 negative_contents
+    2. **중복 분류 금지**: 각 id는 정확히 하나의 위치에만 나타남 (하나의 카테고리, 그 카테고리 내에서 positive_contents 또는 negative_contents 중 하나에만)
+    3. **점수 정확성**: 작성자의 감정이 아닌 평가 대상에 대한 감정을 기준으로 감정 점수를 정확히 계산
     
     **중요**: JSON 객체만 반환하십시오. 추가 텍스트, 설명, 마크다운 형식 없이.
 #}
@@ -138,10 +142,22 @@ You will receive a JSON array of content items:
 - **Frequency focus**: Prioritize commonly mentioned aspects
 - **CRITICAL**: Each id belongs to exactly ONE category. Content in harmful_contents or etc_contents must be completely excluded from categorization
 
-### 2. Sentiment Analysis (0.0~1.0 Numerical Scale)
-- **Sentiment scoring**: Quantify sentiment where 0.0 = most negative, 1.0 = most positive
-- **Classification threshold**: 0.5 or above = positive content (≥0.5), below 0.5 = negative content (<0.5)
-- **CRITICAL: Classify each id only once** - no duplicate between positive_contents and negative_contents within the same category
+### 2. Sentiment Analysis (0.0~1.0 Numerical Scale) - Target-Based Evaluation
+- **Evaluation target clarification**: Analyze sentiment toward **the subject/product/service being evaluated in the text**, not the emotion of the text itself
+- **Example**: "I was angry because the delivery was too late" → Negative sentiment toward delivery service (0.2)
+- **Example**: "This product made me feel happy" → Positive sentiment toward the product (0.8)
+- **Sentiment scoring**: Quantify sentiment toward the evaluation target where 0.0 = most negative toward target, 1.0 = most positive toward target
+
+- **Positive/Negative Classification Rules (Strict Compliance)**:
+  - **positive_contents**: Include ONLY ids with sentiment score **0.5 or above (≥0.5)**
+  - **negative_contents**: Include ONLY ids with sentiment score **below 0.5 (<0.5)**
+  - **CRITICAL**: 0.5 is classified as positive. For ambiguous cases, calculate score precisely and classify according to criteria
+
+- **Classification Accuracy Guarantee**:
+  - First calculate each content's sentiment score accurately, then place in positive_contents or negative_contents based on criteria
+  - Example: score 0.5 → positive_contents, score 0.49 → negative_contents
+  - **ABSOLUTE RULE**: Classify each id only once - no duplicate between positive_contents and negative_contents within the same category
+
 - **Category detailed storage**: Store id and score as pairs in positive_contents and negative_contents arrays
 - **Category sentiment type**: Determine sentiment_type based on category average score
   (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
@@ -189,25 +205,8 @@ Output must be a valid JSON object with the following structure:
    - Tabs: `\t` → `\\t` (or replace with space)
    - Carriage returns: `\r` → `\\r` (or remove)
 2. **No Line Breaks in String Values**: Keep all string values on a single line
-3. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
-
-**Example of Proper Escaping**:
-```json
-{
-  "summary": "This is a \"quoted\" text with a newline character removed",
-  "categorys": [
-    {
-      "category": "Product Quality",
-      "category_key": "product_quality",
-      "highlights": [
-        {
-          "highlight": "User said: \\\"Great product!\\\""
-        }
-      ]
-    }
-  ]
-}
-```
+3. **Minified JSON Format**: Remove unnecessary whitespace, line breaks, and indentation to produce compact minified JSON (strictly follow the response_schema structure above)
+4. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
 
 **CRITICAL**: category_key is created by replacing spaces with '_' in category and converting to lowercase
 
@@ -220,6 +219,11 @@ Content Items:
 ```json
 {{ content_items }}
 ```
+
+**CRITICAL REMINDER**: 
+1. **Sentiment Classification**: MUST strictly follow 0.5 threshold - scores ≥0.5 go to positive_contents, scores <0.5 go to negative_contents
+2. **No Double Classification**: Each id appears in exactly ONE location (one category, and within that category either positive_contents OR negative_contents, never both)
+3. **Score Accuracy**: Calculate sentiment scores precisely based on evaluation target sentiment, not writer's emotion
 
 **Important**: Return ONLY the JSON object. No additional text, explanations, or markdown formatting.
 {% endblock %}

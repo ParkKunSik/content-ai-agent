@@ -8,11 +8,11 @@ class DetailedAnalysisResponse(BaseModel):
     """상세 분석 응답 모델"""
     
     summary: str = Field(..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약")
-    categorys: list[CategorySummary] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
+    categories: list[CategorySummary] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
     harmful_contents: list[int] = Field(default_factory=list, description="유해한 콘텐츠 content_id 리스트 (욕설, 비난, 비방 등)")
     etc_contents: list[EtcContent] = Field(default_factory=list, description="분석에 영향을 주지 않는 기타 콘텐츠 배열")
     
-    @field_validator('categorys')
+    @field_validator('categories')
     @classmethod
     def validate_categorys_count(cls, v: list[CategorySummary]) -> list[CategorySummary]:
         """카테고리 개수 제한 검증 (최대 20개)"""
@@ -20,7 +20,7 @@ class DetailedAnalysisResponse(BaseModel):
             raise ValueError(f"카테고리는 최대 20개까지만 허용됩니다. 현재: {len(v)}개")
         return v
     
-    @field_validator('categorys')
+    @field_validator('categories')
     @classmethod
     def validate_unique_category_keys(cls, v: list[CategorySummary]) -> list[CategorySummary]:
         """카테고리 키 중복 검증"""
@@ -30,7 +30,7 @@ class DetailedAnalysisResponse(BaseModel):
             raise ValueError(f"중복된 category_key가 있습니다: {duplicates}")
         return v
     
-    @field_validator('harmful_contents', 'etc_contents', 'categorys')
+    @field_validator('harmful_contents', 'etc_contents', 'categories')
     @classmethod
     def validate_no_content_id_duplication(cls, v, info: ValidationInfo) -> list:
         """content_id 중복 방지 검증"""
@@ -49,8 +49,8 @@ class DetailedAnalysisResponse(BaseModel):
             for etc_content in data['etc_contents']:
                 used_content_ids.add(etc_content.id)
         
-        if 'categorys' in data and field_name != 'categorys':
-             for category in data['categorys']:
+        if 'categories' in data and field_name != 'categories':
+             for category in data['categories']:
                 for content in category.positive_contents + category.negative_contents:
                     used_content_ids.add(content.id)
 
@@ -71,13 +71,13 @@ class DetailedAnalysisResponse(BaseModel):
                     )
                 used_content_ids.add(etc_content.id)
 
-        elif field_name == 'categorys':
+        elif field_name == 'categories':
             for category in v:
                 for content in category.positive_contents:
                     if content.id in used_content_ids:
                         raise ValueError(
                             f"content_id {content.id}이 중복되었습니다. "
-                            f"현재 필드: categorys.{category.category_key}.positive_contents"
+                            f"현재 필드: categories.{category.category_key}.positive_contents"
                         )
                     used_content_ids.add(content.id)
 
@@ -85,7 +85,7 @@ class DetailedAnalysisResponse(BaseModel):
                     if content.id in used_content_ids:
                         raise ValueError(
                             f"content_id {content.id}이 중복되었습니다. "
-                            f"현재 필d: categorys.{category.category_key}.negative_contents"
+                            f"현재 필드: categories.{category.category_key}.negative_contents"
                         )
                     used_content_ids.add(content.id)
 

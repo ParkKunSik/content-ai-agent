@@ -51,7 +51,8 @@
        - 탭: `\t` → `\\t` (또는 공백으로 대체)
        - 캐리지 리턴: `\r` → `\\r` (또는 제거)
     2. **문자열 값에 줄바꿈 금지**: 모든 문자열 값을 한 줄로 유지
-    3. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
+    3. **JSON 압축 형식**: 불필요한 공백, 줄바꿈, 들여쓰기 제거하여 minify된 형태로 출력
+    4. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
 
     **문체 및 품질 요구사항**:
     - 격식을 갖춘 문서체: 비즈니스 맥락에 적합한 전문적이고 정중한 언어 사용
@@ -105,7 +106,8 @@ Output must be a valid JSON object with the following structure:
    - Tabs: `\t` → `\\t` (or replace with space)
    - Carriage returns: `\r` → `\\r` (or remove)
 2. **No Line Breaks in String Values**: Keep all string values on a single line
-3. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
+3. **Minified JSON Format**: Remove unnecessary whitespace, line breaks, and indentation to produce compact minified JSON
+4. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
 
 **Writing Style & Quality Requirements**:
 - **Formal written style**: Use professional, polite language suitable for business contexts
