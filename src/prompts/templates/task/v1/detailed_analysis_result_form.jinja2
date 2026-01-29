@@ -14,7 +14,7 @@
       - category: 사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠의 주요 언어와 동일한 언어 사용, 특수문자 escape 필수)
       - category_key: category에서 공백을 '_'로 대체하고 소문자로 변환한 키값
         (예: "Product Quality" → "product_quality", "제품 품질" → "제품_품질")
-      - sentiment_type: 카테고리별 감정 유형 (negative: 평균 < 0.4, positive: 평균 ≥ 0.6, neutral: 0.4 ≤ 평균 < 0.6)
+      - sentiment_type: 카테고리별 감정 유형 ("negative": 평균 < 0.4, "positive": 평균 ≥ 0.6, "neutral": 0.4 ≤ 평균 < 0.6)
       - summary: 상세한 카테고리 분석 및 인사이트 (길이 제약 없음. Step 2에서 50자로 제한. 특수문자 escape 필수)
       - positive_contents: 이 카테고리 내 긍정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 **정확히 0.5 이상**, ≥0.5)
         (중요: 0.5는 긍정으로 분류. 점수를 정확히 계산하여 기준에 맞게 분류)

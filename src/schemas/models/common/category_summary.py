@@ -1,9 +1,9 @@
 from __future__ import annotations
 import logging
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
-from typing import Literal
 from .sentiment_content import SentimentContent
 from .highlight_item import HighlightItem
+from ...enums.sentiment_type import SentimentType
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class CategorySummary(BaseModel):
     
     category: str = Field(..., description="사용자가 이해할 수 있는 명확하고 설명적인 카테고리명")
     category_key: str = Field(..., description="카테고리를 snake_case 형태로 변환한 키값")
-    sentiment_type: Literal["negative", "positive", "neutral"] = Field(..., description="카테고리별 감정 유형")
+    sentiment_type: SentimentType = Field(..., description="카테고리별 감정 유형")
     summary: str = Field(..., description="상세한 카테고리 분석 및 인사이트")
     positive_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 긍정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 0.5 이상)")
     negative_contents: list[SentimentContent] = Field(default_factory=list, description="이 카테고리 내 부정적 콘텐츠 배열 (평가 대상에 대한 감정 점수 0.5 미만)")
@@ -62,7 +62,7 @@ class CategorySummary(BaseModel):
     
     @field_validator('sentiment_type')
     @classmethod
-    def validate_sentiment_type(cls, v: str, info: ValidationInfo) -> str:
+    def validate_sentiment_type(cls, v: SentimentType, info: ValidationInfo) -> SentimentType:
         """감정 타입과 평가 대상에 대한 콘텐츠 감정 점수 일관성 검증"""
         data = info.data
         if 'positive_contents' in data and 'negative_contents' in data:
@@ -80,8 +80,8 @@ class CategorySummary(BaseModel):
                     avg_score += content.score
                 avg_score = avg_score / total_count
                 
-                expected_type = "negative" if avg_score < 0.4 else "positive" if avg_score >= 0.6 else "neutral"
+                expected_type = SentimentType.from_average_score(avg_score)
                 if v != expected_type:
-                    raise ValueError(f"sentiment_type '{v}'이 평균 점수 {avg_score:.2f}와 일치하지 않습니다. 예상: '{expected_type}'")
+                    raise ValueError(f"sentiment_type '{v.value}'이 평균 점수 {avg_score:.2f}와 일치하지 않습니다. 예상: '{expected_type.value}'")
         
         return v
