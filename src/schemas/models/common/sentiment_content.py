@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Union
+from src.core.config import settings
 
 
 class SentimentContent(BaseModel):
@@ -11,6 +12,9 @@ class SentimentContent(BaseModel):
     @field_validator('score')
     @classmethod
     def validate_sentiment_score(cls, v: Union[float, int]) -> float:
+        if not settings.STRICT_VALIDATION:
+            return float(v)
+
         """평가 대상에 대한 감정 점수 유효성 검증"""
         if not isinstance(v, (int, float)):
             raise ValueError("score는 숫자여야 합니다")

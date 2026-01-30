@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class SentimentType(Enum):
+class SentimentType(str, Enum):
     """
     카테고리별 감정 유형을 나타내는 Enum.
     평균 감정 점수에 따라 분류됩니다.

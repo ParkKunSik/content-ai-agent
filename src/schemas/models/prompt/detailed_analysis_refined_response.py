@@ -12,6 +12,9 @@ class RefinedCategorySummary(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """요약 길이 제한 검증 (설정값 기반)"""
         max_chars = settings.MAX_CATEGORY_SUMMARY_CHARS
         if len(v) > max_chars:
@@ -28,6 +31,9 @@ class DetailedAnalysisRefinedResponse(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """전체 요약 길이 제한 검증 (설정값 기반)"""
         max_chars = settings.MAX_MAIN_SUMMARY_CHARS
         if len(v) > max_chars:

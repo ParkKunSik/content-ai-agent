@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # [Analysis Configuration]
     MAX_MAIN_SUMMARY_CHARS: int = 300
     MAX_CATEGORY_SUMMARY_CHARS: int = 50
+    
+    # [Validation Configuration]
+    # 스키마 검증 엄격도 제어 (True: 에러 발생, False: 경고만)
+    STRICT_VALIDATION: bool = False
 
     # [LLM Generation Configuration]
     # 입력/출력 토큰 제한 가이드 (Vertex AI 기준):

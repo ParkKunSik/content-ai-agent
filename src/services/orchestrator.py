@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import List, Union
 
 from src.core.config import settings
@@ -84,7 +85,7 @@ class AgentOrchestrator:
         )
 
         # 7. Archive
-        self.memory.save_history(project_id, analysis_mode.value, response.model_dump())
+        self.memory.save_history(project_id, analysis_mode.value, json.loads(response.model_dump_json()))
 
         return response
 
@@ -138,9 +139,9 @@ class AgentOrchestrator:
         # 5. Archive final merged result
         try:
             self.memory.save_history(
-                project_id=project_id, 
-                persona_type=analysis_mode.value, 
-                result_data=base_analysis.model_dump()
+                project_id=project_id,
+                persona_type=analysis_mode.value,
+                result_data=json.loads(base_analysis.model_dump_json())
             )
         except Exception as e:
             logger.warning(f"Failed to save detailed analysis history: {e}")

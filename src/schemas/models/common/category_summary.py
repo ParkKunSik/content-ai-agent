@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from .sentiment_content import SentimentContent
 from .highlight_item import HighlightItem
 from ...enums.sentiment_type import SentimentType
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +23,24 @@ class CategorySummary(BaseModel):
     @field_validator('category_key')
     @classmethod
     def validate_category_key(cls, v: str, info: ValidationInfo) -> str:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """카테고리명을 기반으로 snake_case 키 생성 및 검증"""
         data = info.data
         if 'category' in data:
             expected_key = data['category'].lower().replace(' ', '_').replace('-', '_')
             if v != expected_key:
-                raise ValueError(f"category_key '{v}'이 category '{data['category']}'에서 생성된 예상 키 '{expected_key}'와 다릅니다")
+                error_msg = f"category_key '{v}'이 category '{data['category']}'에서 생성된 예상 키 '{expected_key}'와 다릅니다"
+                raise ValueError(error_msg)
         return v
     
     @field_validator('positive_contents')
     @classmethod
     def validate_positive_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """긍정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 이상 필수)"""
         invalid_contents = []
         for content in v:
@@ -40,14 +48,17 @@ class CategorySummary(BaseModel):
                 invalid_contents.append(f"id {content.id} (score: {content.score})")
         
         if invalid_contents:
-            logger.warning(f"긍정 리스트에 0.5 미만 점수 포함: {', '.join(invalid_contents)}")
-            # 프로덕션에서는 에러를 발생시키지 않지만 경고를 남김
+            error_msg = f"긍정 리스트에 0.5 미만 점수 포함: {', '.join(invalid_contents)}"
+            raise ValueError(error_msg)
         
         return v
     
     @field_validator('negative_contents')
     @classmethod
     def validate_negative_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """부정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 미만 필수)"""
         invalid_contents = []
         for content in v:
@@ -55,14 +66,17 @@ class CategorySummary(BaseModel):
                 invalid_contents.append(f"id {content.id} (score: {content.score})")
         
         if invalid_contents:
-            logger.warning(f"부정 리스트에 0.5 이상 점수 포함: {', '.join(invalid_contents)}")
-            # 프로덕션에서는 에러를 발생시키지 않지만 경고를 남김
+            error_msg = f"부정 리스트에 0.5 이상 점수 포함: {', '.join(invalid_contents)}"
+            raise ValueError(error_msg)
         
         return v
     
     @field_validator('sentiment_type')
     @classmethod
     def validate_sentiment_type(cls, v: SentimentType, info: ValidationInfo) -> SentimentType:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """감정 타입과 평가 대상에 대한 콘텐츠 감정 점수 일관성 검증"""
         data = info.data
         if 'positive_contents' in data and 'negative_contents' in data:
@@ -82,6 +96,7 @@ class CategorySummary(BaseModel):
                 
                 expected_type = SentimentType.from_average_score(avg_score)
                 if v != expected_type:
-                    raise ValueError(f"sentiment_type '{v.value}'이 평균 점수 {avg_score:.2f}와 일치하지 않습니다. 예상: '{expected_type.value}'")
+                    error_msg = f"sentiment_type '{v.value}'이 평균 점수 {avg_score:.2f}와 일치하지 않습니다. 예상: '{expected_type.value}'"
+                    raise ValueError(error_msg)
         
         return v

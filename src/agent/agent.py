@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import List, Dict, Any, Union
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
@@ -55,8 +56,8 @@ class ContentAnalysisAgent:
                 analysis_mode=analysis_mode,
                 content_sources=contents
             )
-            return response_model.model_dump()
-            
+            return json.loads(response_model.model_dump_json())
+
         except Exception as e:
             logger.error(f"Error during agent query: {e}")
             raise
@@ -81,7 +82,7 @@ class ContentAnalysisAgent:
                 contents=contents,
                 analysis_mode=analysis_mode
             )
-            return response_model.model_dump()
+            return json.loads(response_model.model_dump_json())
         except Exception as e:
             logger.error(f"Error during detailed analysis: {e}")
             raise

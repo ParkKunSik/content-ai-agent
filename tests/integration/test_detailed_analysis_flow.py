@@ -147,16 +147,16 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     
     # 6. Save output if requested
     if save_output and output_file_path:
-        # Add execution time to each result
-        step1_result = step1_response.model_dump()
+        # Add execution time to each result (JSON 문자열을 dict로 파싱)
+        step1_result = json.loads(step1_response.model_dump_json())
         step1_result["execution_time_seconds"] = round(step1_duration, 2)
         step1_result["execution_time_formatted"] = _format_duration(step1_duration)
 
-        step2_result = step2_response.model_dump()
+        step2_result = json.loads(step2_response.model_dump_json())
         step2_result["execution_time_seconds"] = round(step2_duration, 2)
         step2_result["execution_time_formatted"] = _format_duration(step2_duration)
 
-        final_result = final_response.model_dump()
+        final_result = json.loads(final_response.model_dump_json())
         final_result["execution_time_seconds"] = round(total_duration, 2)
         final_result["execution_time_formatted"] = _format_duration(total_duration)
 
@@ -260,7 +260,7 @@ async def test_llm_service_detailed_analysis_flow_project_file():
     # Sample items for testing (랜덤 또는 순차 선택)
     sample_size = 500
 
-    if is_all:
+    if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
         if use_random_sampling:
             random.shuffle(content_items)

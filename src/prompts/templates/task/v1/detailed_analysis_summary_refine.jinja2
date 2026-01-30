@@ -1,4 +1,5 @@
 {% extends "task/base.jinja2" %}
+{% from 'task/json_format.jinja2' import json_generation_rules %}
 
 {% block content %}
 {#
@@ -43,16 +44,7 @@
     다음 구조를 가진 유효한 JSON 객체이어야 합니다:
     {{ response_schema }}
 
-    **필수 JSON 생성 규칙**:
-    1. **문자열 Escape 처리**: 모든 문자열 값은 특수문자를 반드시 escape 처리해야 함:
-       - 큰따옴표: `"` → `\"`
-       - 백슬래시: `\` → `\\`
-       - 줄바꿈: `\n` → `\\n` (또는 공백으로 대체)
-       - 탭: `\t` → `\\t` (또는 공백으로 대체)
-       - 캐리지 리턴: `\r` → `\\r` (또는 제거)
-    2. **문자열 값에 줄바꿈 금지**: 모든 문자열 값을 한 줄로 유지
-    3. **JSON 압축 형식**: 불필요한 공백, 줄바꿈, 들여쓰기 제거하여 minify된 형태로 출력
-    4. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
+    {{ json_generation_rules() }}
 
     **문체 및 품질 요구사항**:
     - 격식을 갖춘 문서체: 비즈니스 맥락에 적합한 전문적이고 정중한 언어 사용
@@ -60,8 +52,6 @@
     - 통합된 분석: 긍정적이고 부정적인 측면을 자연스러운 흐름으로 결합
     - 문자 제한: 메인 요약 {{ max_main_summary_chars }}자, 카테고리 요약 {{ max_category_summary_chars }}자 엄격 준수
     - 데이터 무결성 보존: category_key 값을 제공된 그대로 정확히 유지 (수정 금지)
-
-    **중요**: 최적화된 요약 길이로 정제된 JSON 객체만 반환하십시오
 #}
 
 # Task: Summary Refinement and Length Optimization
@@ -98,16 +88,7 @@ Analysis Data:
 Output must be a valid JSON object with the following structure:
 {{ response_schema }}
 
-**CRITICAL JSON Generation Rules**:
-1. **String Escaping**: All string values MUST properly escape special characters:
-   - Double quotes: `"` → `\"`
-   - Backslashes: `\` → `\\`
-   - Newlines: `\n` → `\\n` (or replace with space)
-   - Tabs: `\t` → `\\t` (or replace with space)
-   - Carriage returns: `\r` → `\\r` (or remove)
-2. **No Line Breaks in String Values**: Keep all string values on a single line
-3. **Minified JSON Format**: Remove unnecessary whitespace, line breaks, and indentation to produce compact minified JSON
-4. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
+{{ json_generation_rules() }}
 
 **Writing Style & Quality Requirements**:
 - **Formal written style**: Use professional, polite language suitable for business contexts
@@ -116,5 +97,4 @@ Output must be a valid JSON object with the following structure:
 - **Character limits**: Strictly enforce {{ max_main_summary_chars }}-character main summary, {{ max_category_summary_chars }}-character category summaries
 - **Preserve data integrity**: Keep category_key values exactly as provided (do not modify)
 
-**Important**: Return ONLY the refined JSON object with optimized summary lengths
 {% endblock %}

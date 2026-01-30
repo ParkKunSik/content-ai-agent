@@ -2,6 +2,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from ..common.category_summary import CategorySummary
 from ..common.etc_content import EtcContent
+from src.core.config import settings
 
 
 class DetailedAnalysisResponse(BaseModel):
@@ -15,6 +16,9 @@ class DetailedAnalysisResponse(BaseModel):
     @field_validator('categories')
     @classmethod
     def validate_categorys_count(cls, v: list[CategorySummary]) -> list[CategorySummary]:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """카테고리 개수 제한 검증 (최대 20개)"""
         if len(v) > 20:
             raise ValueError(f"카테고리는 최대 20개까지만 허용됩니다. 현재: {len(v)}개")
@@ -23,6 +27,9 @@ class DetailedAnalysisResponse(BaseModel):
     @field_validator('categories')
     @classmethod
     def validate_unique_category_keys(cls, v: list[CategorySummary]) -> list[CategorySummary]:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """카테고리 키 중복 검증"""
         category_keys = [cat.category_key for cat in v]
         if len(category_keys) != len(set(category_keys)):
@@ -33,6 +40,9 @@ class DetailedAnalysisResponse(BaseModel):
     @field_validator('harmful_contents', 'etc_contents', 'categories')
     @classmethod
     def validate_no_content_id_duplication(cls, v, info: ValidationInfo) -> list:
+        if not settings.STRICT_VALIDATION:
+            return v
+
         """content_id 중복 방지 검증"""
         # data는 현재까지 검증이 완료된 다른 필드들의 딕셔너리 (V2 스타일)
         data = info.data

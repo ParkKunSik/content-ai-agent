@@ -1,4 +1,5 @@
 {% extends "task/base.jinja2" %}
+{% from 'task/json_format.jinja2' import json_generation_rules %}
 
 {% block content %}
 {#
@@ -88,16 +89,7 @@
     다음 구조를 가진 유효한 JSON 객체여야 합니다:
     {{ response_schema }}
 
-    **필수 JSON 생성 규칙**:
-    1. **문자열 Escape 처리**: 모든 문자열 값은 특수문자를 반드시 escape 처리해야 함:
-       - 큰따옴표: `"` → `\"`
-       - 백슬래시: `\` → `\\`
-       - 줄바꿈: `\n` → `\\n` (또는 공백으로 대체)
-       - 탭: `\t` → `\\t` (또는 공백으로 대체)
-       - 캐리지 리턴: `\r` → `\\r` (또는 제거)
-    2. **문자열 값에 줄바꿈 금지**: 모든 문자열 값을 한 줄로 유지
-    3. **JSON 압축 형식**: 불필요한 공백, 줄바꿈, 들여쓰기 제거하여 minify된 형태로 출력 (위의 response_schema 구조를 엄격히 준수)
-    4. **유효한 JSON만**: 표준 JSON 파서로 파싱 가능하도록 보장
+    {{ json_generation_rules() }}
 
     **중요**: category_key는 category에서 공백을 '_'로 대체하고 소문자로 변환한 결과입니다
     
@@ -114,8 +106,6 @@
     1. **감정 분류**: 0.5 기준을 엄격히 준수 - 점수 ≥0.5는 positive_contents, 점수 <0.5는 negative_contents
     2. **중복 분류 금지**: 각 id는 정확히 하나의 위치에만 나타남 (하나의 카테고리, 그 카테고리 내에서 positive_contents 또는 negative_contents 중 하나에만)
     3. **점수 정확성**: 작성자의 감정이 아닌 평가 대상에 대한 감정을 기준으로 감정 점수를 정확히 계산
-    
-    **중요**: JSON 객체만 반환하십시오. 추가 텍스트, 설명, 마크다운 형식 없이.
 #}
 
 # Task: Comprehensive Content Analysis and Categorization
@@ -197,16 +187,7 @@ You will receive a JSON array of content items:
 Output must be a valid JSON object with the following structure:
 {{ response_schema }}
 
-**CRITICAL JSON Generation Rules**:
-1. **String Escaping**: All string values MUST properly escape special characters:
-   - Double quotes: `"` → `\"`
-   - Backslashes: `\` → `\\`
-   - Newlines: `\n` → `\\n` (or replace with space)
-   - Tabs: `\t` → `\\t` (or replace with space)
-   - Carriage returns: `\r` → `\\r` (or remove)
-2. **No Line Breaks in String Values**: Keep all string values on a single line
-3. **Minified JSON Format**: Remove unnecessary whitespace, line breaks, and indentation to produce compact minified JSON (strictly follow the response_schema structure above)
-4. **Valid JSON Only**: Ensure the output is parseable by standard JSON parsers
+{{ json_generation_rules() }}
 
 **CRITICAL**: category_key is created by replacing spaces with '_' in category and converting to lowercase
 
@@ -224,6 +205,4 @@ Content Items:
 1. **Sentiment Classification**: MUST strictly follow 0.5 threshold - scores ≥0.5 go to positive_contents, scores <0.5 go to negative_contents
 2. **No Double Classification**: Each id appears in exactly ONE location (one category, and within that category either positive_contents OR negative_contents, never both)
 3. **Score Accuracy**: Calculate sentiment scores precisely based on evaluation target sentiment, not writer's emotion
-
-**Important**: Return ONLY the JSON object. No additional text, explanations, or markdown formatting.
 {% endblock %}
