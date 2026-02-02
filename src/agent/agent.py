@@ -5,7 +5,7 @@ from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.services.orchestrator import AgentOrchestrator
-from src.core.model_factory import ModelFactory
+from src.core.session_factory import SessionFactory
 
 logger = logging.getLogger(__name__)
 
@@ -18,19 +18,19 @@ class ContentAnalysisAgent:
     def __init__(self):
         """
         Constructor for the agent. 
-        Model configuration is handled via settings and ModelFactory during set_up.
+        Model configuration is handled via settings and SessionFactory during set_up.
         """
         self.orchestrator = None
 
     def set_up(self):
         """
         Initialization logic called by the Reasoning Engine or Local Wrapper.
-        Loads system instructions via ModelFactory.
+        Loads system instructions via SessionFactory.
         """
         logger.info("Setting up ContentAnalysisAgent services...")
         
         # Initialize all models with their versioned system instructions
-        ModelFactory.initialize()
+        SessionFactory.initialize()
 
         # Initialize Orchestrator
         self.orchestrator = AgentOrchestrator()

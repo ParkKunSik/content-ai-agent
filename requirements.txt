@@ -1,5 +1,6 @@
 # Core Agent & Google Cloud
 google-cloud-aiplatform>=1.60.0
+google-genai>=0.3.0
 google-cloud-storage
 google-cloud-secret-manager
 

@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timedelta
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
-from src.core.model_factory import ModelFactory
+from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 
@@ -60,7 +60,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
         :type project_id: int
     """
     # 1. Setup Service
-    ModelFactory.initialize()
+    SessionFactory.initialize()
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 

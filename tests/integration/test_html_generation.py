@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from src.core.config import settings
-from src.core.model_factory import ModelFactory
+from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.services.llm_service import LLMService
@@ -139,7 +139,7 @@ async def _execute_detailed_analysis_with_html(
         tuple: (step1_response, step2_response, final_response, total_duration, html_path, pdf_path)
     """
     # 1. Setup Service
-    ModelFactory.initialize()
+    SessionFactory.initialize()
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 

@@ -3,66 +3,15 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 
-from google.api_core import exceptions
-from vertexai.generative_models import GenerationConfig
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    wait_random_exponential,
-    retry_if_exception
-)
-
-from src.core.model_factory import ModelFactory
-from src.core.config import settings
+from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
-from src.schemas.enums.finish_reason import FinishReason
+from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.schemas.models.prompt.detailed_analysis_refined_response import DetailedAnalysisRefinedResponse
 from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
-from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
-
-def create_json_config(temperature: float, response_schema: Optional[Dict[str, Any]] = None):
-    """Generates a GenerationConfig instance for JSON output."""
-    if temperature is None:
-        raise ValueError("Temperature must be provided for GenerationConfig.")
-
-    
-    return GenerationConfig(
-        max_output_tokens=settings.MAX_OUTPUT_TOKENS,
-        temperature=temperature,
-        response_mime_type="application/json",
-        response_schema=response_schema
-    )
-
-
-def is_quota_error(exception):
-    """할당량 관련 오류 판단"""
-    error_msg = str(exception).lower()
-    return (
-        isinstance(exception, exceptions.ResourceExhausted) or
-        "429" in error_msg or 
-        "resource exhausted" in error_msg
-    )
-
-
-def is_retryable_error(exception):
-    """재시도 가능한 서버/네트워크 오류 판단"""
-    error_msg = str(exception).lower()
-    return (
-        isinstance(exception, (
-            exceptions.InternalServerError,
-            exceptions.ServiceUnavailable,
-            exceptions.DeadlineExceeded
-        )) or
-        "event loop is closed" in error_msg or
-        "connection" in error_msg or
-        any(code in error_msg for code in ["500", "502", "503", "504"])
-    )
-
 
 class LLMService:
     """
@@ -73,26 +22,27 @@ class LLMService:
         self.prompt_manager = prompt_manager
 
     async def count_total_tokens(self, contents: List[str]) -> int:
-        model = ModelFactory.get_model(PersonaType.COMMON_TOKEN_COUNTER)
         total = 0
         for text in contents:
             try:
-                resp = model.count_tokens(text)
-                total += resp.total_tokens
+                token_count = SessionFactory.count_tokens(text, PersonaType.COMMON_TOKEN_COUNTER)
+                total += token_count
             except Exception as e:
                 logger.warning(f"Failed to count tokens: {e}")
                 total += len(text) // 2
         return total
 
-    async def generate(self, prompt: str, persona_type: PersonaType, response_schema: Optional[Dict[str, Any]] = None) -> str:
+    async def generate(self, prompt: str, persona_type: PersonaType, mime_type: str = "text/plain", response_schema: Optional[Dict[str, Any]] = None) -> str:
         """Generic method to generate content using a specific persona."""
-        model = ModelFactory.get_model(persona_type)
-        return await self._safe_generate_content(
-            model, 
-            prompt, 
-            temperature=persona_type.temperature,
-            response_schema=response_schema
+        session = SessionFactory.start_session(
+            persona_type=persona_type,
+            mime_type=mime_type,
+            schema=response_schema
         )
+        
+        # AsyncGenAISession을 사용한 콘텐츠 생성
+        response = session.generate_content(prompt)
+        return response.text
 
     async def run_single_pass_analysis(
         self, 
@@ -102,20 +52,13 @@ class LLMService:
         project_type: ProjectType
     ) -> str:
         """단일 패스 분석 수행"""
-        model = ModelFactory.get_model(persona_type)
-        
-        # Use high-level PromptManager method
         prompt = self.prompt_manager.get_contents_analysis_prompt(
             project_id=project_id,
             project_type=project_type,
             combined_summary="\n\n".join(contents)
         )
         
-        return await self._safe_generate_content(
-            model, 
-            prompt, 
-            temperature=persona_type.temperature
-        )
+        return await self.generate(prompt, persona_type)
 
     async def run_map_reduce_analysis(
         self,
@@ -127,24 +70,18 @@ class LLMService:
         """Map-Reduce 분석 수행 (청킹 단계에서도 동일한 템플릿 사용)"""
         # Map Phase: Flash 모델로 각 콘텐츠 요약
         flash_persona = PersonaType.SUMMARY_DATA_ANALYST
-        flash_model = ModelFactory.get_model(flash_persona)
 
         chunk_summaries = []
         for i, chunk in enumerate(contents):
             logger.info(f"Processing chunk {i+1}/{len(contents)}")
 
-            # Use high-level method for chunks (use base project_id for chunks)
             chunk_prompt = self.prompt_manager.get_contents_analysis_prompt(
                 project_id=project_id,
                 project_type=project_type,
                 combined_summary=chunk
             )
 
-            result_json = await self._safe_generate_content(
-                flash_model, 
-                chunk_prompt, 
-                temperature=flash_persona.temperature
-            )
+            result_json = await self.generate(chunk_prompt, flash_persona)
             summary_text = self._parse_summary(result_json)
             chunk_summaries.append(summary_text)
 
@@ -154,18 +91,13 @@ class LLMService:
         logger.info("Map phase completed, starting Reduce phase")
 
         # Reduce Phase: Pro 모델로 통합 분석
-        pro_model = ModelFactory.get_model(persona_type)
         final_prompt = self.prompt_manager.get_contents_analysis_prompt(
             project_id=project_id,
             project_type=project_type,
             combined_summary="\n---\n".join(chunk_summaries)
         )
 
-        return await self._safe_generate_content(
-            pro_model, 
-            final_prompt, 
-            temperature=persona_type.temperature
-        )
+        return await self.generate(final_prompt, persona_type)
 
     def _convert_to_analysis_items(self, content_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -200,7 +132,7 @@ class LLMService:
         )
 
         schema = DetailedAnalysisResponse.model_json_schema()
-        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, response_schema=schema)
+        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type="application/json", response_schema=schema)
         return self._parse_detailed_analysis_response(response_str)
 
     async def refine_analysis_summary(
@@ -221,78 +153,9 @@ class LLMService:
         )
 
         schema = DetailedAnalysisRefinedResponse.model_json_schema()
-        response_str = await self.generate(prompt, persona_type, response_schema=schema)
+        response_str = await self.generate(prompt, persona_type, mime_type="application/json", response_schema=schema)
         return self._parse_refined_response(response_str)
 
-    @retry(
-        retry=retry_if_exception(is_quota_error),
-        wait=wait_exponential(multiplier=60, min=60, max=600),
-        stop=stop_after_attempt(5),
-        reraise=True
-    )
-    @retry(
-        retry=retry_if_exception(is_retryable_error),
-        wait=wait_random_exponential(multiplier=1, max=60),
-        stop=stop_after_attempt(3),
-        reraise=True
-    )
-    async def _safe_generate_content(
-        self, 
-        model, 
-        prompt: str, 
-        temperature: float, 
-        response_schema: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """안전한 모델 호출 및 재시도"""
-        generation_config = create_json_config(
-            temperature=temperature, 
-            response_schema=response_schema
-        )
-
-        try:
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config
-            )
-            
-            # Check for truncation or safety filters first
-            if hasattr(response, 'usage_metadata'):
-                logger.info(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-                logger.info(f"Output tokens: {response.usage_metadata.candidates_token_count}")
-                logger.info(f"Total tokens: {response.usage_metadata.total_token_count}")
-
-            if hasattr(response, 'candidates') and response.candidates:
-                candidate = response.candidates[0]
-                finish_reason_code = getattr(candidate, 'finish_reason', None)
-                finish_reason = FinishReason.from_value(finish_reason_code)
-
-                logger.info(f"Response candidates: {len(response.candidates) if hasattr(response, 'candidates') else 0}")
-                logger.info(f"Response finish_reason: {finish_reason.name} ({finish_reason.value})")
-                logger.info(f"Response text length: {len(response.text)} chars")
-
-                if finish_reason == FinishReason.MAX_TOKENS:
-                    prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 'unknown')
-                    total_tokens = getattr(response.usage_metadata, 'total_token_count', 'unknown')
-                    logger.warning(
-                        f"Response generation stopped due to MAX_TOKENS. "
-                        f"Prompt tokens: {prompt_tokens}, Total tokens: {total_tokens}. "
-                        f"Response might be incomplete."
-                    )
-                    # Truncation is critical for JSON parsing, so we treat it as an error to trigger retry
-                    # or allow caller to handle. For now, raising ValueError.
-                    raise ValueError(f"Response truncated due to MAX_TOKENS limit ({settings.MAX_OUTPUT_TOKENS}).")
-                
-                if finish_reason == FinishReason.SAFETY:
-                     raise ValueError(f"Response blocked by safety filters: {candidate.safety_ratings}")
-
-            # Try to get text from response
-            try:
-                return response.text
-            except (ValueError, AttributeError) as text_error:
-                raise ValueError(f"Cannot extract text from response: {text_error}")
-        except Exception as e:
-            logger.error(f"Model call failed: {e}")
-            raise
 
     def _parse_summary(self, json_str: str) -> str:
         """JSON 응답에서 summary 필드 추출"""
