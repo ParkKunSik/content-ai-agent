@@ -53,16 +53,6 @@ class Settings(BaseSettings):
     # [System Instruction]
     SYSTEM_INSTRUCTION_VERSION: str = "v1"
 
-    # [Redis Configuration]
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
-    REDIS_PASSWORD: Optional[str] = None
-
-    # [Elasticsearch Configuration]
-    ELASTICSEARCH_URL: str = "http://localhost:9200"
-    ELASTICSEARCH_API_KEY: Optional[str] = None
-    ELASTICSEARCH_INDEX_HISTORY: str = "local-content-ai-history"
-
     # [Model Configuration]
     VERTEX_AI_MODEL_PRO: str = "gemini-2.5-pro"
     VERTEX_AI_MODEL_FLASH: str = "gemini-2.5-flash"
@@ -96,13 +86,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8", 
         extra="ignore"
     )
-
-    @property
-    def redis_url(self) -> str:
-        """Constructs a Redis connection URL."""
-        if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
 
 def fetch_config_from_gsm(env: str, project_id: str) -> Dict[str, Any]:
     """Fetches configuration JSON from Google Secret Manager."""

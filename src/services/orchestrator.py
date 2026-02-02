@@ -1,5 +1,4 @@
 import logging
-import json
 from typing import List, Union
 
 from src.core.config import settings
@@ -9,7 +8,6 @@ from src.schemas.models.api.analyze_response import AnalyzeResponse
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
 from src.services.llm_service import LLMService
-from src.services.memory import MemoryService
 from src.services.request_content_loader import RequestContentLoader
 from src.utils.prompt_manager import PromptManager
 
@@ -25,7 +23,6 @@ class AgentOrchestrator:
 
     def __init__(self):
         self.loader = RequestContentLoader()
-        self.memory = MemoryService()
         self.prompt_manager = PromptManager()
         self.llm_service = LLMService(self.prompt_manager)
 
@@ -84,9 +81,6 @@ class AgentOrchestrator:
             }
         )
 
-        # 7. Archive
-        self.memory.save_history(project_id, analysis_mode.value, json.loads(response.model_dump_json()))
-
         return response
 
     async def detailed_analysis(
@@ -136,16 +130,6 @@ class AgentOrchestrator:
             if category.category_key in refined_map:
                 category.summary = refined_map[category.category_key]
         
-        # 5. Archive final merged result
-        try:
-            self.memory.save_history(
-                project_id=project_id,
-                persona_type=analysis_mode.value,
-                result_data=json.loads(base_analysis.model_dump_json())
-            )
-        except Exception as e:
-            logger.warning(f"Failed to save detailed analysis history: {e}")
-
         logger.info("Detailed analysis completed successfully")
         
         return base_analysis

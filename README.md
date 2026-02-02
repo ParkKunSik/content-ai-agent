@@ -16,9 +16,6 @@ Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용�
 *   **하이브리드 오케스트레이션 (Hybrid Strategy):**
     *   **Single-Pass:** 데이터가 적을 경우 고성능 모델(Pro)을 사용하여 즉시 분석합니다.
     *   **Map-Reduce:** 데이터가 방대할 경우(500k 토큰 이상) 고속 모델(Flash)로 청킹 요약 후 Pro 모델로 최종 통합합니다.
-*   **이원화된 메모리 관리:**
-    *   **Redis:** 실시간 프로젝트 문맥 및 세션 상태 관리 (TTL 적용).
-    *   **Elasticsearch:** 분석 결과 아카이빙 및 검색을 위한 장기 기억 저장소.
 *   **프롬프트 템플릿 엔진 & Controlled Generation:**
     *   `Jinja2`를 활용한 동적 프롬프트 생성과 함께, Vertex AI의 `response_schema` 기능을 도입하여 100% 유효한 JSON 출력을 보장합니다.
     *   Pydantic 모델을 통해 데이터 구조와 지침을 일원화하여 관리합니다.
@@ -49,7 +46,7 @@ src/
 ├── loaders/        # 데이터 수집 (GCS, Local File)
 ├── prompts/        # Jinja2 템플릿 (System, Task)
 ├── schemas/        # Pydantic 모델 및 Enum (PersonaType, AnalysisMode)
-├── services/       # 핵심 로직 (Orchestrator, LLMService, Memory)
+├── services/       # 핵심 로직 (Orchestrator, LLMService)
 └── utils/          # 공통 유틸리티 (PromptManager, PromptRenderer)
 ```
 
@@ -73,8 +70,8 @@ src/
 cp .env.local.example .env.local
 ```
 
-### 2. 인프라 실행
-도커를 통해 Redis와 Elasticsearch를 실행합니다.
+### 2. 인프라 실행 (선택 사항)
+필요한 경우 도커를 통해 추가 인프라를 실행합니다. (현재 핵심 기능은 외부 인프라 의존성 없음)
 
 ```bash
 docker-compose up -d
