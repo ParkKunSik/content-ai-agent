@@ -98,19 +98,21 @@ graph TD
     *   **Server/Network Error (5xx):** Random Exponential Backoff 적용 (Max 3회, 최대 60초 대기).
 *   **Event Loop 안전성:** 비동기 gRPC 호출 시 발생할 수 있는 Event Loop 충돌을 방지하기 위한 안전한 호출 패턴 적용.
 
-## 4. 프롬프트 엔지니어링 (Persona Definition)
+## 4. 프롬프트 엔지니어링 (Persona Definition & Controlled Generation)
 *   **System Prompt Structure:** 
     *   `base.jinja2`를 상속받아 모든 페르소나의 공통 언어 규칙 및 행동 양식을 정의.
-    *   `PromptManager`와 `Jinja2` 템플릿 엔진을 통해 동적 생성 및 JSON 스키마 주입.
+    *   **Controlled Generation:** `GenerationConfig`의 `response_mime_type="application/json"` 및 `response_schema`를 사용하여 구조적 출력을 강제.
+    *   **Schema-Driven Instructions:** Pydantic 모델(`DetailedAnalysisResponse` 등)의 `Field(description=...)`가 LLM에게 세부 지침을 전달하는 역할을 수행.
+    *   **Temperature Strategy:** `PersonaType`별로 최적화된 Temperature 설정 (0.1 ~ 0.7) 적용.
 *   **CUSTOMER_FACING_ANALYST (구 판매자 도우미):**
     *   **Goal:** 고객의 관점에서 제품 가치를 발굴하고 신뢰를 형성.
-    *   **Tone:** 정중함, 진정성 있음, 고객 중심적.
+    *   **Tone:** 정중함, 진정성 있음, 고객 중심적. (Temp: 0.7)
 *   **PRO_DATA_ANALYST (구 데이터 분석가):**
     *   **Goal:** 데이터 이면의 패턴과 사실을 냉철하게 분석.
-    *   **Tone:** 객관적, 논리적, 구조적.
+    *   **Tone:** 객관적, 논리적, 구조적. (Temp: 0.1)
 *   **CUSTOMER_FACING_SMART_BOT (리뷰 요약 봇):**
     *   **Goal:** 방대한 리뷰의 핵심을 효율적으로 요약하여 합리적 의사결정 지원.
-    *   **Tone:** 절제됨, 스마트함, 이모지 배제, 명확한 사실 전달.
+    *   **Tone:** 절제됨, 스마트함, 이모지 배제, 명확한 사실 전달. (Temp: 0.3)
 
 ## 5. 기술 스택 (Technology Stack)
 *   **Runtime:** Python 3.10+

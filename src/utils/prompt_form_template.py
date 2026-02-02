@@ -11,10 +11,6 @@ class PromptFormTemplate(Enum):
     # 기존 콘텐츠 분석
     CONTENTS_ANALYSIS_RESULT = ("task/v1/contents_analysis_result_form.jinja2")
 
-    # 상세 분석 2단계 템플릿
-    DETAILED_ANALYSIS_RESULT = ("task/v1/detailed_analysis_result_form.jinja2")
-    DETAILED_ANALYSIS_SUMMARY_REFINE_RESULT = ("task/v1/detailed_analysis_summary_refine_result_form.jinja2")
-
     def __init__(self, template_path: str):
         self.template_path = template_path
         self._cached_template = None

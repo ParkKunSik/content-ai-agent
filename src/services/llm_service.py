@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from google.api_core import exceptions
+from vertexai.generative_models import GenerationConfig
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -24,19 +25,18 @@ from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
 
-# Shared GenerationConfig instance (immutable, thread-safe)
-_generation_config = None
+def create_json_config(temperature: float, response_schema: Optional[Dict[str, Any]] = None):
+    """Generates a GenerationConfig instance for JSON output."""
+    if temperature is None:
+        raise ValueError("Temperature must be provided for GenerationConfig.")
 
-def get_generation_config():
-    """싱글톤 GenerationConfig 인스턴스 반환"""
-    global _generation_config
-    if _generation_config is None:
-        from vertexai.generative_models import GenerationConfig
-        _generation_config = GenerationConfig(
-            max_output_tokens=settings.MAX_OUTPUT_TOKENS,
-            temperature=settings.TEMPERATURE,
-        )
-    return _generation_config
+    
+    return GenerationConfig(
+        max_output_tokens=settings.MAX_OUTPUT_TOKENS,
+        temperature=temperature,
+        response_mime_type="application/json",
+        response_schema=response_schema
+    )
 
 
 def is_quota_error(exception):
@@ -84,10 +84,15 @@ class LLMService:
                 total += len(text) // 2
         return total
 
-    async def generate(self, prompt: str, persona_type: PersonaType) -> str:
+    async def generate(self, prompt: str, persona_type: PersonaType, response_schema: Optional[Dict[str, Any]] = None) -> str:
         """Generic method to generate content using a specific persona."""
         model = ModelFactory.get_model(persona_type)
-        return await self._safe_generate_content(model, prompt)
+        return await self._safe_generate_content(
+            model, 
+            prompt, 
+            temperature=persona_type.temperature,
+            response_schema=response_schema
+        )
 
     async def run_single_pass_analysis(
         self, 
@@ -106,7 +111,11 @@ class LLMService:
             combined_summary="\n\n".join(contents)
         )
         
-        return await self._safe_generate_content(model, prompt)
+        return await self._safe_generate_content(
+            model, 
+            prompt, 
+            temperature=persona_type.temperature
+        )
 
     async def run_map_reduce_analysis(
         self,
@@ -117,7 +126,8 @@ class LLMService:
     ) -> str:
         """Map-Reduce 분석 수행 (청킹 단계에서도 동일한 템플릿 사용)"""
         # Map Phase: Flash 모델로 각 콘텐츠 요약
-        flash_model = ModelFactory.get_model(PersonaType.SUMMARY_DATA_ANALYST)
+        flash_persona = PersonaType.SUMMARY_DATA_ANALYST
+        flash_model = ModelFactory.get_model(flash_persona)
 
         chunk_summaries = []
         for i, chunk in enumerate(contents):
@@ -130,7 +140,11 @@ class LLMService:
                 combined_summary=chunk
             )
 
-            result_json = await self._safe_generate_content(flash_model, chunk_prompt)
+            result_json = await self._safe_generate_content(
+                flash_model, 
+                chunk_prompt, 
+                temperature=flash_persona.temperature
+            )
             summary_text = self._parse_summary(result_json)
             chunk_summaries.append(summary_text)
 
@@ -147,7 +161,11 @@ class LLMService:
             combined_summary="\n---\n".join(chunk_summaries)
         )
 
-        return await self._safe_generate_content(pro_model, final_prompt)
+        return await self._safe_generate_content(
+            pro_model, 
+            final_prompt, 
+            temperature=persona_type.temperature
+        )
 
     def _convert_to_analysis_items(self, content_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -181,7 +199,8 @@ class LLMService:
             content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
         )
 
-        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST)
+        schema = DetailedAnalysisResponse.model_json_schema()
+        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, response_schema=schema)
         return self._parse_detailed_analysis_response(response_str)
 
     async def refine_analysis_summary(
@@ -201,7 +220,8 @@ class LLMService:
             raw_analysis_data=raw_analysis_data
         )
 
-        response_str = await self.generate(prompt, persona_type)
+        schema = DetailedAnalysisRefinedResponse.model_json_schema()
+        response_str = await self.generate(prompt, persona_type, response_schema=schema)
         return self._parse_refined_response(response_str)
 
     @retry(
@@ -216,9 +236,18 @@ class LLMService:
         stop=stop_after_attempt(3),
         reraise=True
     )
-    async def _safe_generate_content(self, model, prompt: str) -> str:
+    async def _safe_generate_content(
+        self, 
+        model, 
+        prompt: str, 
+        temperature: float, 
+        response_schema: Optional[Dict[str, Any]] = None
+    ) -> str:
         """안전한 모델 호출 및 재시도"""
-        generation_config = get_generation_config()
+        generation_config = create_json_config(
+            temperature=temperature, 
+            response_schema=response_schema
+        )
 
         try:
             response = await model.generate_content_async(

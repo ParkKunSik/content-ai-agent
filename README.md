@@ -19,8 +19,9 @@ Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용�
 *   **이원화된 메모리 관리:**
     *   **Redis:** 실시간 프로젝트 문맥 및 세션 상태 관리 (TTL 적용).
     *   **Elasticsearch:** 분석 결과 아카이빙 및 검색을 위한 장기 기억 저장소.
-*   **프롬프트 템플릿 엔진:**
-    *   `Jinja2`를 활용하여 시스템 지침(System)과 작업 지시(Task)를 분리 관리하며, 버전별 프롬프트 관리가 가능합니다.
+*   **프롬프트 템플릿 엔진 & Controlled Generation:**
+    *   `Jinja2`를 활용한 동적 프롬프트 생성과 함께, Vertex AI의 `response_schema` 기능을 도입하여 100% 유효한 JSON 출력을 보장합니다.
+    *   Pydantic 모델을 통해 데이터 구조와 지침을 일원화하여 관리합니다.
 *   **엔터프라이즈급 안정성:**
     *   **Tenacity Retry:** API 할당량 초과(429) 및 일시적 서버 오류에 대한 자동 재시도 로직이 적용되어 있습니다.
     *   **Validation:** 10MB 파일 크기 제한 및 사전 검증을 통해 안정적인 리소스 관리를 지원합니다.

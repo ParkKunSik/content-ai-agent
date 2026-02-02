@@ -91,10 +91,6 @@ class Settings(BaseSettings):
     # - 현재 설정값: 65,000 (설정은 최대치로 하되, Preview 모델 사용 시 안정성을 위해 입력을 적절히 청킹하는 전략 권장)
     MAX_OUTPUT_TOKENS: int = 65000
     
-    # 모델 창의성 조절: 0.0(결정적) ~ 1.0(창의적)
-    # - 0.3: 분석 작업에 적합한 일관성과 약간의 유연성 균형
-    TEMPERATURE: float = 0.3
-
     model_config = SettingsConfigDict(
         env_file=ENV_LOCAL_PATH, 
         env_file_encoding="utf-8", 

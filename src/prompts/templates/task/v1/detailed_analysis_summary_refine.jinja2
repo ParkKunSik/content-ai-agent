@@ -1,5 +1,5 @@
 {% extends "task/base.jinja2" %}
-{% from 'task/json_format.jinja2' import json_generation_rules %}
+{% from 'task/json_format.jinja2' import json_response_rule %}
 
 {% block content %}
 {#
@@ -41,17 +41,16 @@
     
     ## 출력 형식
 
-    다음 구조를 가진 유효한 JSON 객체이어야 합니다:
-    {{ response_schema }}
+    제공된 JSON 스키마 형식을 엄격히 준수하는 유효한 JSON 객체여야 합니다.
 
-    {{ json_generation_rules() }}
+    {{ json_response_rule() }}
 
     **문체 및 품질 요구사항**:
     - 격식을 갖춘 문서체: 비즈니스 맥락에 적합한 전문적이고 정중한 언어 사용
     - 완전한 문단: 개조식이 아닌 응집력 있는 서술체로 요약 작성
     - 통합된 분석: 긍정적이고 부정적인 측면을 자연스러운 흐름으로 결합
     - 문자 제한: 메인 요약 {{ max_main_summary_chars }}자, 카테고리 요약 {{ max_category_summary_chars }}자 엄격 준수
-    - 데이터 무결성 보존: category_key 값을 제공된 그대로 정확히 유지 (수정 금지)
+    - 데이터 무결성 보존: category_key 값을 제공된 그대로 정확히 유지 (대소문자 포함, 수정 금지)
 #}
 
 # Task: Summary Refinement and Length Optimization
@@ -85,16 +84,15 @@ Analysis Data:
 
 ## Output Format
 
-Output must be a valid JSON object with the following structure:
-{{ response_schema }}
+Output must be a valid JSON object adhering to the provided JSON schema.
 
-{{ json_generation_rules() }}
+{{ json_response_rule() }}
 
 **Writing Style & Quality Requirements**:
 - **Formal written style**: Use professional, polite language suitable for business contexts
 - **Complete paragraphs**: Write summaries as cohesive narratives, not bullet points
 - **Integrated analysis**: Combine positive and negative aspects into natural flow
 - **Character limits**: Strictly enforce {{ max_main_summary_chars }}-character main summary, {{ max_category_summary_chars }}-character category summaries
-- **Preserve data integrity**: Keep category_key values exactly as provided (do not modify)
+- **Preserve data integrity**: Keep category_key values exactly as provided, including original casing (do not modify)
 
 {% endblock %}

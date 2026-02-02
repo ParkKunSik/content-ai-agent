@@ -6,8 +6,8 @@ from src.core.config import settings
 class SentimentContent(BaseModel):
     """감정 분석이 포함된 콘텐츠 모델 - 평가 대상 기준"""
     
-    id: int = Field(..., description="콘텐츠 고유 식별자")
-    score: float = Field(..., description="평가 대상에 대한 감정 점수 (0.0~1.0 범위, 글이 평가하는 대상에 대한 감정)", ge=0.0, le=1.0)
+    id: int = Field(..., description="분석 대상 콘텐츠의 고유 ID")
+    score: float = Field(..., description="평가 대상에 대한 감정 점수 (0.0~1.0, 중립 0.5, 0.5 이상 긍정, 0.5 미만 부정)", ge=0.0, le=1.0)
     
     @field_validator('score')
     @classmethod

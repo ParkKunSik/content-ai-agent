@@ -33,6 +33,13 @@
        - 불린값은 true/false (따옴표 없음)
        - null 값은 null (따옴표 없음)
        - 배열과 객체는 적절한 대괄호/중괄호 사용
+
+    번역 (json_response_rule):
+    **핵심 JSON 출력 규칙**:
+    1. **순수 JSON 객체**: 유효한 JSON 객체만 반환하십시오. 마크다운 코드 블록(예: ```json), 백틱, 또는 서론/결론 텍스트를 포함하지 마십시오.
+    2. **스키마 무결성**: 제공된 JSON 스키마를 엄격히 준수하십시오. 모든 필드가 존재하고 데이터 타입이 정확히 일치해야 합니다.
+    3. **적절한 Escape 처리**: 모든 문자열 값은 유효한 JSON을 위해 올바르게 escape되어야 합니다 (예: 따옴표는 \", 줄바꿈은 \n).
+    4. **압축된 출력**: 불필요한 공백이나 들여쓰기 없이 압축된(minified) JSON 형식으로 결과를 제공하십시오.
 #}
 
 {% macro json_generation_rules() %}
@@ -62,4 +69,12 @@
    - Boolean values as true/false (without quotes)
    - null values as null (without quotes)
    - Arrays and objects with proper brackets/braces
+{% endmacro %}
+
+{% macro json_response_rule() %}
+**CRITICAL JSON Output Rules**:
+1. **Pure JSON Object**: Return ONLY a valid JSON object. Do NOT include markdown code blocks (e.g., ```json), backticks, or any preamble/postamble text.
+2. **Schema Integrity**: Strictly adhere to the provided JSON schema. Ensure all fields are present and data types match exactly.
+3. **Proper Escaping**: All string values must be correctly escaped for valid JSON (e.g., quotes as \", newlines as \n).
+4. **Minified Output**: Provide the result in a compact, minified JSON format without unnecessary whitespace or indentation.
 {% endmacro %}

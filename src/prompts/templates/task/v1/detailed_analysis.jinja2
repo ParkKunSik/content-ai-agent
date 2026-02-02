@@ -1,5 +1,5 @@
 {% extends "task/base.jinja2" %}
-{% from 'task/json_format.jinja2' import json_generation_rules %}
+{% from 'task/json_format.jinja2' import json_response_rule %}
 
 {% block content %}
 {#
@@ -42,22 +42,25 @@
     - 0.0에 가까울수록 평가 대상에 대해 부정적, 1.0에 가까울수록 평가 대상에 대해 긍정적으로 수치화
     
     - **긍부정 분류 규칙 (엄격 준수)**:
-      - **positive_contents**: 감정 점수 **0.5 이상 (≥0.5)**인 id만 포함
-      - **negative_contents**: 감정 점수 **0.5 미만 (<0.5)**인 id만 포함
-      - **핵심**: 0.5는 긍정으로 분류. 애매한 경우 점수를 정확히 계산하여 기준에 맞게 분류
+      - **판단 기준**: 글 감정 자체가 아닌, **평가 대상(제품/서비스)으로 인해 좋은 방향으로 개선되었는지**가 주요 판단 기준
+      - **positive_contents**: 평가 대상으로 인한 개선/만족도 점수 **0.5 이상 (≥0.5)**인 id만 포함
+        * 예시: "제품이 좋아서 만족해요" (긍정) vs "배송이 늦어서 화나지만 제품은 좋네요" (긍정 - 제품 자체는 개선 효과)
+      - **negative_contents**: 평가 대상으로 인한 개선/만족도 점수 **0.5 미만 (<0.5)**인 id만 포함
+        * 예시: "직원이 친절하지만 제품 품질이 실망" (부정 - 제품으로 인한 개선 효과 부족)
+      - **핵심**: 글 작성자의 감정 표현과 평가 대상으로 인한 실질적 개선은 분리하여 판단. 0.5는 긍정으로 분류
     
     - **분류 정확성 보장**:
-      - 각 콘텐츠의 감정 점수를 먼저 정확히 계산한 후, 기준에 따라 positive_contents 또는 negative_contents에 배치
-      - 예시: score 0.5 → positive_contents, score 0.49 → negative_contents
+      - 각 콘텐츠에서 **평가 대상(제품/서비스) 자체로 인한 개선/악화 정도**를 먼저 정확히 계산한 후, 기준에 따라 positive_contents 또는 negative_contents에 배치
+      - 예시: "화가 나지만 제품은 훌륭함" → score 0.8 → positive_contents (제품으로 인한 개선)
+      - 예시: "직원은 좋지만 제품이 별로" → score 0.3 → negative_contents (제품으로 인한 개선 부족)
       - **절대 규칙**: 각 id를 한 번만 분류 - 카테고리 내에서도 positive_contents와 negative_contents 간 중복 불가
     
     - 카테고리별 상세 저장: positive_contents, negative_contents에 id와 score를 페어로 저장
     - 카테고리별 감정 유형: 해당 카테고리 평균 점수에 따라 sentiment_type 결정
-      (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
+      (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
     
     ### 3. 카테고리 키 생성
-    - **규칙**: category에서 공백을 '_'로 대체하고 모든 문자를 소문자로 변환하여 category_key 생성
-    - **예시**: "Product Quality" → "product_quality", "제품 품질" → "제품_품질"
+    - **규칙**: category에서 공백만 '_'로 대체하여 category_key 생성 (대소문자 유지, 기타 가공 금지)
     
     ### 4. 하이라이트 추출 (핵심 인사이트)
     - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 언어 그대로 유지)
@@ -86,12 +89,11 @@
     - **길이 제약 없음**: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
 
     ## 출력 형식
-    다음 구조를 가진 유효한 JSON 객체여야 합니다:
-    {{ response_schema }}
+    제공된 JSON 스키마 형식을 엄격히 준수하는 유효한 JSON 객체여야 합니다.
 
-    {{ json_generation_rules() }}
+    {{ json_response_rule() }}
 
-    **중요**: category_key는 category에서 공백을 '_'로 대체하고 소문자로 변환한 결과입니다
+    **중요**: category_key는 category에서 공백을 '_'로 대체한 결과입니다 (대소문자 유지)
     
     ## 분석할 콘텐츠
     프로젝트 ID: {{ project_id }}
@@ -105,7 +107,7 @@
     **핵심 리마인더**:
     1. **감정 분류**: 0.5 기준을 엄격히 준수 - 점수 ≥0.5는 positive_contents, 점수 <0.5는 negative_contents
     2. **중복 분류 금지**: 각 id는 정확히 하나의 위치에만 나타남 (하나의 카테고리, 그 카테고리 내에서 positive_contents 또는 negative_contents 중 하나에만)
-    3. **점수 정확성**: 작성자의 감정이 아닌 평가 대상에 대한 감정을 기준으로 감정 점수를 정확히 계산
+    3. **점수 정확성**: 작성자의 감정 표현이 아닌 **평가 대상(제품/서비스)으로 인한 실질적 개선/악화 정도**를 기준으로 감정 점수를 정확히 계산
 #}
 
 # Task: Comprehensive Content Analysis and Categorization
@@ -139,22 +141,26 @@ You will receive a JSON array of content items:
 - **Sentiment scoring**: Quantify sentiment toward the evaluation target where 0.0 = most negative toward target, 1.0 = most positive toward target
 
 - **Positive/Negative Classification Rules (Strict Compliance)**:
-  - **positive_contents**: Include ONLY ids with sentiment score **0.5 or above (≥0.5)**
-  - **negative_contents**: Include ONLY ids with sentiment score **below 0.5 (<0.5)**
-  - **CRITICAL**: 0.5 is classified as positive. For ambiguous cases, calculate score precisely and classify according to criteria
+  - **Judgment Criteria**: Not the emotion of the text itself, but **whether the evaluation target (product/service) led to positive improvement** as the main judgment criterion
+  - **positive_contents**: Include ONLY ids with improvement/satisfaction score toward evaluation target **0.5 or above (≥0.5)**
+    * Example: "I'm satisfied because the product is good" (positive) vs "Delivery was late and I'm angry but the product is good" (positive - product itself has improvement effect)
+  - **negative_contents**: Include ONLY ids with improvement/satisfaction score toward evaluation target **below 0.5 (<0.5)**
+    * Example: "Staff is kind but product quality is disappointing" (negative - insufficient improvement effect from product)
+  - **CRITICAL**: Separate judgment between writer's emotional expression and actual improvement from evaluation target. 0.5 is classified as positive
 
 - **Classification Accuracy Guarantee**:
-  - First calculate each content's sentiment score accurately, then place in positive_contents or negative_contents based on criteria
-  - Example: score 0.5 → positive_contents, score 0.49 → negative_contents
+  - First accurately calculate **degree of improvement/deterioration caused by evaluation target (product/service) itself** in each content, then place in positive_contents or negative_contents based on criteria
+  - Example: "I'm angry but product is excellent" → score 0.8 → positive_contents (improvement from product)
+  - Example: "Staff is good but product is mediocre" → score 0.3 → negative_contents (lack of improvement from product)
   - **ABSOLUTE RULE**: Classify each id only once - no duplicate between positive_contents and negative_contents within the same category
 
 - **Category detailed storage**: Store id and score as pairs in positive_contents and negative_contents arrays
 - **Category sentiment type**: Determine sentiment_type based on category average score
-  (negative: <0.4, positive: ≥0.6, neutral: 0.4~0.6)
+  (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
 
 ### 3. Category Key Generation
-- **Rule**: Replace spaces with '_' in category and convert all characters to lowercase to create category_key
-- **Examples**: "Product Quality" → "product_quality", "제품 품질" → "제품_품질"
+- **Rule**: Replace spaces with '_' in category to create category_key. Keep original casing and do not apply other processing.
+- **Examples**: "Product Quality" → "Product_Quality", "제품 품질" → "제품_품질"
 
 ### 4. Highlight Extraction (Key Insights)
 - **Representative quotes**: Extract meaningful phrases that capture category essence (keep in original language)
@@ -184,12 +190,11 @@ You will receive a JSON array of content items:
 
 ## Output Format
 
-Output must be a valid JSON object with the following structure:
-{{ response_schema }}
+Output must be a valid JSON object adhering to the provided JSON schema.
 
-{{ json_generation_rules() }}
+{{ json_response_rule() }}
 
-**CRITICAL**: category_key is created by replacing spaces with '_' in category and converting to lowercase
+**CRITICAL**: category_key MUST be exactly category with spaces replaced by '_'. Keep original casing.
 
 ## Content to Analyze
 
@@ -204,5 +209,5 @@ Content Items:
 **CRITICAL REMINDER**: 
 1. **Sentiment Classification**: MUST strictly follow 0.5 threshold - scores ≥0.5 go to positive_contents, scores <0.5 go to negative_contents
 2. **No Double Classification**: Each id appears in exactly ONE location (one category, and within that category either positive_contents OR negative_contents, never both)
-3. **Score Accuracy**: Calculate sentiment scores precisely based on evaluation target sentiment, not writer's emotion
+3. **Score Accuracy**: Calculate sentiment scores precisely based on **actual improvement/deterioration degree caused by evaluation target (product/service)**, not writer's emotional expression
 {% endblock %}

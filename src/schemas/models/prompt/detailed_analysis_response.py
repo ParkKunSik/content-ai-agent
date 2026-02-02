@@ -6,9 +6,16 @@ from src.core.config import settings
 
 
 class DetailedAnalysisResponse(BaseModel):
-    """상세 분석 응답 모델"""
+    """
+    상세 분석 응답 모델
     
-    summary: str = Field(..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약")
+    Note:
+        이 모델의 JSON 스키마는 Vertex AI의 'response_schema'로 전달되어 
+        LLM의 출력 구조와 내용을 제어하는 핵심 지침으로 사용됩니다.
+        각 필드의 'description'은 LLM에게 전달되는 프롬프트 역할을 하므로 명확하고 상세하게 작성해야 합니다.
+    """
+    
+    summary: str = Field(..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)")
     categories: list[CategorySummary] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
     harmful_contents: list[int] = Field(default_factory=list, description="유해한 콘텐츠 content_id 리스트 (욕설, 비난, 비방 등)")
     etc_contents: list[EtcContent] = Field(default_factory=list, description="분석에 영향을 주지 않는 기타 콘텐츠 배열")
