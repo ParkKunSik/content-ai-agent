@@ -1,0 +1,213 @@
+{% extends "task/base.jinja2" %}
+{% from 'task/json_format.jinja2' import json_response_rule %}
+
+{% block content %}
+{#
+    [상세 분석 메인 프롬프트 - 1단계: 구조화 및 추출]
+    
+    설명:
+    콘텐츠 상세 분석의 첫 번째 단계로, 입력받은 콘텐츠 아이템들을
+    카테고리별로 분류하고 감정 분석을 수행하여 구조화된 인사이트를 생성합니다.
+    PRO_DATA_ANALYST 페르소나를 사용하며, 정확성을 최우선으로 합니다.
+    
+    번역:
+    # 작업: 포괄적인 콘텐츠 분석 및 분류
+    
+    제공된 콘텐츠 아이템들을 분석하고 명확한 분류와 감정 분석을 통해 구조화된 인사이트를 만드십시오.
+    
+    ## 입력 데이터 구조
+    JSON 배열 형태의 콘텐츠 아이템들을 받게 됩니다:
+    ```json
+    [
+      {"id": 1, "content": "...", "has_image": true},
+      {"id": 2, "content": "..."}
+    ]
+    ```
+    **주의**: 필드가 없으면 `false`로 간주하십시오.
+    
+    ## 분석 요구사항
+    
+    ### 1. 카테고리 클러스터링 (최대 20개 카테고리)
+    - **주제 그룹화**: 유사한 주제들을 의미있는 카테고리로 그룹화
+    - **명확한 명명**: 사용자가 이해할 수 있는 설명적인 이름 사용
+    - **언어 일관성**: 콘텐츠의 주요 언어를 감지하여 카테고리명에도 동일한 언어 사용 (예: 한글 콘텐츠면 한글 카테고리명)
+    - **품질 기준**: 여러 콘텐츠 아이템이 주제를 공유할 때만 카테고리 생성
+    - **빈도 집중**: 자주 언급되는 측면에 우선순위 부여
+    - **핵심 규칙**: 각 id는 정확히 하나의 카테고리에만 속함. harmful_contents나 etc_contents에 포함된 콘텐츠는 카테고리 분류에서 완전히 제외됨
+    
+    ### 2. 감정 분석 (0.0~1.0 수치화) - 평가 대상 기준
+    - **평가 대상 명확화**: 글 자체의 감정이 아니라 **글이 평가하고 있는 대상(제품/서비스)에 대한 감정**을 분석
+    - **예시**: "배송이 너무 늦어서 화가 났다" → 배송 서비스에 대한 부정적 감정 (0.2)
+    - **예시**: "이 제품 덕분에 기분이 좋아졌다" → 제품에 대한 긍정적 감정 (0.8)
+    - 0.0에 가까울수록 평가 대상에 대해 부정적, 1.0에 가까울수록 평가 대상에 대해 긍정적으로 수치화
+    
+    - **긍부정 분류 규칙 (엄격 준수)**:
+      - **판단 기준**: 글 감정 자체가 아닌, **평가 대상(제품/서비스)으로 인해 좋은 방향으로 개선되었는지**가 주요 판단 기준
+      - **positive_contents**: 평가 대상으로 인한 개선/만족도 점수 **0.5 이상 (≥0.5)**인 id만 포함
+        * 예시: "제품이 좋아서 만족해요" (긍정) vs "배송이 늦어서 화나지만 제품은 좋네요" (긍정 - 제품 자체는 개선 효과)
+      - **negative_contents**: 평가 대상으로 인한 개선/만족도 점수 **0.5 미만 (<0.5)**인 id만 포함
+        * 예시: "직원이 친절하지만 제품 품질이 실망" (부정 - 제품으로 인한 개선 효과 부족)
+      - **핵심**: 글 작성자의 감정 표현과 평가 대상으로 인한 실질적 개선은 분리하여 판단. 0.5는 긍정으로 분류
+    
+    - **분류 정확성 보장**:
+      - 각 콘텐츠에서 **평가 대상(제품/서비스) 자체로 인한 개선/악화 정도**를 먼저 정확히 계산한 후, 기준에 따라 positive_contents 또는 negative_contents에 배치
+      - 예시: "화가 나지만 제품은 훌륭함" → score 0.8 → positive_contents (제품으로 인한 개선)
+      - 예시: "직원은 좋지만 제품이 별로" → score 0.3 → negative_contents (제품으로 인한 개선 부족)
+      - **절대 규칙**: 각 id를 한 번만 분류 - 카테고리 내에서도 positive_contents와 negative_contents 간 중복 불가
+    
+    - 카테고리별 상세 저장: positive_contents, negative_contents에 id와 score를 페어로 저장
+    - 카테고리별 감정 유형: 해당 카테고리 평균 점수에 따라 sentiment_type 결정
+      (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
+    
+    ### 3. 카테고리 키 생성
+    - **규칙**: category에서 공백만 '_'로 대체하여 category_key 생성 (대소문자 유지, 기타 가공 금지)
+    
+    ### 4. 하이라이트 추출 (핵심 인사이트)
+    - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 언어 그대로 유지)
+    - **원본 키워드**: 각 하이라이트를 뒷받침하는 특정 용어/구문 식별 (번역하지 않음)
+    - **콘텐츠 추적가능성**: 각 하이라이트를 그 출처 id에 연결
+    - **품질 필터**: 카테고리를 잘 대표하는 하이라이트만 포함
+    - **이미지 콘텐츠 우선순위**: 하이라이트 선택 시 has_image가 true인 콘텐츠를 우선적으로 고려
+    - **수량 제한**: 카테고리당 최대 4개의 핵심 인사이트 선별
+    
+    ### 5. 유해한 콘텐츠 처리
+    - **유해 콘텐츠 식별**: 욕설, 비난, 비방, 혐오 표현 등이 포함된 콘텐츠
+    - **분석에서 완전 제외**: 유해한 콘텐츠는 카테고리 분류 및 감정 분석에서 완전히 제거
+    - **별도 추적**: harmful_contents 배열에 해당 id들을 기록
+    - **핵심: harmful_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 나타나지 않아야 함**
+    
+    ### 6. 기타 콘텐츠 처리
+    - **비영향 콘텐츠 식별**: 유해하지 않으나 분석에 기여하지 않는 콘텐츠
+    - **예시**: 단순 인사말, 무의미한 반복, 관련 없는 내용 등
+    - **이유와 함께 기록**: etc_contents에 id와 제외 이유를 저장
+    - **핵심: etc_contents에 포함된 id는 어떤 카테고리나 감정 분석에도 나타나지 않아야 함**
+    
+    ### 7. 요약 생성
+    - **포괄적 개요**: 모든 주요 주제를 다루는 상세한 요약 작성
+    - **데이터 기반 통찰**: 실제 콘텐츠 패턴에 기반한 결론 도출
+    - **전문적 어조**: 객관적이고 분석적인 언어 유지
+    - **길이 제약 없음**: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
+
+    ## 출력 형식
+    제공된 JSON 스키마 형식을 엄격히 준수하는 유효한 JSON 객체여야 합니다.
+
+    {{ json_response_rule() }}
+
+    **중요**: category_key는 category에서 공백을 '_'로 대체한 결과입니다 (대소문자 유지)
+    
+    ## 분석할 콘텐츠
+    프로젝트 ID: {{ project_id }}
+    프로젝트 타입: {{ project_type }}
+    
+    콘텐츠 아이템들:
+    ```json
+    {{ content_items }}
+    ```
+    
+    **핵심 리마인더**:
+    1. **감정 분류**: 0.5 기준을 엄격히 준수 - 점수 ≥0.5는 positive_contents, 점수 <0.5는 negative_contents
+    2. **중복 분류 금지**: 각 id는 정확히 하나의 위치에만 나타남 (하나의 카테고리, 그 카테고리 내에서 positive_contents 또는 negative_contents 중 하나에만)
+    3. **점수 정확성**: 작성자의 감정 표현이 아닌 **평가 대상(제품/서비스)으로 인한 실질적 개선/악화 정도**를 기준으로 감정 점수를 정확히 계산
+#}
+
+# Task: Comprehensive Content Analysis and Categorization
+
+Analyze the provided content items and create structured insights with clear categorization and sentiment analysis.
+
+## Input Data Structure
+You will receive a JSON array of content items:
+```json
+[
+  {"id": 1, "content": "...", "has_image": true},
+  {"id": 2, "content": "..."}
+]
+```
+**Note**: `has_image` field is only present when `true`. If the field is missing, treat it as `false`.
+
+## Analysis Requirements
+
+### 1. Category Clustering (Maximum 20 Categories)
+- **Theme grouping**: Group similar topics into meaningful categories
+- **Clear naming**: Use descriptive names users can understand
+- **Language Consistency**: Detect the main language of the content items and use THAT language for category names (e.g., if content is Korean, category must be Korean)
+- **Quality threshold**: Only create categories when multiple content items share themes
+- **Frequency focus**: Prioritize commonly mentioned aspects
+- **CRITICAL**: Each id belongs to exactly ONE category. Content in harmful_contents or etc_contents must be completely excluded from categorization
+
+### 2. Sentiment Analysis (0.0~1.0 Numerical Scale) - Target-Based Evaluation
+- **Evaluation target clarification**: Analyze sentiment toward **the subject/product/service being evaluated in the text**, not the emotion of the text itself
+- **Example**: "I was angry because the delivery was too late" → Negative sentiment toward delivery service (0.2)
+- **Example**: "This product made me feel happy" → Positive sentiment toward the product (0.8)
+- **Sentiment scoring**: Quantify sentiment toward the evaluation target where 0.0 = most negative toward target, 1.0 = most positive toward target
+
+- **Positive/Negative Classification Rules (Strict Compliance)**:
+  - **Judgment Criteria**: Not the emotion of the text itself, but **whether the evaluation target (product/service) led to positive improvement** as the main judgment criterion
+  - **positive_contents**: Include ONLY ids with improvement/satisfaction score toward evaluation target **0.5 or above (≥0.5)**
+    * Example: "I'm satisfied because the product is good" (positive) vs "Delivery was late and I'm angry but the product is good" (positive - product itself has improvement effect)
+  - **negative_contents**: Include ONLY ids with improvement/satisfaction score toward evaluation target **below 0.5 (<0.5)**
+    * Example: "Staff is kind but product quality is disappointing" (negative - insufficient improvement effect from product)
+  - **CRITICAL**: Separate judgment between writer's emotional expression and actual improvement from evaluation target. 0.5 is classified as positive
+
+- **Classification Accuracy Guarantee**:
+  - First accurately calculate **degree of improvement/deterioration caused by evaluation target (product/service) itself** in each content, then place in positive_contents or negative_contents based on criteria
+  - Example: "I'm angry but product is excellent" → score 0.8 → positive_contents (improvement from product)
+  - Example: "Staff is good but product is mediocre" → score 0.3 → negative_contents (lack of improvement from product)
+  - **ABSOLUTE RULE**: Classify each id only once - no duplicate between positive_contents and negative_contents within the same category
+
+- **Category detailed storage**: Store id and score as pairs in positive_contents and negative_contents arrays
+- **Category sentiment type**: Determine sentiment_type based on category average score
+  (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
+
+### 3. Category Key Generation
+- **Rule**: Replace spaces with '_' in category to create category_key. Keep original casing and do not apply other processing.
+- **Examples**: "Product Quality" → "Product_Quality", "제품 품질" → "제품_품질"
+
+### 4. Highlight Extraction (Key Insights)
+- **Representative quotes**: Extract meaningful phrases that capture category essence (keep in original language)
+- **Original keywords**: Identify specific terms/phrases that support each highlight (do not translate)
+- **Content traceability**: Link each highlight to its source id
+- **Quality filter**: Only include highlights that represent the category well
+- **Image content prioritization**: When selecting highlights, prioritize content items where has_image is true
+- **Quantity limit**: Select maximum 4 key insights per category
+
+### 5. Harmful Content Processing
+- **Identify harmful content**: Content containing profanity, abuse, slander, hate speech, etc.
+- **Completely exclude from analysis**: Remove harmful content entirely from categorization and sentiment analysis
+- **Track separately**: Record the ids in harmful_contents array
+- **CRITICAL: ids in harmful_contents must not appear in any category or sentiment analysis**
+
+### 6. Other Content Processing
+- **Identify non-influential content**: Content that is not harmful but does not contribute to analysis
+- **Examples**: Simple greetings, meaningless repetitions, irrelevant content, etc.
+- **Record with reason**: Store id and exclusion reason in etc_contents array
+- **CRITICAL: ids in etc_contents must not appear in any category or sentiment analysis**
+
+### 7. Summary Generation
+- **Comprehensive overview**: Create a detailed summary covering all major themes
+- **Data-driven insights**: Base conclusions on actual content patterns
+- **Professional tone**: Maintain objective, analytical language
+- **No length constraints**: Focus on accuracy and completeness (refinement happens in Step 2)
+
+## Output Format
+
+Output must be a valid JSON object adhering to the provided JSON schema.
+
+{{ json_response_rule() }}
+
+**CRITICAL**: category_key MUST be exactly category with spaces replaced by '_'. Keep original casing.
+
+## Content to Analyze
+
+Project ID: {{ project_id }}
+Project Type: {{ project_type }}
+
+Content Items:
+```json
+{{ content_items }}
+```
+
+**CRITICAL REMINDER**: 
+1. **Sentiment Classification**: MUST strictly follow 0.5 threshold - scores ≥0.5 go to positive_contents, scores <0.5 go to negative_contents
+2. **No Double Classification**: Each id appears in exactly ONE location (one category, and within that category either positive_contents OR negative_contents, never both)
+3. **Score Accuracy**: Calculate sentiment scores precisely based on **actual improvement/deterioration degree caused by evaluation target (product/service)**, not writer's emotional expression
+{% endblock %}

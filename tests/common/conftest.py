@@ -14,8 +14,8 @@ if os.path.exists(env_path):
 
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
-from src.core.model_factory import ModelFactory
-from tests.test_contents import POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT
+from src.core.session_factory import SessionFactory
+from tests.data.test_contents import POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT
 
 # 로깅 필터 설정
 class VertexLogFilter(logging.Filter):
@@ -29,10 +29,10 @@ def get_sample_contents():
     return [POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT]
 
 @pytest.fixture(scope="function", autouse=True)
-def setup_model_factory():
-    print("\n🔧 ModelFactory 초기화 중 (Function Scope)...")
-    ModelFactory.initialize()
-    print("✅ ModelFactory 초기화 완료")
+def setup_session_factory():
+    print("\n🔧 SessionFactory 초기화 중 (Function Scope)...")
+    SessionFactory.initialize()
+    print("✅ SessionFactory 초기화 완료")
 
 @pytest.fixture
 def llm_service():

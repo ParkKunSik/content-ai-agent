@@ -1,5 +1,6 @@
 # Core Agent & Google Cloud
 google-cloud-aiplatform>=1.60.0
+google-genai>=0.3.0
 google-cloud-storage
 google-cloud-secret-manager
 
@@ -7,9 +8,7 @@ google-cloud-secret-manager
 pydantic>=2.0.0
 pydantic-settings
 
-# Infrastructure & Memory
-redis
-elasticsearch
+# Infrastructure
 python-dotenv
 tenacity
 jinja2

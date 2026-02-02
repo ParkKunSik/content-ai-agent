@@ -7,7 +7,6 @@
 ### 핵심 기능
 *   **프로젝트 단위 분석:** 다수의 문서를 하나의 맥락으로 통합 분석.
 *   **페르소나 기반 분석:** 사용자가 선택한 페르소나(판매자 도우미, 데이터 분석가)에 따른 맞춤형 인사이트 제공.
-*   **이원화된 메모리:** Agent Persona(불변)와 Project Context(휘발성)의 분리.
 *   **하이브리드 청킹:** 데이터 규모에 따른 Map-Reduce(Flash) / Single-Pass(Pro) 자동 분기.
 
 ## 2. 하이 레벨 아키텍처 (High-Level Architecture)
@@ -22,15 +21,11 @@ graph TD
         
         subgraph "Core Services"
             Orch -->|Request| LLM[LLM Service with Retry]
-            Orch -->|State| ID[Identity Manager]
-            ID -->|Key| Mem[Memory Store]
             Orch -->|Data| Load[Content Loader]
         end
     end
     
     subgraph "External Resources"
-        ID -.->|VPC Peering| Redis[(Redis Context)]
-        ID -.->|API Call| ES[(Elasticsearch History)]
         Load -->|Read| GCS[Google Cloud Storage]
         LLM -->|Vertex SDK| Vertex[Vertex AI Gemini 2.5]
     end
@@ -47,23 +42,12 @@ graph TD
 *   **Class:** `ContentAnalysisAgent`
 *   **Role:** Reasoning Engine에 등록될 최상위 클래스. 외부 요청을 받아 오케스트레이터에 전달하고 결과를 반환.
 *   **Methods:**
-    *   `set_up()`: 초기화 (DB 연결 등). Reasoning Engine 라이프사이클 훅.
+    *   `set_up()`: 초기화. Reasoning Engine 라이프사이클 훅.
     *   `query(project_id: str, persona: str, contents: List[str]) -> Dict`: 메인 분석 메서드.
 *   **FastAPI Wrapper (Local Only):**
     *   `src/main.py`에서 `ContentAnalysisAgent`를 인스턴스화하여 `/analyze` 엔드포인트로 노출.
 
-### 3.2. 이원화된 메모리 전략 (Dual-Layer Memory)
-*   **Layer 1: Persona Memory & History Archive**
-    *   **저장소:** **Elasticsearch SaaS**. (인덱스명은 환경 변수 설정을 통해 고정 주입)
-    *   **내용:** 
-        *   `Persona Index`: `SELLER_ASSISTANT`, `DATA_ANALYST` 등 페르소나별 시스템 프롬프트 및 설정 저장.
-        *   `History Index`: 분석 완료된 결과 저장 (Full-text Search 가능).
-*   **Layer 2: Project Working Memory (Context)**
-    *   **저장소:** Redis (VPC Peering 필수).
-    *   **Key Strategy:** `proj:{project_id}:context` (TTL 적용).
-    *   **접근 제어:** Agent Class 내부에서 `MemoryService`를 통해서만 접근.
-
-### 3.3. 데이터 수집 및 처리 제약 조건 (Processing Constraints)
+### 3.2. 데이터 수집 및 처리 제약 조건 (Processing Constraints)
 안정적인 메모리 관리와 효율적인 LLM 분석을 위해 다음 제약 조건을 적용합니다.
 
 #### **A. Gemini 모델 스펙 및 선정 근거**
@@ -98,19 +82,21 @@ graph TD
     *   **Server/Network Error (5xx):** Random Exponential Backoff 적용 (Max 3회, 최대 60초 대기).
 *   **Event Loop 안전성:** 비동기 gRPC 호출 시 발생할 수 있는 Event Loop 충돌을 방지하기 위한 안전한 호출 패턴 적용.
 
-## 4. 프롬프트 엔지니어링 (Persona Definition)
+## 4. 프롬프트 엔지니어링 (Persona Definition & Controlled Generation)
 *   **System Prompt Structure:** 
     *   `base.jinja2`를 상속받아 모든 페르소나의 공통 언어 규칙 및 행동 양식을 정의.
-    *   `PromptManager`와 `Jinja2` 템플릿 엔진을 통해 동적 생성 및 JSON 스키마 주입.
+    *   **Controlled Generation:** `GenerationConfig`의 `response_mime_type="application/json"` 및 `response_schema`를 사용하여 구조적 출력을 강제.
+    *   **Schema-Driven Instructions:** Pydantic 모델(`DetailedAnalysisResponse` 등)의 `Field(description=...)`가 LLM에게 세부 지침을 전달하는 역할을 수행.
+    *   **Temperature Strategy:** `PersonaType`별로 최적화된 Temperature 설정 (0.1 ~ 0.7) 적용.
 *   **CUSTOMER_FACING_ANALYST (구 판매자 도우미):**
     *   **Goal:** 고객의 관점에서 제품 가치를 발굴하고 신뢰를 형성.
-    *   **Tone:** 정중함, 진정성 있음, 고객 중심적.
+    *   **Tone:** 정중함, 진정성 있음, 고객 중심적. (Temp: 0.7)
 *   **PRO_DATA_ANALYST (구 데이터 분석가):**
     *   **Goal:** 데이터 이면의 패턴과 사실을 냉철하게 분석.
-    *   **Tone:** 객관적, 논리적, 구조적.
+    *   **Tone:** 객관적, 논리적, 구조적. (Temp: 0.1)
 *   **CUSTOMER_FACING_SMART_BOT (리뷰 요약 봇):**
     *   **Goal:** 방대한 리뷰의 핵심을 효율적으로 요약하여 합리적 의사결정 지원.
-    *   **Tone:** 절제됨, 스마트함, 이모지 배제, 명확한 사실 전달.
+    *   **Tone:** 절제됨, 스마트함, 이모지 배제, 명확한 사실 전달. (Temp: 0.3)
 
 ## 5. 기술 스택 (Technology Stack)
 *   **Runtime:** Python 3.10+
@@ -120,11 +106,7 @@ graph TD
 *   **Deployment:** 
     *   **Prod:** Google Vertex AI Reasoning Engine.
     *   **Dev/Test:** Local FastAPI Wrapper.
-*   **Infrastructure & State Management:**
-    *   **Elasticsearch SaaS:** History Archive & Persona Config.
-    *   **Redis:** 
-        *   **Prod:** Google Cloud Memorystore (VPC Peering).
-        *   **Local:** Docker Container (Standalone).
+*   **Infrastructure:**
     *   **Google Cloud Storage:** Raw Content.
 *   **Secret Management (Configuration):**
     *   **로컬 환경:** `.env.local` 파일 사용.
