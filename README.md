@@ -13,9 +13,9 @@ Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용�
     *   `CUSTOMER_FACING_ANALYST`: 고객의 관점에서 제품의 가치를 발견하고 정중하게 전달하는 전문가.
     *   `PRO_DATA_ANALYST`: 사실과 수치에 기반하여 패턴을 도출하는 냉철한 데이터 분석가.
     *   `CUSTOMER_FACING_SMART_BOT`: 방대한 리뷰의 핵심을 절제된 표현으로 스마트하게 요약하는 봇.
-*   **하이브리드 오케스트레이션 (Hybrid Strategy):**
-    *   **Single-Pass:** 데이터가 적을 경우 고성능 모델(Pro)을 사용하여 즉시 분석합니다.
-    *   **Map-Reduce:** 데이터가 방대할 경우(500k 토큰 이상) 고속 모델(Flash)로 청킹 요약 후 Pro 모델로 최종 통합합니다.
+*   **2단계 심층 분석 프로세스 (2-Step Analysis):**
+    *   **Step 1. 구조화 및 추출 (Structuring):** 비정형 데이터를 카테고리, 감정, 하이라이트 등 정형 구조로 변환.
+    *   **Step 2. 요약 정제 (Refinement):** 생성된 분석 데이터를 바탕으로 페르소나별 최적의 요약문 생성.
 *   **프롬프트 템플릿 엔진 & Controlled Generation:**
     *   `Jinja2`를 활용한 동적 프롬프트 생성과 함께, Vertex AI의 `response_schema` 기능을 도입하여 100% 유효한 JSON 출력을 보장합니다.
     *   Pydantic 모델을 통해 데이터 구조와 지침을 일원화하여 관리합니다.
@@ -98,15 +98,15 @@ uvicorn src.main:app --reload
 
 ## 🧪 테스트 (Testing)
 
-분리된 테스트 파일을 통해 각 페르소나별 동작과 Map-Reduce 로직을 검증할 수 있습니다.
+분리된 테스트 파일을 통해 각 단계별 동작과 통합 플로우를 검증할 수 있습니다.
 
 ```bash
 # 전체 테스트 실행 (실행 시간 포함)
 pytest
 
-# Single-Pass 분석 단독 테스트
-pytest tests/test_single_pass.py
+# 콘텐츠 분석 통합 플로우 테스트
+pytest tests/integration/test_content_analysis_flow.py
 
-# Map-Reduce 분산 처리 테스트
-pytest tests/test_map_reduce.py
+# HTML/PDF 생성 결과물 검증 테스트
+pytest tests/integration/test_html_generation.py
 ```
