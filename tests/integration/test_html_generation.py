@@ -3,6 +3,7 @@ import os
 import random
 import time
 from datetime import datetime, timedelta
+from typing import List
 
 import pytest
 
@@ -10,6 +11,7 @@ from src.core.config import settings
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.common.content_item import ContentItem
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
 from src.utils.generation_viewer import GenerationViewer, PDF_AVAILABLE
@@ -114,7 +116,7 @@ def _print_token_usage(step_label: str, usage: dict) -> None:
 
 async def _execute_content_analysis_with_html(
     project_id: int,
-    sample_contents: list,
+    sample_contents: List[ContentItem],
     project_type: ProjectType = ProjectType.FUNDING,
     show_content_details: bool = False,
     save_output: bool = True,
@@ -127,7 +129,7 @@ async def _execute_content_analysis_with_html(
 
     Args:
         project_id: 프로젝트 ID
-        sample_contents: 분석할 콘텐츠 리스트
+        sample_contents: 분석할 ContentItem 리스트
         project_type: 프로젝트 타입
         show_content_details: 콘텐츠 상세 내용 출력 여부
         save_output: 결과를 파일로 저장 여부
@@ -147,11 +149,10 @@ async def _execute_content_analysis_with_html(
     print(f"\n>>> Total input items: {len(sample_contents)}")
     if show_content_details:
         for item in sample_contents:
-            img_icon = "📷" if item.get('has_image', False) else "📝"
-            item_id = item.get('id') or item.get('content_id')
-            print(f"  - [{item_id}] {img_icon} {item['content'][:30]}...")
+            img_icon = "📷" if item.has_image else "📝"
+            print(f"  - [{item.content_id}] {img_icon} {item.content[:30]}...")
     else:
-        image_count = sum(1 for item in sample_contents if item.get('has_image', False))
+        image_count = sum(1 for item in sample_contents if item.has_image)
         print(f"  - Content items: {len(sample_contents)}")
         print(f"  - With images: {image_count} 📷")
         print(f"  - Without images: {len(sample_contents) - image_count} 📝")
@@ -162,11 +163,13 @@ async def _execute_content_analysis_with_html(
     print(f"\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
 
+    # ContentItem → AnalysisContentItem 변환 및 JSON 변환을 LLMService와 동일하게 처리
     analysis_items = llm_service._convert_to_analysis_items(sample_contents)
+    analysis_items_dict = [item.model_dump(exclude_none=True) for item in analysis_items]
     step1_prompt = prompt_manager.get_content_analysis_structuring_prompt(
         project_id=project_id,
         project_type=project_type,
-        content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
+        content_items=json.dumps(analysis_items_dict, ensure_ascii=False, separators=(',', ':'))
     )
     step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
@@ -275,7 +278,7 @@ async def _execute_content_analysis_with_html(
                 },
                 "input_summary": {
                     "total_items": len(sample_contents),
-                    "items_with_image": sum(1 for item in sample_contents if item.get('has_image', False)),
+                    "items_with_image": sum(1 for item in sample_contents if item.has_image),
                     "project_id": project_id,
                     "project_type": project_type.value
                 },
@@ -343,14 +346,20 @@ async def test_html_generation_from_project_file():
 
     try:
         with open(project_file_path, 'r', encoding='utf-8') as f:
-            content_items = json.load(f)
+            raw_data = json.load(f)
+        
+        # JSON dict를 ContentItem 객체로 변환
+        content_items = [
+            ContentItem(
+                content_id=item.get('id', item.get('content_id')),
+                content=item['content'],
+                has_image=item.get('has_image', False)
+            ) for item in raw_data
+        ]
     except Exception as e:
         pytest.fail(f"Failed to load project data: {e}")
 
     # Validate data structure
-    if not isinstance(content_items, list):
-        pytest.fail("Project data should be a JSON array")
-
     if len(content_items) == 0:
         pytest.skip("No content items in project data file")
 

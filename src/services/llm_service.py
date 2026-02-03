@@ -10,6 +10,7 @@ from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.mime_type import MimeType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
 from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 from src.utils.prompt_manager import PromptManager
@@ -93,36 +94,44 @@ class LLMService:
             logger.error(f"예상치 못한 오류 (persona: {persona_type.value}): {e}")
             raise
 
-    def _convert_to_analysis_items(self, content_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _convert_to_analysis_items(self, content_items: List[ContentItem]) -> List[AnalysisContentItem]:
         """
-        content_items를 AnalysisContentItem으로 변환하여 프롬프트 최적화된 딕셔너리 리스트 반환
+        ContentItem 리스트를 AnalysisContentItem 리스트로 변환
+        
+        Args:
+            content_items: ContentItem 객체 리스트
+            
+        Returns:
+            List[AnalysisContentItem]: 분석용 AnalysisContentItem 리스트
         """
         analysis_items = []
-        for item in content_items:
-            content_item = AnalysisContentItem(
-                id=item.get("content_id") or item.get("id"),  # Support both keys
-                content=item.get("content"),
-                has_image=None if item.get("has_image") is False else item.get("has_image")  # 삼항연산자 활용
+        for content_item in content_items:
+            # 토큰 절약을 위해 has_image가 True인 경우만 설정, 나머지는 None 처리
+            analysis_item = AnalysisContentItem(
+                id=content_item.content_id,  # int 타입 유지
+                content=content_item.content,
+                has_image=content_item.has_image if content_item.has_image is True else None
             )
-            analysis_items.append(content_item.model_dump(exclude_none=True))  # None 필드 제외
+            analysis_items.append(analysis_item)
         return analysis_items
 
     async def structure_content_analysis(
         self,
         project_id: int,
         project_type: ProjectType,
-        content_items: List[Dict[str, Any]]
+        content_items: List[ContentItem]
     ) -> StructuredAnalysisResponse:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
         """
         analysis_items = self._convert_to_analysis_items(content_items)
+        analysis_items_dict = [item.model_dump(exclude_none=True) for item in analysis_items]
 
         prompt = self.prompt_manager.get_content_analysis_structuring_prompt(
             project_id=project_id,
             project_type=project_type,
-            content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
+            content_items=json.dumps(analysis_items_dict, ensure_ascii=False, separators=(',', ':'))
         )
 
         schema = StructuredAnalysisResponse.model_json_schema()
