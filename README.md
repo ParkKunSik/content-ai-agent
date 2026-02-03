@@ -54,10 +54,10 @@ src/
 
 ## 📦 의존성 관리 (Dependency Management)
 
-프로젝트는 용도에 따라 두 가지 의존성 파일을 제공합니다.
+프로젝트는 **`pyproject.toml`**을 사용하여 의존성을 표준화된 방식으로 관리합니다.
 
-*   **`requirements.txt`**: 운영 환경 및 배포용 필수 패키지 목록. (Vertex AI SDK, Pydantic, Redis, Elasticsearch, FastAPI 등)
-*   **`requirements-dev.txt`**: 로컬 개발 및 테스트를 위한 추가 패키지 포함. (pytest, ruff, black 등)
+*   **운영 의존성 (`dependencies`)**: 배포 및 실행에 필수적인 패키지 (Vertex AI SDK, Pydantic, FastAPI 등).
+*   **개발 의존성 (`dev`)**: 로컬 개발, 테스트, 린팅을 위한 추가 패키지 (pytest, ruff, black 등).
 
 ---
 
@@ -78,14 +78,17 @@ docker-compose up -d
 ```
 
 ### 3. 서버 실행 (로컬 개발 모드)
-가상환경을 구축하고 **개발용 의존성**을 설치한 후 FastAPI 서버를 가동합니다.
+가상환경을 구축하고 **개발용 의존성**을 포함하여 패키지를 설치한 후 FastAPI 서버를 가동합니다.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 개발용 패키지 포함 설치
-pip install -r requirements-dev.txt
+# 개발용 패키지 포함 설치 (Editable 모드 권장)
+pip install -e ".[dev]"
+
+# 운영용 필수 패키지만 설치할 경우
+pip install .
 
 # 서버 실행
 uvicorn src.main:app --reload

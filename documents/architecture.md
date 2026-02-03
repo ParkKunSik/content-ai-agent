@@ -116,5 +116,5 @@ graph TD
     *   **동작 방식:** 앱 시작 시 `ENV` 프로필에 맞는 JSON Secret을 통째로 가져와 설정(`Settings`)에 주입. `.env.local`이 없고 `ENV` 변수도 없으면 실행 차단.
     *   **장점:** 설정값의 버전 관리 용이, 런타임 API 호출 최소화.
 *   **Dev Ops:** 
-    *   **Local:** Docker, `pip`.
+    *   **Local:** Docker, `pip` (via `pyproject.toml`).
     *   **Production:** `google-genai` SDK + Vertex AI Agent Engine.

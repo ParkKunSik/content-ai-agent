@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "content-ai-agent"
+version = "0.1.0"
+description = "Content Analysis AI Agent using Google Vertex AI Gemini models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [
+  {name = "Wadiz AI Team", email = "ai-team@wadiz.kr"}
+]
+dependencies = [
+    # Core Agent & Google Cloud
+    "google-cloud-aiplatform>=1.60.0",
+    "google-genai>=0.3.0",
+    "google-cloud-storage",
+    "google-cloud-secret-manager",
+    
+    # Data Validation & Settings
+    "pydantic>=2.0.0",
+    "pydantic-settings",
+    
+    # Infrastructure
+    "python-dotenv",
+    "tenacity",
+    "jinja2",
+    
+    # Interface (FastAPI / Uvicorn)
+    "fastapi",
+    "uvicorn[standard]"
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing & Quality
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "black",
+    "ipython",
+    
+    # PDF Generation (Optional)
+    "weasyprint>=62.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
