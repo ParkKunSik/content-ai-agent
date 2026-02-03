@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from typing import List, Dict, Any, Optional
@@ -93,61 +92,6 @@ class LLMService:
             logger.error(f"예상치 못한 오류 (persona: {persona_type.value}): {e}")
             raise
 
-    async def run_single_pass_analysis(
-        self, 
-        contents: List[str],
-        persona_type: PersonaType,
-        project_id: int,
-        project_type: ProjectType
-    ) -> str:
-        """단일 패스 분석 수행"""
-        prompt = self.prompt_manager.get_contents_analysis_prompt(
-            project_id=project_id,
-            project_type=project_type,
-            combined_summary="\n\n".join(contents)
-        )
-        
-        return await self.generate(prompt, persona_type)
-
-    async def run_map_reduce_analysis(
-        self,
-        contents: List[str],
-        persona_type: PersonaType,
-        project_id: int,
-        project_type: ProjectType
-    ) -> str:
-        """Map-Reduce 분석 수행 (청킹 단계에서도 동일한 템플릿 사용)"""
-        # Map Phase: Flash 모델로 각 콘텐츠 요약
-        flash_persona = PersonaType.SUMMARY_DATA_ANALYST
-
-        chunk_summaries = []
-        for i, chunk in enumerate(contents):
-            logger.info(f"Processing chunk {i+1}/{len(contents)}")
-
-            chunk_prompt = self.prompt_manager.get_contents_analysis_prompt(
-                project_id=project_id,
-                project_type=project_type,
-                combined_summary=chunk
-            )
-
-            result_json = await self.generate(chunk_prompt, flash_persona)
-            summary_text = self._parse_summary(result_json)
-            chunk_summaries.append(summary_text)
-
-            await asyncio.sleep(0.1)
-
-        await asyncio.sleep(0.2)
-        logger.info("Map phase completed, starting Reduce phase")
-
-        # Reduce Phase: Pro 모델로 통합 분석
-        final_prompt = self.prompt_manager.get_contents_analysis_prompt(
-            project_id=project_id,
-            project_type=project_type,
-            combined_summary="\n---\n".join(chunk_summaries)
-        )
-
-        return await self.generate(final_prompt, persona_type)
-
     def _convert_to_analysis_items(self, content_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         content_items를 AnalysisContentItem으로 변환하여 프롬프트 최적화된 딕셔너리 리스트 반환
@@ -220,14 +164,4 @@ class LLMService:
             model_class=DetailedAnalysisRefinedResponse,
             error_context="analysis_refinement"
         )
-
-
-    def _parse_summary(self, json_str: str) -> str:
-        """JSON 응답에서 summary 필드 추출"""
-        try:
-            cleaned = json_str.strip().replace("```json", "").replace("```", "").strip()
-            data = json.loads(cleaned)
-            return data.get("summary", json_str)
-        except Exception:
-            return json_str
 

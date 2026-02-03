@@ -21,11 +21,7 @@ class PersonaType(Enum):
     # 1. Utility Models
     COMMON_TOKEN_COUNTER = (lambda s: s.VERTEX_AI_MODEL_PRO, None, 0.0)
     
-    # 2. Logic Models
-    # SUMMARY_DATA_ANALYST: 0.3 (Consistent summary)
-    SUMMARY_DATA_ANALYST = (lambda s: s.VERTEX_AI_MODEL_FLASH, "Precise Content Summarizer", 0.3)
-    
-    # 3. Persona Models
+    # 2. Persona Models
     # CUSTOMER_FACING_ANALYST: 0.7 (Creative insight)
     CUSTOMER_FACING_ANALYST = (lambda s: s.VERTEX_AI_MODEL_PRO, "Customer-Facing Data Analyst", 0.7)
     # PRO_DATA_ANALYST: 0.1 (Precise analysis)

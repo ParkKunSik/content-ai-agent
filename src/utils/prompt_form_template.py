@@ -8,9 +8,6 @@ class PromptFormTemplate(Enum):
     각 템플릿은 (template_path)로 정의됩니다.
     """
 
-    # 기존 콘텐츠 분석
-    CONTENTS_ANALYSIS_RESULT = ("task/v1/contents_analysis_result_form.jinja2")
-
     def __init__(self, template_path: str):
         self.template_path = template_path
         self._cached_template = None

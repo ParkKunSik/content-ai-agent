@@ -32,18 +32,6 @@ class PromptManager:
         """Access the underlying PromptRenderer instance."""
         return self._renderer
 
-    def get_contents_analysis_prompt(self, project_id: int, project_type: ProjectType, combined_summary: str) -> str:
-        """
-        Constructs the prompt for comprehensive contents analysis.
-        """
-        template = PromptTemplate.CONTENTS_ANALYSIS.get_template(self._renderer)
-        return self._renderer.render_with_template(
-            template,
-            project_id=project_id,
-            project_type=project_type,
-            combined_summary=combined_summary
-        )
-
     def get_detailed_analysis_prompt(self, project_id: int, project_type: ProjectType, content_items: str) -> str:
         """
         상세 분석 프롬프트 생성 (구조화 및 추출).

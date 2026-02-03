@@ -36,32 +36,6 @@ class ContentAnalysisAgent:
         self.orchestrator = AgentOrchestrator()
         logger.info("Agent setup complete.")
 
-    async def query(
-        self, 
-        project_id: int,
-        project_type: ProjectType,
-        analysis_mode: AnalysisMode, 
-        contents: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Main query method. Executes the analysis pipeline.
-        """
-        if not self.orchestrator:
-            raise RuntimeError("Agent not set up. Call set_up() before query().")
-
-        try:
-            response_model = await self.orchestrator.orchestrate_analysis(
-                project_id=project_id,
-                project_type=project_type,
-                analysis_mode=analysis_mode,
-                content_sources=contents
-            )
-            return json.loads(response_model.model_dump_json())
-
-        except Exception as e:
-            logger.error(f"Error during agent query: {e}")
-            raise
-
     async def detailed_analysis(
         self,
         project_id: int,
