@@ -112,7 +112,7 @@ def _print_token_usage(step_label: str, usage: dict) -> None:
     )
 
 
-async def _execute_detailed_analysis_with_html(
+async def _execute_content_analysis_with_html(
     project_id: int,
     sample_contents: list,
     project_type: ProjectType = ProjectType.FUNDING,
@@ -163,12 +163,12 @@ async def _execute_detailed_analysis_with_html(
     step1_start_time = time.time()
 
     analysis_items = llm_service._convert_to_analysis_items(sample_contents)
-    step1_prompt = prompt_manager.get_detailed_analysis_prompt(
+    step1_prompt = prompt_manager.get_content_analysis_structuring_prompt(
         project_id=project_id,
         project_type=project_type,
         content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
     )
-    step1_response = await llm_service.perform_detailed_analysis(
+    step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=sample_contents
@@ -190,7 +190,7 @@ async def _execute_detailed_analysis_with_html(
     print(f"\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
     step2_start_time = time.time()
 
-    step2_prompt = prompt_manager.get_detailed_analysis_summary_refine_prompt(
+    step2_prompt = prompt_manager.get_content_analysis_summary_refine_prompt(
         project_id=project_id,
         project_type=project_type,
         raw_analysis_data=step1_response.model_dump_json()
@@ -378,7 +378,7 @@ async def test_html_generation_from_project_file():
 
     try:
         step1_res, step2_res, final_res, duration, html_p, pdf_p = \
-            await _execute_detailed_analysis_with_html(
+            await _execute_content_analysis_with_html(
                 project_id=project_id,
                 sample_contents=test_content_items,
                 show_content_details=False,

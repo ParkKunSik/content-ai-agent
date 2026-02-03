@@ -36,7 +36,7 @@ class ContentAnalysisAgent:
         self.orchestrator = AgentOrchestrator()
         logger.info("Agent setup complete.")
 
-    async def detailed_analysis(
+    async def analysis(
         self,
         project_id: int,
         project_type: ProjectType,
@@ -50,7 +50,7 @@ class ContentAnalysisAgent:
             raise RuntimeError("Agent not set up. Call set_up() before detailed_analysis().")
 
         try:
-            response_model = await self.orchestrator.detailed_analysis(
+            response_model = await self.orchestrator.analysis(
                 project_id=project_id,
                 project_type=project_type,
                 contents=contents,

@@ -1,6 +1,6 @@
 import re
 
-from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 
 # PDF 생성을 위한 선택적 임포트
 try:
@@ -73,7 +73,7 @@ class GenerationViewer:
     @classmethod
     def generate_pdf_optimized_html(
         cls, 
-        result: DetailedAnalysisResponse,
+        result: StructuredAnalysisResponse,
         project_id: int,
         total_items: int,
         executed_at: str,
@@ -327,7 +327,7 @@ class GenerationViewer:
     @classmethod
     def generate_amazon_style_html(
         cls,
-        result: DetailedAnalysisResponse,
+        result: StructuredAnalysisResponse,
         project_id: int,
         total_items: int,
         executed_at: str,

@@ -39,12 +39,12 @@ def _format_duration(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
 
-async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list,
-                                        project_type: ProjectType = ProjectType.FUNDING,
-                                        show_content_details: bool = True, 
-                                        save_output: bool = False, 
-                                        output_file_path: str = None
-                                        ):
+async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
+                                         project_type: ProjectType = ProjectType.FUNDING,
+                                         show_content_details: bool = True,
+                                         save_output: bool = False,
+                                         output_file_path: str = None
+                                         ):
     """
     상세 분석 플로우 공통 실행 로직
     
@@ -86,7 +86,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     print(f"\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
     
-    step1_response = await llm_service.perform_detailed_analysis(
+    step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=sample_contents
@@ -190,7 +190,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
 
 
 @pytest.mark.asyncio
-async def test_llm_service_detailed_analysis_flow_static():
+async def test_llm_service_content_analysis_flow_static():
     """
     LLMService 상세 분석 통합 테스트 - 정적 데이터
     - 데이터 소스: tests/data/test_contents.py (정적 변수, has_image 포함)
@@ -208,7 +208,7 @@ async def test_llm_service_detailed_analysis_flow_static():
     project_id = 88888
 
     try:
-        step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
+        step1_response, step2_response, final_response, total_duration = await _execute_content_analysis_flow(
             project_id=project_id, sample_contents=sample_contents, show_content_details=True)
         
         assert step1_response is not None
@@ -221,7 +221,7 @@ async def test_llm_service_detailed_analysis_flow_static():
 
 
 @pytest.mark.asyncio
-async def test_llm_service_detailed_analysis_flow_project_file():
+async def test_llm_service_content_analysis_flow_project_file():
     """
     LLMService 상세 분석 통합 테스트 - 프로젝트 파일 데이터
     - 데이터 소스: tests/data/project_365330.json (JSON 파일)
@@ -269,7 +269,7 @@ async def test_llm_service_detailed_analysis_flow_project_file():
     test_content_items = content_items if is_all else content_items[:sample_size]
 
     try:
-        step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
+        step1_response, step2_response, final_response, total_duration = await _execute_content_analysis_flow(
             project_id=project_id, sample_contents=test_content_items, show_content_details=False, save_output=True,
             output_file_path=output_file_path)
         
@@ -284,4 +284,4 @@ async def test_llm_service_detailed_analysis_flow_project_file():
 
 
 # Legacy test name for backward compatibility
-test_llm_service_detailed_analysis_flow = test_llm_service_detailed_analysis_flow_static
+test_llm_service_content_analysis_flow = test_llm_service_content_analysis_flow_static

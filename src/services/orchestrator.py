@@ -4,7 +4,7 @@ from typing import List, Union
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
-from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 from src.services.llm_service import LLMService
 from src.services.request_content_loader import RequestContentLoader
 from src.utils.prompt_manager import PromptManager
@@ -21,13 +21,13 @@ class AgentOrchestrator:
         self.prompt_manager = PromptManager()
         self.llm_service = LLMService(self.prompt_manager)
 
-    async def detailed_analysis(
+    async def analysis(
         self, 
         project_id: int,
         project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
         analysis_mode: AnalysisMode
-    ) -> DetailedAnalysisResponse:
+    ) -> StructuredAnalysisResponse:
         """
         Performs a detailed 2-step analysis:
         Step 1: Structure & Extract (Main Analysis)
@@ -41,7 +41,7 @@ class AgentOrchestrator:
         
         # 2. Step 1: Main Analysis (PRO_DATA_ANALYST)
         logger.info("Executing Step 1: Main Analysis")
-        base_analysis = await self.llm_service.perform_detailed_analysis(
+        base_analysis = await self.llm_service.structure_content_analysis(
             project_id=project_id,
             project_type=project_type,
             content_items=[item.model_dump() for item in content_items]

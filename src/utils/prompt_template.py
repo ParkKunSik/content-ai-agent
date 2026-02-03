@@ -9,8 +9,8 @@ class PromptTemplate(Enum):
     """
 
     # 상세 분석 2단계 템플릿
-    DETAILED_ANALYSIS = ("task/v1/detailed_analysis.jinja2")
-    DETAILED_ANALYSIS_SUMMARY_REFINE = ("task/v1/detailed_analysis_summary_refine.jinja2")
+    CONTENT_ANALYSIS_STRUCTURING = ("task/v1/content_analysis_structuring.jinja2")
+    CONTENT_ANALYSIS_SUMMARY_REFINE = ("task/v1/content_analysis_summary_refine.jinja2")
 
     def __init__(self, template_path: str):
         self.template_path = template_path

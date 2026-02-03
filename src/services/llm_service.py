@@ -7,10 +7,11 @@ from google.genai import types, errors
 from src.core.session_factory import SessionFactory
 from src.core.validation_error_handler import ValidationErrorHandler
 from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.mime_type import MimeType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
-from src.schemas.models.prompt.detailed_analysis_refined_response import DetailedAnalysisRefinedResponse
-from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class LLMService:
                 total += len(text) // 2
         return total
 
-    async def generate(self, prompt: str, persona_type: PersonaType, mime_type: str = "text/plain", response_schema: Optional[Dict[str, Any]] = None) -> str:
+    async def generate(self, prompt: str, persona_type: PersonaType, mime_type: MimeType = MimeType.TEXT_PLAIN, response_schema: Optional[Dict[str, Any]] = None) -> str:
         """Generic method to generate content using a specific persona."""
         session = SessionFactory.start_session(
             persona_type=persona_type,
@@ -106,34 +107,34 @@ class LLMService:
             analysis_items.append(content_item.model_dump(exclude_none=True))  # None 필드 제외
         return analysis_items
 
-    async def perform_detailed_analysis(
+    async def structure_content_analysis(
         self,
         project_id: int,
         project_type: ProjectType,
         content_items: List[Dict[str, Any]]
-    ) -> DetailedAnalysisResponse:
+    ) -> StructuredAnalysisResponse:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
         """
         analysis_items = self._convert_to_analysis_items(content_items)
 
-        prompt = self.prompt_manager.get_detailed_analysis_prompt(
+        prompt = self.prompt_manager.get_content_analysis_structuring_prompt(
             project_id=project_id,
             project_type=project_type,
             content_items=json.dumps(analysis_items, ensure_ascii=False, separators=(',', ':'))
         )
 
-        schema = DetailedAnalysisResponse.model_json_schema()
+        schema = StructuredAnalysisResponse.model_json_schema()
         
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
-            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type="application/json", response_schema=schema)
+            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type=MimeType.APPLICATION_JSON, response_schema=schema)
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,
-            model_class=DetailedAnalysisResponse,
-            error_context="detailed_analysis"
+            model_class=StructuredAnalysisResponse,
+            error_context="content_analysis_structuring"
         )
 
     async def refine_analysis_summary(
@@ -142,26 +143,26 @@ class LLMService:
         project_type: ProjectType,
         raw_analysis_data: str,
         persona_type: PersonaType
-    ) -> DetailedAnalysisRefinedResponse:
+    ) -> StructuredAnalysisRefinedResponse:
         """
         분석 요약 정제 (Refinement) - Phase 2 세션 기반 검증 적용
         분석된 데이터를 바탕으로 요약의 길이를 최적화하고 정제합니다.
         """
-        prompt = self.prompt_manager.get_detailed_analysis_summary_refine_prompt(
+        prompt = self.prompt_manager.get_content_analysis_summary_refine_prompt(
             project_id=project_id,
             project_type=project_type,
             raw_analysis_data=raw_analysis_data
         )
 
-        schema = DetailedAnalysisRefinedResponse.model_json_schema()
+        schema = StructuredAnalysisRefinedResponse.model_json_schema()
         
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
-            return await self.generate(prompt, persona_type, mime_type="application/json", response_schema=schema)
+            return await self.generate(prompt, persona_type, mime_type=MimeType.APPLICATION_JSON, response_schema=schema)
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,
-            model_class=DetailedAnalysisRefinedResponse,
+            model_class=StructuredAnalysisRefinedResponse,
             error_context="analysis_refinement"
         )
 

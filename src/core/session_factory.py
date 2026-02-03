@@ -7,6 +7,7 @@ from google.genai import types
 from src.core.config import settings
 from src.core.async_genai_session import AsyncGenAISession
 from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.mime_type import MimeType
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ class SessionFactory:
     def start_session(
         cls, 
         persona_type: PersonaType, 
-        mime_type: str = "text/plain",
+        mime_type: MimeType = MimeType.TEXT_PLAIN,
         schema: Optional[Dict[str, Any]] = None
     ) -> AsyncGenAISession:
         """
@@ -109,7 +110,7 @@ class SessionFactory:
         session_config = types.GenerateContentConfig(
             temperature=base_config.temperature,
             system_instruction=base_config.system_instruction,
-            response_mime_type=mime_type,
+            response_mime_type=mime_type.value,
             response_schema=schema
         )
             

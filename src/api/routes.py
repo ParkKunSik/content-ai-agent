@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from src.agent.agent import ContentAnalysisAgent
 from src.core.config import settings
 from src.schemas.models.api.analyze_request import AnalyzeRequest
-from src.schemas.models.prompt.detailed_analysis_response import DetailedAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +24,15 @@ except Exception as e:
 def health_check():
     return {"status": "healthy", "env": settings.ENV}
 
-@router.post("/detailed-analysis", response_model=DetailedAnalysisResponse)
-async def detailed_analysis(request: AnalyzeRequest):
+@router.post("/analysis", response_model=StructuredAnalysisResponse)
+async def analysis(request: AnalyzeRequest):
     """
     Executes the 2-step detailed analysis.
     Accepts project_id and a list of contents (strings or ContentItem objects).
     Returns the detailed analysis with refined summaries.
     """
     try:
-        result = await agent.detailed_analysis(
+        result = await agent.analysis(
             project_id=request.project_id,
             project_type=request.project_type,
             contents=request.contents,

@@ -22,7 +22,7 @@ class RefinedCategorySummary(BaseModel):
         return v
 
 
-class DetailedAnalysisRefinedResponse(BaseModel):
+class StructuredAnalysisRefinedResponse(BaseModel):
     """
     상세 분석 정제된 응답 모델 (Step 2 출력용)
     

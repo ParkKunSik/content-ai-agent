@@ -5,7 +5,7 @@ from ..common.etc_content import EtcContent
 from src.core.config import settings
 
 
-class DetailedAnalysisResponse(BaseModel):
+class StructuredAnalysisResponse(BaseModel):
     """
     상세 분석 응답 모델
     
