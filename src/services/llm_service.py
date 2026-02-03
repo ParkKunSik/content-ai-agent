@@ -3,7 +3,10 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 
+from google.genai import types, errors
+
 from src.core.session_factory import SessionFactory
+from src.core.validation_error_handler import ValidationErrorHandler
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
@@ -20,6 +23,7 @@ class LLMService:
 
     def __init__(self, prompt_manager: PromptManager):
         self.prompt_manager = prompt_manager
+        self.validation_handler = ValidationErrorHandler(max_retries=3, delay_between_retries=1.0)
 
     async def count_total_tokens(self, contents: List[str]) -> int:
         total = 0
@@ -42,7 +46,52 @@ class LLMService:
         
         # AsyncGenAISession을 사용한 콘텐츠 생성
         response = session.generate_content(prompt)
-        return response.text
+        
+        # GenerateContentResponse에서 텍스트 추출 (고수준 예외처리)
+        return self._extract_text_safely(response, persona_type)
+    
+    def _extract_text_safely(self, response: 'types.GenerateContentResponse', persona_type: PersonaType) -> str:
+        """GenerateContentResponse에서 안전하게 텍스트를 추출한다 (베스트 프랙티스)."""
+        try:
+            # 1. 후보 응답(Candidates) 확인
+            if not response.candidates:
+                raise ValueError(f"모델이 응답을 생성하지 못했습니다 (persona: {persona_type.value})")
+            
+            candidate = response.candidates[0]
+            
+            # 2. 종료 사유에 따른 분기 처리
+            if candidate.finish_reason == types.FinishReason.SAFETY:
+                raise ValueError(f"안전 정책에 의해 응답이 거부되었습니다 (persona: {persona_type.value})")
+            elif candidate.finish_reason == types.FinishReason.PROHIBITED_CONTENT:
+                raise ValueError(f"금지된 콘텐츠로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
+            elif candidate.finish_reason == types.FinishReason.BLOCKLIST:
+                raise ValueError(f"차단 목록 단어로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
+            elif candidate.finish_reason == types.FinishReason.SPII:
+                raise ValueError(f"개인정보 포함으로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
+            elif candidate.finish_reason == types.FinishReason.MAX_TOKENS:
+                logger.warning(f"답변이 너무 길어 중간에 끊겼습니다 (persona: {persona_type.value})")
+                # MAX_TOKENS의 경우 부분 응답이라도 사용
+            
+            # 3. 정상적인 경우에만 텍스트 추출
+            return response.text
+            
+        except errors.ClientError as e:
+            # 429 Rate Limit 에러 특별 처리
+            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
+                logger.warning(f"Rate limit 도달 (persona: {persona_type.value}): {e}")
+                # ValidationErrorHandler의 재시도 로직에 위임하도록 재발생
+                raise e  # 원본 에러 유지하여 상위 레벨에서 재시도 가능
+            else:
+                # 기타 클라이언트 오류 (인증, 잘못된 파라미터 등)
+                logger.error(f"클라이언트 오류 발생 (persona: {persona_type.value}): {e}")
+                raise ValueError(f"클라이언트 오류: {e}") from e
+        except errors.ServerError as e:
+            # Google 서버 측 문제 (5xx) - 재시도 로직 검토 필요
+            logger.error(f"서버 오류 발생 (persona: {persona_type.value}): {e}")
+            raise ValueError(f"서버 오류: {e}") from e
+        except Exception as e:
+            logger.error(f"예상치 못한 오류 (persona: {persona_type.value}): {e}")
+            raise
 
     async def run_single_pass_analysis(
         self, 
@@ -120,7 +169,7 @@ class LLMService:
         content_items: List[Dict[str, Any]]
     ) -> DetailedAnalysisResponse:
         """
-        상세 분석 수행 (Main Analysis)
+        상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
         """
         analysis_items = self._convert_to_analysis_items(content_items)
@@ -132,8 +181,16 @@ class LLMService:
         )
 
         schema = DetailedAnalysisResponse.model_json_schema()
-        response_str = await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type="application/json", response_schema=schema)
-        return self._parse_detailed_analysis_response(response_str)
+        
+        # ValidationErrorHandler를 사용한 재시도 로직 적용
+        async def response_generator() -> str:
+            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type="application/json", response_schema=schema)
+        
+        return await self.validation_handler.validate_with_retry(
+            response_generator=response_generator,
+            model_class=DetailedAnalysisResponse,
+            error_context="detailed_analysis"
+        )
 
     async def refine_analysis_summary(
         self,
@@ -143,7 +200,7 @@ class LLMService:
         persona_type: PersonaType
     ) -> DetailedAnalysisRefinedResponse:
         """
-        분석 요약 정제 (Refinement)
+        분석 요약 정제 (Refinement) - Phase 2 세션 기반 검증 적용
         분석된 데이터를 바탕으로 요약의 길이를 최적화하고 정제합니다.
         """
         prompt = self.prompt_manager.get_detailed_analysis_summary_refine_prompt(
@@ -153,8 +210,16 @@ class LLMService:
         )
 
         schema = DetailedAnalysisRefinedResponse.model_json_schema()
-        response_str = await self.generate(prompt, persona_type, mime_type="application/json", response_schema=schema)
-        return self._parse_refined_response(response_str)
+        
+        # ValidationErrorHandler를 사용한 재시도 로직 적용
+        async def response_generator() -> str:
+            return await self.generate(prompt, persona_type, mime_type="application/json", response_schema=schema)
+        
+        return await self.validation_handler.validate_with_retry(
+            response_generator=response_generator,
+            model_class=DetailedAnalysisRefinedResponse,
+            error_context="analysis_refinement"
+        )
 
 
     def _parse_summary(self, json_str: str) -> str:
@@ -166,87 +231,3 @@ class LLMService:
         except Exception:
             return json_str
 
-    def _parse_detailed_analysis_response(self, response_str: str) -> DetailedAnalysisResponse:
-        """Parses and validates Step 1 response."""
-        data = None
-        cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
-        
-        try:
-            data = json.loads(cleaned)
-            return DetailedAnalysisResponse(**data)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Step 1 response: {e}")
-
-            # 원본 응답 전체 로깅 (디버깅용)
-            logger.error(f"Raw Step 1 response_str:\n{response_str}")
-
-            # 파싱 오류 위치 전후 컨텍스트 로깅 (디버깅용)
-            error_pos = getattr(e, 'pos', 0)
-            context_start = max(0, error_pos - 100)
-            context_end = min(len(cleaned), error_pos + 100)
-            error_context = cleaned[context_start:context_end]
-            logger.debug(f"Error context around position {error_pos}: ...{error_context}...")
-
-            # 일반적인 JSON 오류 패턴 자동 수정 시도
-            try:
-                import re
-                # 시도 1: Trailing comma 제거 (가장 흔한 오류)
-                # , } -> }
-                # , ] -> ]
-                # \s*는 공백 문자를 포함
-                attempt = re.sub(r',\s*}', '}', cleaned)
-                attempt = re.sub(r',\s*]', ']', attempt)
-
-                data = json.loads(attempt)
-                logger.warning("Successfully parsed after removing trailing commas")
-                return DetailedAnalysisResponse(**data)
-
-            except Exception as comma_error:
-                logger.debug(f"Trailing comma correction failed: {comma_error}")
-
-                try:
-                    # 시도 2: 연속된 공백 정리 (기존 로직 유지)
-                    import re
-                    attempt = re.sub(r'\s+', ' ', cleaned)
-                    data = json.loads(attempt)
-                    logger.warning("Successfully parsed after whitespace normalization")
-                    return DetailedAnalysisResponse(**data)
-                except Exception as ws_error:
-                    logger.error(f"Whitespace correction failed: {ws_error}")
-
-            # 원본 에러 정보로 최종 실패 처리
-            logger.debug(f"Raw response (first 1000 chars): {response_str[:1000]}")
-            logger.debug(f"Raw response (last 1000 chars): {response_str[-1000:]}")
-            raise ValueError(f"Step 1 analysis failed: JSON parsing error at position {error_pos}: {str(e)}")
-        except Exception as e:
-            logger.error(f"Failed to validate Step 1 response: {e}")
-
-            # 원본 응답 전체 로깅 (Validation 에러 시)
-            logger.error(f"Raw Step 1 response_str (validation error):\n{response_str}")
-
-            # Validation 에러 시 파싱된 데이터 전체 로깅
-            if data is not None:
-                logger.error(f"Parsed data that failed validation:")
-                logger.error(json.dumps(data, indent=2, ensure_ascii=False))
-
-            raise ValueError(f"Step 1 analysis failed: {str(e)}")
-
-    def _parse_refined_response(self, response_str: str) -> DetailedAnalysisRefinedResponse:
-        """Parses and validates Step 2 response."""
-        try:
-            cleaned = response_str.strip().replace("```json", "").replace("```", "").strip()
-            data = json.loads(cleaned)
-
-            # Robustness: Handle if LLM returns a list containing the object
-            if isinstance(data, list) and len(data) > 0:
-                logger.warning("Step 2 response returned as a list, extracting the first element.")
-                data = data[0]
-
-            return DetailedAnalysisRefinedResponse(**data)
-        except Exception as e:
-            logger.error(f"Failed to parse Step 2 response: {e}")
-
-            # 원본 응답 전체 로깅 (Step 2 에러 시)
-            logger.error(f"Raw Step 2 response_str:\n{response_str}")
-
-            raise ValueError(f"Step 2 refinement failed: {str(e)}")

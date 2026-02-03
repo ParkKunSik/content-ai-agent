@@ -1,33 +1,33 @@
-# 콘텐츠 분석 AI Agent 아키텍처 설계
+# 콘텐츠 분석 AI Agent 아키텍처 설계 (2026 Modern Edition)
 
 ## 1. 시스템 개요
 **Content Analysis AI Agent**는 프로젝트 단위로 전달된 콘텐츠(텍스트 또는 문서) 리스트를 수집하여, 심층적인 요약과 분석 인사이트를 제공하는 지능형 서비스입니다. 
-본 시스템은 **Google Vertex AI Reasoning Engine** 배포를 주 목적으로 설계되었으며, 로컬 개발 및 테스트를 위해 FastAPI 래퍼를 제공합니다.
+본 시스템은 **Google Vertex AI Agent Engine** 배포를 주 목적으로 설계되었으며, 로컬 개발 및 테스트를 위해 FastAPI 래퍼를 제공합니다.
 
 ### 핵심 기능
 *   **프로젝트 단위 분석:** 다수의 문서를 하나의 맥락으로 통합 분석.
 *   **페르소나 기반 분석:** 사용자가 선택한 페르소나(판매자 도우미, 데이터 분석가)에 따른 맞춤형 인사이트 제공.
-*   **하이브리드 청킹:** 데이터 규모에 따른 Map-Reduce(Flash) / Single-Pass(Pro) 자동 분기.
+*   **하이브리드 청킹:** 데이터 규모에 따른 Map-Reduce / Single-Pass 자동 분기.
 
 ## 2. 하이 레벨 아키텍처 (High-Level Architecture)
 
 ```mermaid
 graph TD
-    Client[Spring Boot / Client] -- "Vertex AI SDK / REST" --> RE[Vertex AI Reasoning Engine]
+    Client[Spring Boot / Client] -- "Gen AI SDK / REST" --> AE[Vertex AI Agent Engine]
     
-    subgraph "Reasoning Engine Runtime (Managed)"
-        RE -->|Invoke| Agent[ContentAgent Class]
-        Agent -->|Logic| Orch[Orchestrator]
+    subgraph "Agent Engine Runtime (Managed)"
+        AE -->|Invoke| Agent[ContentAgent Class]
+        Agent -->|Workflow| Orch[Orchestrator]
         
         subgraph "Core Services"
-            Orch -->|Request| LLM[LLM Service with Retry]
+            Orch -->|Session| LLM[LLM Service with Stateful Chat]
             Orch -->|Data| Load[Content Loader]
         end
     end
     
     subgraph "External Resources"
         Load -->|Read| GCS[Google Cloud Storage]
-        LLM -->|Vertex SDK| Vertex[Vertex AI Gemini 2.5]
+        LLM -->|Gen AI SDK| Vertex[Vertex AI Gemini 2.5/3.0]
     end
     
     subgraph "Local Dev"
@@ -40,9 +40,11 @@ graph TD
 
 ### 3.1. Agent Interface (Entry Point)
 *   **Class:** `ContentAnalysisAgent`
-*   **Role:** Reasoning Engine에 등록될 최상위 클래스. 외부 요청을 받아 오케스트레이터에 전달하고 결과를 반환.
+*   **Role:** Agent Engine에 등록될 최상위 클래스. 외부 요청을 받아 오케스트레이터에 전달하고 결과를 반환.
+*   **Implementation:** `google-genai` SDK를 사용하여 핵심 추론 및 생성 로직 구현.
+*   **Deployment:** 구현된 클래스를 **Vertex AI Agent Engine**을 통해 관리형 런타임에 배포하여 API로 노출.
 *   **Methods:**
-    *   `set_up()`: 초기화. Reasoning Engine 라이프사이클 훅.
+    *   `set_up()`: 초기화. Agent Engine 라이프사이클 훅.
     *   `query(project_id: str, persona: str, contents: List[str]) -> Dict`: 메인 분석 메서드.
 *   **FastAPI Wrapper (Local Only):**
     *   `src/main.py`에서 `ContentAnalysisAgent`를 인스턴스화하여 `/analyze` 엔드포인트로 노출.
@@ -75,12 +77,11 @@ graph TD
             *   **Reduce:** 중간 요약본들을 모아 Gemini 2.5 Pro로 최종 통합 분석.
     4.  **Archiving:** 분석 완료 후 Elasticsearch에 결과 저장.
 
-### 3.5. LLM Service (Reliability & Resilience)
-*   **역할:** `Orchestrator`와 Vertex AI 사이의 통신을 전담하며, 네트워크 불안정 및 할당량 제한에 대응.
-*   **재시도 전략 (Retry Policy via Tenacity):**
-    *   **Quota Error (429):** Exponential Backoff 적용 (Max 5회, 최대 5분 대기).
-    *   **Server/Network Error (5xx):** Random Exponential Backoff 적용 (Max 3회, 최대 60초 대기).
-*   **Event Loop 안전성:** 비동기 gRPC 호출 시 발생할 수 있는 Event Loop 충돌을 방지하기 위한 안전한 호출 패턴 적용.
+### 3.5. LLM Service (Reliability & Stateful Interaction)
+*   **역할:** `Orchestrator`와 Vertex AI 사이의 통신을 전담하며, **ChatSession** 기반의 상태 유지형 대화를 관리.
+*   **재시도 전략 (Retry Policy):**
+    *   **Quota Error (429):** Exponential Backoff with Jitter 적용 (Google 2026 권장 사항).
+    *   **Validation Error:** 동일 세션 내에서 피드백 메시지 전송을 통한 자가 교정(Self-Correction) 수행.
 
 ## 4. 프롬프트 엔지니어링 (Persona Definition & Controlled Generation)
 *   **System Prompt Structure:** 
@@ -104,7 +105,7 @@ graph TD
 *   **Core Framework:** Pure Python (No Web Framework Dependency in Core)
 *   **AI Model:** Gemini 2.5 Pro / 3.0 Pro (Vertex AI)
 *   **Deployment:** 
-    *   **Prod:** Google Vertex AI Reasoning Engine.
+    *   **Prod:** Vertex AI Agent Engine (Managed Runtime).
     *   **Dev/Test:** Local FastAPI Wrapper.
 *   **Infrastructure:**
     *   **Google Cloud Storage:** Raw Content.
@@ -115,5 +116,5 @@ graph TD
     *   **동작 방식:** 앱 시작 시 `ENV` 프로필에 맞는 JSON Secret을 통째로 가져와 설정(`Settings`)에 주입. `.env.local`이 없고 `ENV` 변수도 없으면 실행 차단.
     *   **장점:** 설정값의 버전 관리 용이, 런타임 API 호출 최소화.
 *   **Dev Ops:** 
-    *   **Local:** Docker (Redis 전용), `pip` (Python 의존성 관리).
-    *   **Production:** Vertex AI SDK (Reasoning Engine Deployment).
+    *   **Local:** Docker, `pip`.
+    *   **Production:** `google-genai` SDK + Vertex AI Agent Engine.

@@ -5,33 +5,11 @@ import google.genai as genai
 from google.genai import types
 
 from src.core.config import settings
+from src.core.async_genai_session import AsyncGenAISession
 from src.schemas.enums.persona_type import PersonaType
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
-
-
-class AsyncGenAISession:
-    """
-    google-genai SDK를 위한 비동기 세션 래퍼.
-    내부적으로 client, model_name, config를 관리하고
-    외부에는 generate_content 메서드만 노출한다.
-    """
-    
-    def __init__(self, client: 'genai.Client', model_name: str, config: 'types.GenerateContentConfig'):
-        self._client = client
-        self._model_name = model_name
-        self._config = config
-    
-    def generate_content(self, prompt: str) -> 'types.GenerateContentResponse':
-        """
-        프롬프트를 입력받아 콘텐츠를 생성한다.
-        """
-        return self._client.models.generate_content(
-            model=self._model_name,
-            contents=prompt,
-            config=self._config
-        )
 
 class SessionFactory:
     """

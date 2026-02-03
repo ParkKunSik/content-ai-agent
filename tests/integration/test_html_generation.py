@@ -366,7 +366,7 @@ async def test_html_generation_from_project_file():
 
     # Sample items for testing (랜덤 또는 순차 선택)
     is_all = False
-    sample_size = 100
+    sample_size = 300
 
     if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
