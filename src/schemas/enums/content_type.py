@@ -2,26 +2,20 @@ from enum import Enum
 from typing import List, Dict, Any
 
 
-class InternalContentType(str, Enum):
+class InternalContentType(Enum):
     """내부 ES 조회에서 사용하는 콘텐츠 타입 - 모든 내부 로직 처리"""
 
     # g2 인덱스 사용 타입들 (groupsubcode 사용)
-    SUPPORT = ("wadiz_db_comment_g2_*", True)
-    SUGGESTION = ("wadiz_db_comment_g2_*", True)
-    REVIEW = ("wadiz_db_comment_g2_*", True)
-    PHOTO_REVIEW = ("wadiz_db_comment_g2_*", True)
+    # 첫 번째 인자는 Enum Aliasing 방지를 위한 고유 ID
+    SUPPORT = (1, "wadiz_db_comment_g2_*", True)
+    SUGGESTION = (2, "wadiz_db_comment_g2_*", True)
+    REVIEW = (3, "wadiz_db_comment_g2_*", True)
+    PHOTO_REVIEW = (4, "wadiz_db_comment_g2_*", True)
 
     # g4 인덱스 사용 타입 (groupsubcode 미사용)
-    SATISFACTION = ("wadiz_db_comment_g4_*", False)
+    SATISFACTION = (5, "wadiz_db_comment_g4_*", False)
 
-    def __init__(self, index_pattern: str, uses_groupsubcode: bool):
-        """
-        생성자에서 인덱스 패턴, groupsubcode 사용 여부를 주입
-
-        Args:
-            index_pattern: ES 인덱스 패턴
-            uses_groupsubcode: groupsubcode 필터 사용 여부
-        """
+    def __init__(self, uid: int, index_pattern: str, uses_groupsubcode: bool):
         self._value_ = self.name
         self._index_pattern = index_pattern
         self._uses_groupsubcode = uses_groupsubcode
@@ -46,11 +40,11 @@ class InternalContentType(str, Enum):
         Returns:
             dict: ES bool 쿼리
         """
-        must_conditions = [{"term": {"campaignid": project_id}}]
+        must_conditions: List[Dict[str, Any]] = [{"term": {"campaignid": project_id}}]
 
         # groupsubcode 사용 타입인 경우만 추가
         if self.uses_groupsubcode:
-            must_conditions.append({"term": {"groupsubcode": self.value}})
+            must_conditions.append({"term": {"groupsubcode.keyword": self.name}})
 
         return {
             "bool": {
@@ -81,7 +75,7 @@ class InternalContentType(str, Enum):
         # 복수 타입인 경우 (REVIEW: REVIEW + PHOTO_REVIEW)
         # groupsubcode 사용하는 타입들만 필터링
         groupsubcodes = [
-            internal_type.value
+            internal_type.name
             for internal_type in internal_types
             if internal_type.uses_groupsubcode
         ]
@@ -91,7 +85,7 @@ class InternalContentType(str, Enum):
                 "bool": {
                     "must": [
                         {"term": {"campaignid": project_id}},
-                        {"terms": {"groupsubcode": groupsubcodes}}
+                        {"terms": {"groupsubcode.keyword": groupsubcodes}}
                     ]
                 }
             }
@@ -104,15 +98,16 @@ class InternalContentType(str, Enum):
             }
 
 
-class ExternalContentType(str, Enum):
+class ExternalContentType(Enum):
     """외부 API에서 사용하는 콘텐츠 타입 - 단순 변환만 담당"""
 
-    SUPPORT = ([InternalContentType.SUPPORT])
-    SUGGESTION = ([InternalContentType.SUGGESTION])
-    REVIEW = ([InternalContentType.REVIEW, InternalContentType.PHOTO_REVIEW])
-    SATISFACTION = ([InternalContentType.SATISFACTION])
+    # 첫 번째 인자는 고유 ID (InternalContentType과 마찬가지로 별칭 방지 및 일관성 유지)
+    SUPPORT = (1, [InternalContentType.SUPPORT])
+    SUGGESTION = (2, [InternalContentType.SUGGESTION])
+    REVIEW = (3, [InternalContentType.REVIEW, InternalContentType.PHOTO_REVIEW])
+    SATISFACTION = (4, [InternalContentType.SATISFACTION])
 
-    def __init__(self, internal_types: List[InternalContentType]):
+    def __init__(self, uid: int, internal_types: List[InternalContentType]):
         self._value_ = self.name
         self._internal_types = internal_types
 
