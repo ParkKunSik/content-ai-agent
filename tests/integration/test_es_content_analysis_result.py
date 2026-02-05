@@ -1,11 +1,19 @@
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
-from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
-from src.schemas.models.es.content_analysis_result import ContentAnalysisResultDocument, ContentAnalysisResultState, ContentAnalysisResultDataV1
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
-from src.schemas.enums.project_type import ProjectType
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.schemas.enums.content_type import ExternalContentType
+from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.es.content_analysis_result import (
+    ContentAnalysisResultDataV1,
+    ContentAnalysisResultDocument,
+    ContentAnalysisResultState,
+)
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
+
 
 class TestESContentSummaryService:
     
@@ -30,6 +38,7 @@ class TestESContentSummaryService:
         """분석 결과 저장 테스트"""
         # Given
         result_data = ContentAnalysisResultDataV1(
+            persona=PersonaType.PRO_DATA_ANALYST,
             data=StructuredAnalysisResponse(
                 summary="test result",
                 categories=[]

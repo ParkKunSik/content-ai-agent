@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ProjectType(Enum):
     """
     Defines the type of project for analysis context.

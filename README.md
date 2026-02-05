@@ -2,7 +2,7 @@
 
 **Content Analysis AI Agent**는 프로젝트 단위로 전달된 대량의 콘텐츠를 분석하고, 선택한 **페르소나(Persona)**의 관점에서 심층적인 요약 및 인사이트를 제공하는 지능형 서비스입니다.
 
-Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용하여, 효율적인 단일 패스(Single-Pass) 분석과 대용량 처리를 위한 맵-리듀스(Map-Reduce) 전략을 자동으로 수행합니다.
+Google Vertex AI의 **Gemini 2.5/3.0** 모델을 활용하여, 효율적인 단일 패스(Single-Pass) 분석과 대용량 처리를 위한 맵-리듀스(Map-Reduce) 전략을 자동으로 수행합니다.
 
 ---
 
@@ -10,27 +10,25 @@ Google Vertex AI의 **Gemini 2.5 Pro**와 **Gemini 2.5 Flash** 모델을 활용�
 
 *   **프로젝트 단위 통합 분석:** 개별 문서가 아닌 프로젝트 전체의 맥락을 이해하는 통합 요약 및 리포트를 생성합니다.
 *   **페르소나 기반 관점 제공 (Role-Playing):**
-    *   `CUSTOMER_FACING_ANALYST`: 고객의 관점에서 제품의 가치를 발견하고 정중하게 전달하는 전문가.
     *   `PRO_DATA_ANALYST`: 사실과 수치에 기반하여 패턴을 도출하는 냉철한 데이터 분석가.
     *   `CUSTOMER_FACING_SMART_BOT`: 방대한 리뷰의 핵심을 절제된 표현으로 스마트하게 요약하는 봇.
+*   **고급 시각화 보고서:** 아마존 스타일의 인터랙티브 HTML 보고서를 생성하며, 모달 창을 통해 하이라이트의 원본 콘텐츠를 즉시 확인할 수 있습니다.
 *   **2단계 심층 분석 프로세스 (2-Step Analysis):**
     *   **Step 1. 구조화 및 추출 (Structuring):** 비정형 데이터를 카테고리, 감정, 하이라이트 등 정형 구조로 변환.
     *   **Step 2. 요약 정제 (Refinement):** 생성된 분석 데이터를 바탕으로 페르소나별 최적의 요약문 생성.
 *   **프롬프트 템플릿 엔진 & Controlled Generation:**
     *   `Jinja2`를 활용한 동적 프롬프트 생성과 함께, Vertex AI의 `response_schema` 기능을 도입하여 100% 유효한 JSON 출력을 보장합니다.
     *   Pydantic 모델을 통해 데이터 구조와 지침을 일원화하여 관리합니다.
-*   **엔터프라이즈급 안정성:**
-    *   **Tenacity Retry:** API 할당량 초과(429) 및 일시적 서버 오류에 대한 자동 재시도 로직이 적용되어 있습니다.
-    *   **Validation:** 10MB 파일 크기 제한 및 사전 검증을 통해 안정적인 리소스 관리를 지원합니다.
+*   **Elasticsearch 통합:** 기존 와디즈 데이터를 조회하고 분석 결과를 영구 저장하여 버전별 관리가 가능합니다.
 
 ---
 
 ## 🛠 기술 스택 (Tech Stack)
 
 *   **Language:** Python 3.10+
-*   **AI Platform:** Google Vertex AI (Gemini 2.5 Pro / 2.5 Flash)
+*   **AI Platform:** Google Vertex AI (Gemini 2.5 / 3.0 Pro & Flash)
 *   **Framework:** FastAPI (비동기 API 서버)
-*   **Data Store:** Redis, Elasticsearch SaaS
+*   **Data Store:** Redis, Elasticsearch
 *   **Infrastructure:** Docker, Docker Compose
 *   **Testing:** pytest (Asyncio 기반 통합 테스트)
 
@@ -123,7 +121,7 @@ http://localhost:8000/redoc
   "project_id": 365330,
   "project_type": "FUNDING",
   "content_type": "REVIEW",
-  "analysis_mode": "SELLER_ASSISTANT",
+  "analysis_mode": "REVIEW_BOT",
   "force_refresh": false
 }
 ```

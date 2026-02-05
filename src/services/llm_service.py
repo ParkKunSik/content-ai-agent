@@ -1,18 +1,18 @@
-import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from google.genai import types, errors
+from google.genai import errors, types
 
 from src.core.session_factory import SessionFactory
 from src.core.validation_error_handler import ValidationErrorHandler
-from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.mime_type import MimeType
+from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
-from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.schemas.models.common.content_item import ContentItem
+from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
 from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -126,12 +126,11 @@ class LLMService:
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
         """
         analysis_items = self._convert_to_analysis_items(content_items)
-        analysis_items_dict = [item.model_dump(exclude_none=True) for item in analysis_items]
 
         prompt = self.prompt_manager.get_content_analysis_structuring_prompt(
             project_id=project_id,
             project_type=project_type,
-            content_items=json.dumps(analysis_items_dict, ensure_ascii=False, separators=(',', ':'))
+            analysis_content_items=analysis_items
         )
 
         schema = StructuredAnalysisResponse.model_json_schema()
@@ -150,7 +149,7 @@ class LLMService:
         self,
         project_id: int,
         project_type: ProjectType,
-        raw_analysis_data: str,
+        refine_content_items: StructuredAnalysisSummary,
         persona_type: PersonaType
     ) -> StructuredAnalysisRefinedResponse:
         """
@@ -160,7 +159,7 @@ class LLMService:
         prompt = self.prompt_manager.get_content_analysis_summary_refine_prompt(
             project_id=project_id,
             project_type=project_type,
-            raw_analysis_data=raw_analysis_data
+            refine_content_items=refine_content_items
         )
 
         schema = StructuredAnalysisRefinedResponse.model_json_schema()

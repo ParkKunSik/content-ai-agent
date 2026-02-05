@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 from typing import Union
 
 from pydantic import BaseModel, Field
 
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
+
 from ..common.content_item import ContentItem
+
 
 class AnalyzeRequest(BaseModel):
     project_id: int = Field(..., description="Unique identifier for the project context")

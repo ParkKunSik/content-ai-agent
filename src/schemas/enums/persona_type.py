@@ -1,8 +1,9 @@
 from enum import Enum
-from typing import Callable, Any, Optional
+from typing import Any, Callable, Optional
 
 from src.core.config import settings
 from src.utils.prompt_renderer import PromptRenderer
+
 
 class PersonaType(Enum):
     """

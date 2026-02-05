@@ -2,12 +2,13 @@ import logging
 from typing import List, Union
 
 from src.core.config import settings
-from src.core.elasticsearch_config import es_manager, ElasticsearchConfig
+from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
 from src.services.request_content_loader import RequestContentLoader
@@ -84,17 +85,27 @@ class AgentOrchestrator:
         base_analysis = await self.llm_service.structure_content_analysis(
             project_id=project_id,
             project_type=project_type,
-            content_items=[item.model_dump() for item in content_items]
+            content_items=content_items
         )
         logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categories)}")
         
         # 3. Step 2: Refine Summary
         # Uses the persona defined in AnalysisMode for refinement
         logger.info(f"Executing Step 2: Refinement with persona {analysis_mode.persona_type}")
+        
+        # Step1 결과를 StructuredAnalysisSummary로 변환
+        refine_content_items = StructuredAnalysisSummary(
+            summary=base_analysis.summary,
+            categories=[
+                CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+                for cat in base_analysis.categories
+            ]
+        )
+        
         refinement_result = await self.llm_service.refine_analysis_summary(
             project_id=project_id,
             project_type=project_type,
-            raw_analysis_data=base_analysis.model_dump_json(),
+            refine_content_items=refine_content_items,
             persona_type=analysis_mode.persona_type
         )
         

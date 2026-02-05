@@ -6,10 +6,16 @@ from elasticsearch import Elasticsearch
 
 from src.core.config import settings
 from src.core.elasticsearch_config import es_manager
-from src.schemas.models.es.content_analysis_result import ContentAnalysisResultDocument, ContentAnalysisResultState, ContentAnalysisResultDataV1
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
-from src.schemas.enums.project_type import ProjectType
 from src.schemas.enums.content_type import ExternalContentType
+from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.es.content_analysis_result import (
+    ContentAnalysisResultDataV1,
+    ContentAnalysisResultDocument,
+    ContentAnalysisResultState,
+)
+from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
 
 logger = logging.getLogger(__name__)
 
@@ -107,13 +113,19 @@ class ESContentAnalysisResultService:
         version: int,
         state: ContentAnalysisResultState,
         structured_response: StructuredAnalysisResponse,
+        persona: PersonaType = PersonaType.PRO_DATA_ANALYST,
+        refine_persona: Optional[PersonaType] = None,
+        refined_summary: Optional[StructuredAnalysisRefinedResponse] = None,
         reason: str = None
     ) -> str:
         """구조화된 분석 응답을 V1 형식으로 저장하는 헬퍼 메서드"""
         
         # V1 결과 데이터 생성
         result_data = ContentAnalysisResultDataV1(
-            data=structured_response
+            persona=persona,
+            data=structured_response,
+            refine_persona=refine_persona,
+            refined_summary=refined_summary
         )
         
         # 문서 생성

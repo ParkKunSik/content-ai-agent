@@ -1,7 +1,8 @@
-import pytest
 import logging
-import sys
 import os
+import sys
+
+import pytest
 from dotenv import load_dotenv
 
 # 프로젝트 루트 경로 설정
@@ -12,12 +13,13 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if os.path.exists(env_path):
     load_dotenv(env_path, override=True)
 
+from src.core.config import settings
+from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
+from src.core.session_factory import SessionFactory
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
-from src.core.session_factory import SessionFactory
-from src.core.config import settings
-from src.core.elasticsearch_config import es_manager, ElasticsearchConfig
-from tests.data.test_contents import POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT
+from tests.data.test_contents import MILD_NEGATIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, POSITIVE_CONTENT, TOXIC_CONTENT
+
 
 # 로깅 필터 설정
 class VertexLogFilter(logging.Filter):
@@ -82,8 +84,8 @@ def sample_contents():
 @pytest.fixture(autouse=True)
 def cleanup_resources():
     yield
-    import time
     import gc
+    import time
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

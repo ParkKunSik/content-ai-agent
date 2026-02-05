@@ -2,6 +2,7 @@ from enum import Enum
 
 from .persona_type import PersonaType
 
+
 class AnalysisMode(str, Enum):
     """
     External interface for choosing the analysis persona.

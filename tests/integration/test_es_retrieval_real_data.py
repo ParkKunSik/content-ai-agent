@@ -1,7 +1,9 @@
-import pytest
 import logging
-from src.services.es_content_retrieval_service import ESContentRetrievalService
+
+import pytest
+
 from src.schemas.enums.content_type import ExternalContentType
+from src.services.es_content_retrieval_service import ESContentRetrievalService
 
 # 로그 설정
 logging.basicConfig(level=logging.INFO)

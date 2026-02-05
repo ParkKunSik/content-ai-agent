@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import random
-from typing import Optional, Dict, Any, Callable, TypeVar, Generic, Awaitable
+from typing import Any, Awaitable, Callable, Dict, Generic, Optional, TypeVar
 
 from google.genai import errors
 from pydantic import BaseModel, ValidationError

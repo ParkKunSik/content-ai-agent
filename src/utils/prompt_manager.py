@@ -1,5 +1,10 @@
+import json
+from typing import List
+
 from src.core.config import settings
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_renderer import PromptRenderer
 from src.utils.prompt_template import PromptTemplate
 
@@ -10,13 +15,13 @@ class PromptManager:
     Implemented as a Singleton to share the internal PromptRenderer instance.
     """
     _instance = None
-    
+
     # Summary character limits for detailed analysis refinement
     @property
     def MAX_MAIN_SUMMARY_CHARS(self) -> int:
         return settings.MAX_MAIN_SUMMARY_CHARS
-    
-    @property  
+
+    @property
     def MAX_CATEGORY_SUMMARY_CHARS(self) -> int:
         return settings.MAX_CATEGORY_SUMMARY_CHARS
 
@@ -32,23 +37,49 @@ class PromptManager:
         """Access the underlying PromptRenderer instance."""
         return self._renderer
 
-    def get_content_analysis_structuring_prompt(self, project_id: int, project_type: ProjectType, content_items: str) -> str:
+    def get_content_analysis_structuring_prompt(
+        self,
+        project_id: int,
+        project_type: ProjectType,
+        analysis_content_items: List[AnalysisContentItem]
+    ) -> str:
         """
         상세 분석 프롬프트 생성 (구조화 및 추출).
+
+        Args:
+            project_id: 프로젝트 ID
+            project_type: 프로젝트 타입
+            analysis_content_items: 분석 대상 콘텐츠 아이템 리스트
         """
         template = PromptTemplate.CONTENT_ANALYSIS_STRUCTURING.get_template(self._renderer)
+        content_items_json = json.dumps(
+            [item.model_dump(exclude_none=True) for item in analysis_content_items],
+            ensure_ascii=False,
+            separators=(',', ':')
+        )
         return self._renderer.render_with_template(
             template,
             project_id=project_id,
             project_type=project_type,
-            content_items=content_items
+            content_items=content_items_json
         )
 
-    def get_content_analysis_summary_refine_prompt(self, project_id: int, project_type: ProjectType, raw_analysis_data: str) -> str:
+    def get_content_analysis_summary_refine_prompt(
+        self,
+        project_id: int,
+        project_type: ProjectType,
+        refine_content_items: StructuredAnalysisSummary
+    ) -> str:
         """
         상세 분석 요약 정제 프롬프트 생성 (요약 최적화).
+
+        Args:
+            project_id: 프로젝트 ID
+            project_type: 프로젝트 타입
+            refine_content_items: 정제 대상 분석 요약 데이터
         """
         template = PromptTemplate.CONTENT_ANALYSIS_SUMMARY_REFINE.get_template(self._renderer)
+        raw_analysis_data = refine_content_items.model_dump_json(exclude_none=True)
         return self._renderer.render_with_template(
             template,
             project_id=project_id,

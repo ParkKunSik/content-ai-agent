@@ -1,5 +1,7 @@
 from typing import Optional
+
 from pydantic import BaseModel, Field
+
 
 class AnalysisContentItem(BaseModel):
     """상세 분석 프롬프트에 주입할 콘텐츠 아이템 모델"""

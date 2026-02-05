@@ -1,6 +1,8 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional
-import logging
+
+from elasticsearch import Elasticsearch
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +29,6 @@ class ElasticsearchManager:
     def initialize(self, reference_config: ElasticsearchConfig, main_config: ElasticsearchConfig):
         """ES 클라이언트 초기화"""
         try:
-            from elasticsearch import Elasticsearch
-
             # 호스트 URL 구성 헬퍼 함수
             def build_host_url(config: ElasticsearchConfig) -> str:
                 """호스트 URL 구성 (http:// 또는 https://가 포함된 경우 포트 생략)"""

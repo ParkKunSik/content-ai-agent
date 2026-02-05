@@ -1,11 +1,15 @@
-from pydantic import BaseModel, Field
-from enum import Enum
-from typing import Optional, Dict, Any, Union, Literal
 from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, Literal, Optional, Union
 
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
-from src.schemas.enums.project_type import ProjectType
+from pydantic import BaseModel, Field
+
 from src.schemas.enums.content_type import ExternalContentType
+from src.schemas.enums.persona_type import PersonaType
+from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
+from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+
 
 class ContentAnalysisResultState(str, Enum):
     """분석 상태"""
@@ -21,7 +25,10 @@ class ContentAnalysisResult(BaseModel):
 class ContentAnalysisResultDataV1(ContentAnalysisResult):
     """분석 결과 데이터 V1 - StructuredAnalysisResponse 기반"""
     version: Literal[1] = 1
+    persona: PersonaType = Field(description="분석에 사용된 페르소나")
     data: StructuredAnalysisResponse = Field(description="V1 구조화된 분석 응답")
+    refine_persona: Optional[PersonaType] = Field(default=None, description="요약 정제에 사용된 페르소나")
+    refined_summary: Optional[StructuredAnalysisRefinedResponse] = Field(default=None, description="정제된 요약 결과")
 
 class ContentAnalysisResultDocument(BaseModel):
     """ES에 저장될 분석 결과 문서"""

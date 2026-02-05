@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 class InternalContentType(Enum):
@@ -7,16 +7,17 @@ class InternalContentType(Enum):
 
     # g2 인덱스 사용 타입들 (groupsubcode 사용)
     # 첫 번째 인자는 Enum Aliasing 방지를 위한 고유 ID
-    SUPPORT = (1, "wadiz_db_comment_g2_*", True)
-    SUGGESTION = (2, "wadiz_db_comment_g2_*", True)
-    REVIEW = (3, "wadiz_db_comment_g2_*", True)
-    PHOTO_REVIEW = (4, "wadiz_db_comment_g2_*", True)
+    SUPPORT = ("응원", "wadiz_db_comment_g2_*", True)
+    SUGGESTION = ("의견", "wadiz_db_comment_g2_*", True)
+    REVIEW = ("체험리뷰", "wadiz_db_comment_g2_*", True)
+    PHOTO_REVIEW = ("사진체험리뷰", "wadiz_db_comment_g2_*", True)
 
     # g4 인덱스 사용 타입 (groupsubcode 미사용)
-    SATISFACTION = (5, "wadiz_db_comment_g4_*", False)
+    SATISFACTION = ("만족도", "wadiz_db_comment_g4_*", False)
 
-    def __init__(self, uid: int, index_pattern: str, uses_groupsubcode: bool):
+    def __init__(self, description: str, index_pattern: str, uses_groupsubcode: bool):
         self._value_ = self.name
+        self.description = description
         self._index_pattern = index_pattern
         self._uses_groupsubcode = uses_groupsubcode
 
@@ -102,13 +103,14 @@ class ExternalContentType(Enum):
     """외부 API에서 사용하는 콘텐츠 타입 - 단순 변환만 담당"""
 
     # 첫 번째 인자는 고유 ID (InternalContentType과 마찬가지로 별칭 방지 및 일관성 유지)
-    SUPPORT = (1, [InternalContentType.SUPPORT])
-    SUGGESTION = (2, [InternalContentType.SUGGESTION])
-    REVIEW = (3, [InternalContentType.REVIEW, InternalContentType.PHOTO_REVIEW])
-    SATISFACTION = (4, [InternalContentType.SATISFACTION])
+    SUPPORT = ("응원", [InternalContentType.SUPPORT])
+    SUGGESTION = ("의견", [InternalContentType.SUGGESTION])
+    REVIEW = ("체험리뷰", [InternalContentType.REVIEW, InternalContentType.PHOTO_REVIEW])
+    SATISFACTION = ("만족도", [InternalContentType.SATISFACTION])
 
-    def __init__(self, uid: int, internal_types: List[InternalContentType]):
+    def __init__(self, description: str, internal_types: List[InternalContentType]):
         self._value_ = self.name
+        self.description = description
         self._internal_types = internal_types
 
     def to_internal(self) -> List[InternalContentType]:

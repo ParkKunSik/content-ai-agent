@@ -1,22 +1,20 @@
-import pytest
-import time
 import json
 import os
 import random
+import time
 from datetime import datetime, timedelta
-from src.services.llm_service import LLMService
-from src.utils.prompt_manager import PromptManager
+
+import pytest
+
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
+from src.services.llm_service import LLMService
+from src.utils.prompt_manager import PromptManager
 
 # tests/data/test_contents.py에서 정적 데이터 임포트
-from tests.data.test_contents import (
-    POSITIVE_CONTENT,
-    NEGATIVE_CONTENT_QUALITY,
-    MILD_NEGATIVE_CONTENT,
-    TOXIC_CONTENT
-)
+from tests.data.test_contents import MILD_NEGATIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, POSITIVE_CONTENT, TOXIC_CONTENT
 
 
 def _format_duration(seconds: float) -> str:
@@ -83,7 +81,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
     total_start_time = time.time()
 
     # 3. Step 1: Main Analysis (PRO_DATA_ANALYST)
-    print(f"\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
+    print("\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
     
     step1_response = await llm_service.structure_content_analysis(
@@ -103,13 +101,22 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
         print(f"  - Summary length: {len(step1_response.summary)} chars")
 
     # 4. Step 2: Refinement with CUSTOMER_FACING_SMART_BOT
-    print(f"\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
+    print("\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
     step2_start_time = time.time()
+    
+    # Step1 결과를 StructuredAnalysisSummary로 변환
+    refine_content_items = StructuredAnalysisSummary(
+        summary=step1_response.summary,
+        categories=[
+            CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+            for cat in step1_response.categories
+        ]
+    )
     
     step2_response = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
-        raw_analysis_data=step1_response.model_dump_json(),
+        refine_content_items=refine_content_items,
         persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT
     )
     step2_duration = time.time() - step2_start_time
@@ -124,7 +131,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
         print(f"  - Refined categories: {len(step2_response.categories)}")
 
     # 5. Merge & Print Final Result
-    print(f"\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
+    print("\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
     
     # Merge Logic (simulating Orchestrator)
     final_response = step1_response.model_copy(deep=True)

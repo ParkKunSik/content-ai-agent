@@ -1,11 +1,12 @@
-import os
 import json
 import logging
-from typing import Optional, Any, Dict
+import os
+from typing import Any, Dict, Optional
+
+from dotenv import load_dotenv
+from google.cloud import secretmanager
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from google.cloud import secretmanager
-from dotenv import load_dotenv
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO)

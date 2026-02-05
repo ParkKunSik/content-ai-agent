@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MimeType(str, Enum):
     """
     Defines supported MIME types for content generation.

@@ -4,6 +4,7 @@ from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.project_type import ProjectType
 
+
 class ProjectAnalysisRequest(BaseModel):
     """프로젝트 기반 콘텐츠 분석 요청"""
     project_id: int = Field(..., description="프로젝트 ID")

@@ -1,8 +1,11 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+
+from src.core.config import settings
+
 from ..common.category_summary import CategorySummary
 from ..common.etc_content import EtcContent
-from src.core.config import settings
 
 
 class StructuredAnalysisResponse(BaseModel):

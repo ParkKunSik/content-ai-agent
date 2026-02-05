@@ -1,6 +1,9 @@
 from enum import Enum
+
 from jinja2 import Template
+
 from src.utils.prompt_renderer import PromptRenderer
+
 
 class PromptTemplate(Enum):
     """

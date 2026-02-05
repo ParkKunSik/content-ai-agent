@@ -13,10 +13,11 @@ from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
+from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
+from src.utils.generation_viewer import PDF_AVAILABLE, GenerationViewer
 from src.utils.prompt_manager import PromptManager
-from src.utils.generation_viewer import GenerationViewer, PDF_AVAILABLE
 
 TOKEN_COST_CURRENCY = "USD"
 MODEL_PRICING_TABLE = {
@@ -125,7 +126,8 @@ async def _execute_content_analysis_with_html(
     output_json_path: str = None,
     output_html_path: str = None,
     output_pdf_path: str = None,
-    persona_type: PersonaType = None
+    persona_type: PersonaType = None,
+    content_type_description: str = "고객 의견"
 ):
     """
     상세 분석 플로우 실행 후 HTML/PDF 생성 유틸리티를 활용
@@ -163,16 +165,15 @@ async def _execute_content_analysis_with_html(
     total_start_time = time.time()
 
     # 3. Step 1: Main Analysis
-    print(f"\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
+    print("\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
 
-    # ContentItem → AnalysisContentItem 변환 및 JSON 변환을 LLMService와 동일하게 처리
+    # ContentItem → AnalysisContentItem 변환
     analysis_items = llm_service._convert_to_analysis_items(sample_contents)
-    analysis_items_dict = [item.model_dump(exclude_none=True) for item in analysis_items]
     step1_prompt = prompt_manager.get_content_analysis_structuring_prompt(
         project_id=project_id,
         project_type=project_type,
-        content_items=json.dumps(analysis_items_dict, ensure_ascii=False, separators=(',', ':'))
+        analysis_content_items=analysis_items
     )
     step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
@@ -193,18 +194,26 @@ async def _execute_content_analysis_with_html(
     _print_token_usage("Step 1", step1_token_usage)
 
     # 4. Step 2: Refinement
-    print(f"\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
+    print("\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
     step2_start_time = time.time()
 
+    # Step1 결과를 StructuredAnalysisSummary로 변환
+    refine_content_items = StructuredAnalysisSummary(
+        summary=step1_response.summary,
+        categories=[
+            CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+            for cat in step1_response.categories
+        ]
+    )
     step2_prompt = prompt_manager.get_content_analysis_summary_refine_prompt(
         project_id=project_id,
         project_type=project_type,
-        raw_analysis_data=step1_response.model_dump_json()
+        refine_content_items=refine_content_items
     )
     step2_response = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
-        raw_analysis_data=step1_response.model_dump_json(),
+        refine_content_items=refine_content_items,
         persona_type=persona_type
     )
     step2_duration = time.time() - step2_start_time
@@ -221,7 +230,7 @@ async def _execute_content_analysis_with_html(
     _print_token_usage("Step 2", step2_token_usage)
 
     # 5. Merge Results
-    print(f"\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
+    print("\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
 
     final_response = step1_response.model_copy(deep=True)
     final_response.summary = step2_response.summary
@@ -307,7 +316,8 @@ async def _execute_content_analysis_with_html(
                 project_id=project_id,
                 total_items=len(sample_contents),
                 executed_at=executed_at,
-                total_duration=total_duration_formatted
+                total_duration=total_duration_formatted,
+                content_type_description=content_type_description
             )
             with open(output_html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -316,7 +326,7 @@ async def _execute_content_analysis_with_html(
 
         # Generate PDF (Using GenerationViewer with Pydantic model directly)
         if output_pdf_path:
-            print(f"\n📄 [PDF Generation]: Starting...")
+            print("\n📄 [PDF Generation]: Starting...")
             pdf_html = GenerationViewer.generate_pdf_optimized_html(
                 result=final_response,
                 project_id=project_id,
@@ -328,18 +338,20 @@ async def _execute_content_analysis_with_html(
                 pdf_path = output_pdf_path
                 print(f"📄 [PDF Saved]: {output_pdf_path}")
             else:
-                print(f"❌ [PDF Failed]: Could not generate PDF")
+                print("❌ [PDF Failed]: Could not generate PDF")
 
     return step1_response, step2_response, final_response, total_duration, html_path, pdf_path
 
 
-async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str, persona_type: PersonaType):
+async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str, persona_type: PersonaType, content_type_description: str = "고객 의견"):
     """
     공통 HTML 생성 테스트 로직
-    
+
     Args:
         content_items: 분석할 ContentItem 리스트
         test_name: 테스트명 (파일명에 사용)
+        persona_type: 페르소나 타입
+        content_type_description: 콘텐츠 타입 설명 (HTML 제목에 표시)
     """
     # Validate data structure
     if len(content_items) == 0:
@@ -357,7 +369,7 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
 
     # Sample items for testing (랜덤 또는 순차 선택)
     is_all = False
-    sample_size = 100
+    sample_size = 300
 
     if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
@@ -377,7 +389,8 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
                 output_json_path=output_json_path,
                 output_html_path=output_html_path,
                 output_pdf_path=output_pdf_path,
-                persona_type=persona_type
+                persona_type=persona_type,
+                content_type_description=content_type_description
             )
 
         # Assertions
@@ -434,7 +447,7 @@ async def test_html_generation_from_project_file():
 
     project_id = 365330
     # 공통 테스트 로직 실행
-    await _execute_html_generation_test(project_id, content_items, "file", PersonaType.CUSTOMER_FACING_SMART_BOT)
+    await _execute_html_generation_test(project_id, content_items, "file", PersonaType.CUSTOMER_FACING_SMART_BOT, f"고객 의견({ExternalContentType.REVIEW.description})")
 
 
 @pytest.mark.asyncio 
@@ -448,8 +461,8 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
     try:
         # ES 초기화는 setup_elasticsearch fixture에서 처리
         es_service = ESContentRetrievalService()
-        
-        project_id = 354602
+
+        project_id = 376278
         content_type = ExternalContentType.SATISFACTION
         
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
@@ -462,9 +475,9 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
             pytest.skip(f"ES에서 프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
         
         print(f">>> ES에서 {len(content_items)}개 콘텐츠 조회 완료")
-        
+
         # 공통 테스트 로직 실행
-        await _execute_html_generation_test(project_id, content_items, "ES", PersonaType.CUSTOMER_FACING_SMART_BOT)
+        await _execute_html_generation_test(project_id, content_items, "ES", PersonaType.CUSTOMER_FACING_SMART_BOT, f"고객 의견({content_type.description})")
         
     except Exception as e:
         pytest.fail(f"ES 조회 테스트 실패: {e}")
