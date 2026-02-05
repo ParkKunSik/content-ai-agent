@@ -40,7 +40,7 @@ def _format_duration(seconds: float) -> str:
 
 
 async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
-                                         project_type: ProjectType = ProjectType.FUNDING,
+                                         project_type: ProjectType = ProjectType.FUNDING_AND_PREORDER,
                                          show_content_details: bool = True,
                                          save_output: bool = False,
                                          output_file_path: str = None

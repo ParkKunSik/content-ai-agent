@@ -16,7 +16,7 @@ class ESContentRetrievalService:
         # 참조용 ES 클라이언트 사용 (기존 데이터 조회)
         self.client: Elasticsearch = es_manager.reference_client
     
-    async def get_project_contents(
+    async def get_funding_preorder_project_contents(
         self, 
         project_id: int, 
         content_type: ExternalContentType,

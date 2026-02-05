@@ -19,7 +19,7 @@ async def test_get_project_contents_real_data(setup_elasticsearch):
     # 2. 데이터 조회 (ExternalContentType.REVIEW 사용)
     # REVIEW 타입은 내부적으로 REVIEW와 PHOTO_REVIEW를 모두 포함함
     logger.info(f"프로젝트 {project_id}의 콘텐츠 조회를 시작합니다. (Type: REVIEW)")
-    contents = await service.get_project_contents(
+    contents = await service.get_funding_preorder_project_contents(
         project_id=project_id,
         content_type=ExternalContentType.REVIEW,
         size=5000  # 전체 데이터를 가져오기 위해 충분한 사이즈 설정

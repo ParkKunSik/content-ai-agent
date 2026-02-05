@@ -119,7 +119,7 @@ def _print_token_usage(step_label: str, usage: dict) -> None:
 async def _execute_content_analysis_with_html(
     project_id: int,
     sample_contents: List[ContentItem],
-    project_type: ProjectType = ProjectType.FUNDING,
+    project_type: ProjectType = ProjectType.FUNDING_AND_PREORDER,
     show_content_details: bool = False,
     save_output: bool = True,
     output_json_path: str = None,
@@ -451,7 +451,7 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
         content_type = ExternalContentType.SATISFACTION
         
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
-        content_items = await es_service.get_project_contents(
+        content_items = await es_service.get_funding_preorder_project_contents(
             project_id=project_id,
             content_type=content_type
         )

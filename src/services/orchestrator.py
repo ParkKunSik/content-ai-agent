@@ -112,6 +112,14 @@ class AgentOrchestrator:
         
         return base_analysis
 
+    async def funding_preorder_project_analysis(
+            self,
+            project_id: int,
+            content_type: ExternalContentType,
+            analysis_mode: AnalysisMode
+    ) -> StructuredAnalysisResponse:
+        return await self.project_analysis(project_id, ProjectType.FUNDING_AND_PREORDER, content_type, analysis_mode)
+
     async def project_analysis(
         self,
         project_id: int,
@@ -135,7 +143,7 @@ class AgentOrchestrator:
         
         # 1. ES에서 콘텐츠 조회
         logger.info(f"Retrieving content from ES for project {project_id}")
-        content_items = await self.es_content_service.get_project_contents(
+        content_items = await self.es_content_service.get_funding_preorder_project_contents(
             project_id=project_id,
             content_type=content_type
         )

@@ -38,7 +38,7 @@ class TestESContentSummaryService:
         
         doc = ContentAnalysisResultDocument(
             project_id="12345",
-            project_type=ProjectType.FUNDING,
+            project_type=ProjectType.FUNDING_AND_PREORDER,
             content_type=ExternalContentType.REVIEW,
             version=1,
             state=ContentAnalysisResultState.COMPLETED,
@@ -71,7 +71,7 @@ class TestESContentSummaryService:
         # When
         doc_id = await service.save_analysis_result(
             project_id="12345",
-            project_type=ProjectType.FUNDING,
+            project_type=ProjectType.FUNDING_AND_PREORDER,
             content_type=ExternalContentType.REVIEW,
             version=1,
             state=ContentAnalysisResultState.COMPLETED,

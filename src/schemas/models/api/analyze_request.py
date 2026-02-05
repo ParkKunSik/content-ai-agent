@@ -9,7 +9,7 @@ from ..common.content_item import ContentItem
 
 class AnalyzeRequest(BaseModel):
     project_id: int = Field(..., description="Unique identifier for the project context")
-    project_type: ProjectType = Field(default=ProjectType.FUNDING, description="Type of project (FUNDING, PREORDER, STORE)")
+    project_type: ProjectType = Field(default=ProjectType.FUNDING_AND_PREORDER, description="Type of project (FUNDING, PREORDER, STORE)")
     analysis_mode: AnalysisMode = Field(
         default=AnalysisMode.SELLER_ASSISTANT,
         description="Type of persona to adopt for analysis"
