@@ -10,7 +10,7 @@ class ProjectAnalysisRequest(BaseModel):
     project_type: ProjectType = Field(default=ProjectType.FUNDING_AND_PREORDER, description="프로젝트 타입")
     content_type: ExternalContentType = Field(..., description="콘텐츠 타입 (REVIEW, SATISFACTION, SUPPORT, SUGGESTION)")
     analysis_mode: AnalysisMode = Field(
-        default=AnalysisMode.SELLER_ASSISTANT,
+        default=AnalysisMode.REVIEW_BOT,
         description="분석 모드/페르소나"
     )
     force_refresh: bool = Field(default=False, description="기존 분석 결과 무시하고 새로 분석")

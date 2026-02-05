@@ -11,7 +11,7 @@ class AnalyzeRequest(BaseModel):
     project_id: int = Field(..., description="Unique identifier for the project context")
     project_type: ProjectType = Field(default=ProjectType.FUNDING_AND_PREORDER, description="Type of project (FUNDING, PREORDER, STORE)")
     analysis_mode: AnalysisMode = Field(
-        default=AnalysisMode.SELLER_ASSISTANT,
+        default=AnalysisMode.REVIEW_BOT,
         description="Type of persona to adopt for analysis"
     )
     contents: list[Union[str, ContentItem]] = Field(

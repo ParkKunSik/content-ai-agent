@@ -124,7 +124,8 @@ async def _execute_content_analysis_with_html(
     save_output: bool = True,
     output_json_path: str = None,
     output_html_path: str = None,
-    output_pdf_path: str = None
+    output_pdf_path: str = None,
+    persona_type: PersonaType = None
 ):
     """
     상세 분석 플로우 실행 후 HTML/PDF 생성 유틸리티를 활용
@@ -204,7 +205,7 @@ async def _execute_content_analysis_with_html(
         project_id=project_id,
         project_type=project_type,
         raw_analysis_data=step1_response.model_dump_json(),
-        persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT
+        persona_type=persona_type
     )
     step2_duration = time.time() - step2_start_time
     step2_token_usage = await _calculate_token_usage(
@@ -332,7 +333,7 @@ async def _execute_content_analysis_with_html(
     return step1_response, step2_response, final_response, total_duration, html_path, pdf_path
 
 
-async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str):
+async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str, persona_type: PersonaType):
     """
     공통 HTML 생성 테스트 로직
     
@@ -375,7 +376,8 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
                 save_output=True,
                 output_json_path=output_json_path,
                 output_html_path=output_html_path,
-                output_pdf_path=output_pdf_path
+                output_pdf_path=output_pdf_path,
+                persona_type=persona_type
             )
 
         # Assertions
@@ -432,7 +434,7 @@ async def test_html_generation_from_project_file():
 
     project_id = 365330
     # 공통 테스트 로직 실행
-    await _execute_html_generation_test(project_id, content_items, "file")
+    await _execute_html_generation_test(project_id, content_items, "file", PersonaType.CUSTOMER_FACING_SMART_BOT)
 
 
 @pytest.mark.asyncio 
@@ -462,7 +464,7 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
         print(f">>> ES에서 {len(content_items)}개 콘텐츠 조회 완료")
         
         # 공통 테스트 로직 실행
-        await _execute_html_generation_test(project_id, content_items, "ES")
+        await _execute_html_generation_test(project_id, content_items, "ES", PersonaType.CUSTOMER_FACING_SMART_BOT)
         
     except Exception as e:
         pytest.fail(f"ES 조회 테스트 실패: {e}")
