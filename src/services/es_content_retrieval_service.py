@@ -5,7 +5,7 @@ from elasticsearch import Elasticsearch
 
 from src.core.elasticsearch_config import es_manager
 from src.schemas.enums.content_type import ExternalContentType, InternalContentType
-from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.common.content_item import ContentItem
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,9 @@ class ESContentRetrievalService:
         content_type: ExternalContentType,
         size: int = 1000,
         from_: int = 0
-    ) -> List[AnalysisContentItem]:
+    ) -> List[ContentItem]:
         """
-        프로젝트 콘텐츠 조회 후 AnalysisContentItem 리스트 반환
+        프로젝트 콘텐츠 조회 후 ContentItem 리스트 반환
         
         Args:
             project_id: 프로젝트 ID (캠페인 ID)
@@ -33,7 +33,7 @@ class ESContentRetrievalService:
             from_: 시작 위치
             
         Returns:
-            List[AnalysisContentItem]: 분석용 콘텐츠 아이템 리스트
+            List[ContentItem]: 콘텐츠 아이템 리스트
         """
         try:
             # 1. 외부 타입을 내부 타입으로 변환
@@ -72,7 +72,7 @@ class ESContentRetrievalService:
                 }
             )
             
-            # 5. AnalysisContentItem 리스트로 변환
+            # 5. ContentItem 리스트로 변환
             hits = response["hits"]["hits"]
             logger.info(f"ES response hits count: {len(hits)}")
             if hits:
@@ -85,7 +85,7 @@ class ESContentRetrievalService:
                 
                 # ES 필드 매핑
                 # seq는 integer로 가정. 없으면 0 또는 예외 처리?
-                # AnalysisContentItem.id는 int 필수.
+                # ContentItem.content_id는 int 필수.
                 seq_val = source.get("seq")
                 if seq_val is None:
                     # seq가 없으면 _id를 시도하되, int 변환 가능해야 함
@@ -100,17 +100,12 @@ class ESContentRetrievalService:
                 content_text = source.get("body", "")
                 groupsubcode = source.get("groupsubcode", "")
                 
-                # has_image 판단: groupsubcode가 'PHOTO_REVIEW'인 경우 true
-                # AnalysisContentItem 최적화: True인 경우만 True, False면 None
-                is_photo = (groupsubcode == "PHOTO_REVIEW")
-                has_image = True if is_photo else None
-                
                 # 빈 콘텐츠 제외
                 if content_text and content_text.strip():
-                    content_item = AnalysisContentItem(
-                        id=content_id,
+                    content_item = ContentItem(
+                        content_id=content_id,
                         content=content_text.strip(),
-                        has_image=has_image
+                        has_image=(groupsubcode == "PHOTO_REVIEW")
                     )
                     content_items.append(content_item)
             

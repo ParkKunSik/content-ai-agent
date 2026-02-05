@@ -90,8 +90,42 @@ pip install -e ".[dev]"
 # 운영용 필수 패키지만 설치할 경우
 pip install .
 
-# 서버 실행
-uvicorn src.main:app --reload
+# 서버 실행 (.venv 환경에서)
+source .venv/bin/activate
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 4. API 문서 확인
+서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다.
+
+```bash
+# 서버 Health Check
+curl http://localhost:8000/health
+
+# Swagger UI (Interactive API Documentation)
+http://localhost:8000/docs
+
+# ReDoc (Alternative API Documentation)
+http://localhost:8000/redoc
+```
+
+#### 주요 API 엔드포인트
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| `GET` | `/health` | 서버 상태 확인 |
+| `POST` | `/analysis` | 콘텐츠 직접 분석 (파일 업로드) |
+| `POST` | `/project-analysis` | 프로젝트 기반 분석 (ES 조회) |
+
+**프로젝트 분석 예제:**
+```json
+{
+  "project_id": 365330,
+  "project_type": "FUNDING",
+  "content_type": "REVIEW",
+  "analysis_mode": "SELLER_ASSISTANT",
+  "force_refresh": false
+}
 ```
 
 ---

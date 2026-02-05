@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     ES_MAIN_TIMEOUT: int = 30
     
     # ES 인덱스 설정
-    CONTENT_SUMMARY_INDEX: str = "core-content-analysis-summary"
+    CONTENT_ANALYSIS_RESULT_INDEX: str = "core-content-analysis-result"
 
     @field_validator('ES_REFERENCE_PORT', 'ES_MAIN_PORT', mode='before')
     @classmethod

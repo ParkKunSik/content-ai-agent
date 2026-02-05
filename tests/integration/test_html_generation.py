@@ -9,9 +9,11 @@ import pytest
 
 from src.core.config import settings
 from src.core.session_factory import SessionFactory
+from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
+from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
 from src.utils.generation_viewer import GenerationViewer, PDF_AVAILABLE
@@ -330,48 +332,27 @@ async def _execute_content_analysis_with_html(
     return step1_response, step2_response, final_response, total_duration, html_path, pdf_path
 
 
-@pytest.mark.asyncio
-async def test_html_generation_from_project_file():
+async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str):
     """
-    LLMService 상세 분석 후 HTML 생성 테스트 (유틸리티 사용)
-    - 데이터 소스: tests/data/project_365330.json
-    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
-    - HTML 출력 경로: tests/data/html/
+    공통 HTML 생성 테스트 로직
+    
+    Args:
+        content_items: 분석할 ContentItem 리스트
+        test_name: 테스트명 (파일명에 사용)
     """
-    current_dir = os.path.dirname(__file__)
-    project_file_path = os.path.join(current_dir, "..", "data", "project_365330.json")
-
-    if not os.path.exists(project_file_path):
-        pytest.skip(f"Project data file not found: {project_file_path}")
-
-    try:
-        with open(project_file_path, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-        
-        # JSON dict를 ContentItem 객체로 변환
-        content_items = [
-            ContentItem(
-                content_id=item.get('id', item.get('content_id')),
-                content=item['content'],
-                has_image=item.get('has_image', False)
-            ) for item in raw_data
-        ]
-    except Exception as e:
-        pytest.fail(f"Failed to load project data: {e}")
-
     # Validate data structure
     if len(content_items) == 0:
-        pytest.skip("No content items in project data file")
+        pytest.skip("No content items provided")
 
-    project_id = 365330
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    current_dir = os.path.dirname(__file__)
     html_dir = os.path.join(current_dir, "..", "data", "html")
     os.makedirs(html_dir, exist_ok=True)
 
-    output_json_path = os.path.join(html_dir, f"project_{project_id}_analysis_{timestamp}.json")
-    output_html_path = os.path.join(html_dir, f"project_{project_id}_review_{timestamp}.html")
+    output_json_path = os.path.join(html_dir, f"project_{project_id}_{test_name}_analysis_{timestamp}.json")
+    output_html_path = os.path.join(html_dir, f"project_{project_id}_{test_name}_review_{timestamp}.html")
     # pdf 파일 출력이 필요할 경우 사용
-    output_pdf_path = None #os.path.join(html_dir, f"project_{project_id}_report_{timestamp}.pdf")
+    output_pdf_path = None
 
     # Sample items for testing (랜덤 또는 순차 선택)
     is_all = False
@@ -410,11 +391,78 @@ async def test_html_generation_from_project_file():
         if PDF_AVAILABLE and pdf_p:
             assert os.path.exists(pdf_p), "PDF output file should be created"
 
-        print(f"\n✅ Generation Viewer test completed successfully!")
+        print(f"\n✅ {test_name} test completed successfully!")
         print(f"   - JSON: {output_json_path}")
         print(f"   - HTML: {output_html_path}")
         if PDF_AVAILABLE and pdf_p:
             print(f"   - PDF:  {pdf_p}")
 
     except Exception as e:
-        pytest.fail(f"Test failed: {e}")
+        pytest.fail(f"{test_name} test failed: {e}")
+
+
+@pytest.mark.asyncio
+async def test_html_generation_from_project_file():
+    """
+    LLMService 상세 분석 후 HTML 생성 테스트 (유틸리티 사용)
+    - 데이터 소스: tests/data/project_365330.json
+    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
+    - HTML 출력 경로: tests/data/html/
+    """
+    current_dir = os.path.dirname(__file__)
+    project_file_path = os.path.join(current_dir, "..", "data", "project_365330.json")
+
+    if not os.path.exists(project_file_path):
+        pytest.skip(f"Project data file not found: {project_file_path}")
+
+    try:
+        with open(project_file_path, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+        
+        # JSON dict를 ContentItem 객체로 변환
+        content_items = [
+            ContentItem(
+                content_id=item.get('id', item.get('content_id')),
+                content=item['content'],
+                has_image=item.get('has_image', False)
+            ) for item in raw_data
+        ]
+    except Exception as e:
+        pytest.fail(f"Failed to load project data: {e}")
+
+    project_id = 365330
+    # 공통 테스트 로직 실행
+    await _execute_html_generation_test(project_id, content_items, "file")
+
+
+@pytest.mark.asyncio 
+async def test_html_generation_from_project_ES(setup_elasticsearch):
+    """
+    ESContentRetrievalService를 통한 ES 조회 후 HTML 생성 테스트
+    - 데이터 소스: Elasticsearch (project 365330, REVIEW 타입)
+    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)  
+    - HTML 출력 경로: tests/data/html/
+    """
+    try:
+        # ES 초기화는 setup_elasticsearch fixture에서 처리
+        es_service = ESContentRetrievalService()
+        
+        project_id = 354602
+        content_type = ExternalContentType.SATISFACTION
+        
+        print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
+        content_items = await es_service.get_project_contents(
+            project_id=project_id,
+            content_type=content_type
+        )
+        
+        if not content_items:
+            pytest.skip(f"ES에서 프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
+        
+        print(f">>> ES에서 {len(content_items)}개 콘텐츠 조회 완료")
+        
+        # 공통 테스트 로직 실행
+        await _execute_html_generation_test(project_id, content_items, "ES")
+        
+    except Exception as e:
+        pytest.fail(f"ES 조회 테스트 실패: {e}")
