@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 import logging
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
-from .sentiment_content import SentimentContent
-from .highlight_item import HighlightItem
-from ...enums.sentiment_type import SentimentType
+
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+
 from src.core.config import settings
+
+from ...enums.sentiment_type import SentimentType
+from .highlight_item import HighlightItem
+from .sentiment_content import SentimentContent
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +18,14 @@ class CategorySummary(BaseModel):
     카테고리별 상세 분석 결과 모델
     
     Note:
-        이 모델은 'DetailedAnalysisResponse'의 하위 모델로서, 
+        이 모델은 'DetailedAnalysisResponse'의 하위 모델로서,
         API의 'response_schema'를 통해 LLM에게 카테고리 분석 지침을 전달합니다.
         필드 설명(description)은 LLM이 데이터를 추출하고 분류하는 기준이 됩니다.
     """
     
     category: str = Field(..., description="사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠와 동일한 언어 사용)")
     category_key: str = Field(..., description="category의 공백을 '_'로 대체한 키값 (기타 변형 없이 대소문자 유지, 예: 'Product Quality' -> 'Product_Quality')")
+    display_highlight: str = Field(..., description="highlights 배열 중 카테고리를 가장 잘 대표하는 highlight의 keyword 값 (highlights[].keyword에서 선택, 그대로 복사)")
     sentiment_type: SentimentType = Field(..., description="카테고리별 감정 유형 (평균 점수 기준: negative < 0.45, positive >= 0.55, neutral 0.45 ~ 0.55)")
     summary: str = Field(..., description="상세한 카테고리 분석 및 인사이트")
     positive_contents: list[SentimentContent] = Field(default_factory=list, description="평가 대상에 대한 감정 점수가 0.5 이상인 긍정적 콘텐츠 리스트")

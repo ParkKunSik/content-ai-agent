@@ -1,6 +1,9 @@
 from enum import Enum
+
 from jinja2 import Template
+
 from src.utils.prompt_renderer import PromptRenderer
+
 
 class PromptTemplate(Enum):
     """
@@ -8,12 +11,9 @@ class PromptTemplate(Enum):
     각 템플릿은 (template_path)로 정의됩니다.
     """
 
-    # 기존 콘텐츠 분석
-    CONTENTS_ANALYSIS = ("task/v1/contents_analysis.jinja2")
-
     # 상세 분석 2단계 템플릿
-    DETAILED_ANALYSIS = ("task/v1/detailed_analysis.jinja2")
-    DETAILED_ANALYSIS_SUMMARY_REFINE = ("task/v1/detailed_analysis_summary_refine.jinja2")
+    CONTENT_ANALYSIS_STRUCTURING = ("task/v1/content_analysis_structuring.jinja2")
+    CONTENT_ANALYSIS_SUMMARY_REFINE = ("task/v1/content_analysis_summary_refine.jinja2")
 
     def __init__(self, template_path: str):
         self.template_path = template_path

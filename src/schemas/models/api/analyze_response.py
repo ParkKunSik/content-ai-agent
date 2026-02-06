@@ -1,9 +1,10 @@
-from typing import List, Any, Dict
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
+
 
 class AnalyzeResponse(BaseModel):
     project_id: int

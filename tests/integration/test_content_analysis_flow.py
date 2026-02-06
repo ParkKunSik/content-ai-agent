@@ -1,22 +1,20 @@
-import pytest
-import time
 import json
 import os
 import random
+import time
 from datetime import datetime, timedelta
-from src.services.llm_service import LLMService
-from src.utils.prompt_manager import PromptManager
+
+import pytest
+
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
+from src.services.llm_service import LLMService
+from src.utils.prompt_manager import PromptManager
 
 # tests/data/test_contents.py에서 정적 데이터 임포트
-from tests.data.test_contents import (
-    POSITIVE_CONTENT,
-    NEGATIVE_CONTENT_QUALITY,
-    MILD_NEGATIVE_CONTENT,
-    TOXIC_CONTENT
-)
+from tests.data.test_contents import MILD_NEGATIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, POSITIVE_CONTENT, TOXIC_CONTENT
 
 
 def _format_duration(seconds: float) -> str:
@@ -39,12 +37,12 @@ def _format_duration(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
 
-async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list,
-                                        project_type: ProjectType = ProjectType.FUNDING,
-                                        show_content_details: bool = True, 
-                                        save_output: bool = False, 
-                                        output_file_path: str = None
-                                        ):
+async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
+                                         project_type: ProjectType = ProjectType.FUNDING_AND_PREORDER,
+                                         show_content_details: bool = True,
+                                         save_output: bool = False,
+                                         output_file_path: str = None
+                                         ):
     """
     상세 분석 플로우 공통 실행 로직
     
@@ -83,10 +81,10 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
     total_start_time = time.time()
 
     # 3. Step 1: Main Analysis (PRO_DATA_ANALYST)
-    print(f"\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
+    print("\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
     
-    step1_response = await llm_service.perform_detailed_analysis(
+    step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=sample_contents
@@ -103,13 +101,22 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
         print(f"  - Summary length: {len(step1_response.summary)} chars")
 
     # 4. Step 2: Refinement with CUSTOMER_FACING_SMART_BOT
-    print(f"\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
+    print("\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
     step2_start_time = time.time()
+    
+    # Step1 결과를 StructuredAnalysisSummary로 변환
+    refine_content_items = StructuredAnalysisSummary(
+        summary=step1_response.summary,
+        categories=[
+            CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+            for cat in step1_response.categories
+        ]
+    )
     
     step2_response = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
-        raw_analysis_data=step1_response.model_dump_json(),
+        refine_content_items=refine_content_items,
         persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT
     )
     step2_duration = time.time() - step2_start_time
@@ -124,7 +131,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
         print(f"  - Refined categories: {len(step2_response.categories)}")
 
     # 5. Merge & Print Final Result
-    print(f"\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
+    print("\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
     
     # Merge Logic (simulating Orchestrator)
     final_response = step1_response.model_copy(deep=True)
@@ -190,7 +197,7 @@ async def _execute_detailed_analysis_flow(project_id: int, sample_contents: list
 
 
 @pytest.mark.asyncio
-async def test_llm_service_detailed_analysis_flow_static():
+async def test_llm_service_content_analysis_flow_static():
     """
     LLMService 상세 분석 통합 테스트 - 정적 데이터
     - 데이터 소스: tests/data/test_contents.py (정적 변수, has_image 포함)
@@ -208,7 +215,7 @@ async def test_llm_service_detailed_analysis_flow_static():
     project_id = 88888
 
     try:
-        step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
+        step1_response, step2_response, final_response, total_duration = await _execute_content_analysis_flow(
             project_id=project_id, sample_contents=sample_contents, show_content_details=True)
         
         assert step1_response is not None
@@ -221,7 +228,7 @@ async def test_llm_service_detailed_analysis_flow_static():
 
 
 @pytest.mark.asyncio
-async def test_llm_service_detailed_analysis_flow_project_file():
+async def test_llm_service_content_analysis_flow_project_file():
     """
     LLMService 상세 분석 통합 테스트 - 프로젝트 파일 데이터
     - 데이터 소스: tests/data/project_365330.json (JSON 파일)
@@ -269,7 +276,7 @@ async def test_llm_service_detailed_analysis_flow_project_file():
     test_content_items = content_items if is_all else content_items[:sample_size]
 
     try:
-        step1_response, step2_response, final_response, total_duration = await _execute_detailed_analysis_flow(
+        step1_response, step2_response, final_response, total_duration = await _execute_content_analysis_flow(
             project_id=project_id, sample_contents=test_content_items, show_content_details=False, save_output=True,
             output_file_path=output_file_path)
         
@@ -284,4 +291,4 @@ async def test_llm_service_detailed_analysis_flow_project_file():
 
 
 # Legacy test name for backward compatibility
-test_llm_service_detailed_analysis_flow = test_llm_service_detailed_analysis_flow_static
+test_llm_service_content_analysis_flow = test_llm_service_content_analysis_flow_static

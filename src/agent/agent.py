@@ -1,11 +1,12 @@
-import logging
 import json
-from typing import List, Dict, Any, Union
+import logging
+from typing import Any, Dict, List, Union
+
+from src.core.session_factory import SessionFactory
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.services.orchestrator import AgentOrchestrator
-from src.core.session_factory import SessionFactory
 
 logger = logging.getLogger(__name__)
 
@@ -36,33 +37,7 @@ class ContentAnalysisAgent:
         self.orchestrator = AgentOrchestrator()
         logger.info("Agent setup complete.")
 
-    async def query(
-        self, 
-        project_id: int,
-        project_type: ProjectType,
-        analysis_mode: AnalysisMode, 
-        contents: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Main query method. Executes the analysis pipeline.
-        """
-        if not self.orchestrator:
-            raise RuntimeError("Agent not set up. Call set_up() before query().")
-
-        try:
-            response_model = await self.orchestrator.orchestrate_analysis(
-                project_id=project_id,
-                project_type=project_type,
-                analysis_mode=analysis_mode,
-                content_sources=contents
-            )
-            return json.loads(response_model.model_dump_json())
-
-        except Exception as e:
-            logger.error(f"Error during agent query: {e}")
-            raise
-
-    async def detailed_analysis(
+    async def analysis(
         self,
         project_id: int,
         project_type: ProjectType,
@@ -76,7 +51,7 @@ class ContentAnalysisAgent:
             raise RuntimeError("Agent not set up. Call set_up() before detailed_analysis().")
 
         try:
-            response_model = await self.orchestrator.detailed_analysis(
+            response_model = await self.orchestrator.analysis(
                 project_id=project_id,
                 project_type=project_type,
                 contents=contents,

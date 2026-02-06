@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pydantic import BaseModel, Field, field_validator
+
 from src.core.config import settings
 
 
@@ -22,7 +24,7 @@ class RefinedCategorySummary(BaseModel):
         return v
 
 
-class DetailedAnalysisRefinedResponse(BaseModel):
+class StructuredAnalysisRefinedResponse(BaseModel):
     """
     상세 분석 정제된 응답 모델 (Step 2 출력용)
     

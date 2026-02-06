@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class BaseContentLoader(ABC):
     """Abstract base class for individual content loaders."""
     

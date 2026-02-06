@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field, field_validator
 from typing import Union
+
+from pydantic import BaseModel, Field, field_validator
+
 from src.core.config import settings
 
 

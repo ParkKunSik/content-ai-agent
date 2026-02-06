@@ -1,10 +1,12 @@
-import os
 import json
 import logging
-from typing import Optional, Any, Dict
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from google.cloud import secretmanager
+import os
+from typing import Any, Dict, Optional
+
 from dotenv import load_dotenv
+from google.cloud import secretmanager
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +66,36 @@ class Settings(BaseSettings):
     # [Validation Configuration]
     # 스키마 검증 엄격도 제어 (True: 에러 발생, False: 경고만)
     STRICT_VALIDATION: bool = False
+
+    # [Elasticsearch Configuration]
+    # 참조용 ES 클러스터 (기존 wadiz 데이터 조회)
+    ES_REFERENCE_HOST: str = "localhost"
+    ES_REFERENCE_PORT: Optional[int] = 9200
+    ES_REFERENCE_USERNAME: Optional[str] = None
+    ES_REFERENCE_PASSWORD: Optional[str] = None
+    ES_REFERENCE_USE_SSL: bool = False
+    ES_REFERENCE_VERIFY_CERTS: bool = False
+    ES_REFERENCE_TIMEOUT: int = 30
+
+    # 메인 ES 클러스터 (분석 결과 저장)
+    ES_MAIN_HOST: str = "localhost"
+    ES_MAIN_PORT: Optional[int] = 9201
+    ES_MAIN_USERNAME: Optional[str] = None
+    ES_MAIN_PASSWORD: Optional[str] = None
+    ES_MAIN_USE_SSL: bool = False
+    ES_MAIN_VERIFY_CERTS: bool = False
+    ES_MAIN_TIMEOUT: int = 30
+    
+    # ES 인덱스 설정
+    CONTENT_ANALYSIS_RESULT_INDEX: str = "core-content-analysis-result"
+
+    @field_validator('ES_REFERENCE_PORT', 'ES_MAIN_PORT', mode='before')
+    @classmethod
+    def validate_port(cls, v):
+        """빈 문자열을 None으로 변환"""
+        if v == '' or v is None:
+            return None
+        return int(v)
 
     # [LLM Generation Configuration]
     # 입력/출력 토큰 제한 가이드 (Vertex AI 기준):
