@@ -10,8 +10,8 @@ from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
-from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_manager import PromptManager
 
@@ -120,7 +120,7 @@ class LLMService:
         project_id: int,
         project_type: ProjectType,
         content_items: List[ContentItem]
-    ) -> StructuredAnalysisResponse:
+    ) -> StructuredAnalysisResult:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
@@ -133,7 +133,7 @@ class LLMService:
             analysis_content_items=analysis_items
         )
 
-        schema = StructuredAnalysisResponse.model_json_schema()
+        schema = StructuredAnalysisResult.model_json_schema()
         
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
@@ -141,7 +141,7 @@ class LLMService:
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,
-            model_class=StructuredAnalysisResponse,
+            model_class=StructuredAnalysisResult,
             error_context="content_analysis_structuring"
         )
 
@@ -151,7 +151,7 @@ class LLMService:
         project_type: ProjectType,
         refine_content_items: StructuredAnalysisSummary,
         persona_type: PersonaType
-    ) -> StructuredAnalysisRefinedResponse:
+    ) -> StructuredAnalysisRefinedSummary:
         """
         분석 요약 정제 (Refinement) - Phase 2 세션 기반 검증 적용
         분석된 데이터를 바탕으로 요약의 길이를 최적화하고 정제합니다.
@@ -162,7 +162,7 @@ class LLMService:
             refine_content_items=refine_content_items
         )
 
-        schema = StructuredAnalysisRefinedResponse.model_json_schema()
+        schema = StructuredAnalysisRefinedSummary.model_json_schema()
         
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
@@ -170,7 +170,7 @@ class LLMService:
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,
-            model_class=StructuredAnalysisRefinedResponse,
+            model_class=StructuredAnalysisRefinedSummary,
             error_context="analysis_refinement"
         )
 

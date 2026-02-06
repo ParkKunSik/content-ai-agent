@@ -7,7 +7,12 @@ from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.common.structured_analysis_refine_result import (
+    RefineCategoryItem,
+    RefineHighlightItem,
+    StructuredAnalysisRefineResult,
+)
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
@@ -68,12 +73,12 @@ class AgentOrchestrator:
         project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
         analysis_mode: AnalysisMode
-    ) -> StructuredAnalysisResponse:
+    ) -> StructuredAnalysisRefineResult:
         """
         Performs a detailed 2-step analysis:
         Step 1: Structure & Extract (Main Analysis)
         Step 2: Refine & Summarize (Optimization)
-        Returns base analysis data updated with refined summaries from refinement step.
+        Returns a refined analysis result combining both steps.
         """
         logger.info(f"Starting detailed analysis for Project: {project_id}, Mode: {analysis_mode}")
         
@@ -82,7 +87,7 @@ class AgentOrchestrator:
         
         # 2. Step 1: Main Analysis (PRO_DATA_ANALYST)
         logger.info("Executing Step 1: Main Analysis")
-        base_analysis = await self.llm_service.structure_content_analysis(
+        base_analysis: StructuredAnalysisResult = await self.llm_service.structure_content_analysis(
             project_id=project_id,
             project_type=project_type,
             content_items=content_items
@@ -97,7 +102,7 @@ class AgentOrchestrator:
         refine_content_items = StructuredAnalysisSummary(
             summary=base_analysis.summary,
             categories=[
-                CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+                CategorySummaryItem(key=cat.key, summary=cat.summary)
                 for cat in base_analysis.categories
             ]
         )
@@ -109,26 +114,47 @@ class AgentOrchestrator:
             persona_type=analysis_mode.persona_type
         )
         
-        # 4. Merge Refined Summaries into Base Analysis
-        base_analysis.summary = refinement_result.summary
+        # 4. Construct Final Refined Result
+        refined_categories = []
+        refined_map = {cat.key: cat.summary for cat in refinement_result.categories}
         
-        # Create a lookup map for refined category summaries
-        refined_map = {cat.category_key: cat.summary for cat in refinement_result.categories}
+        for base_cat in base_analysis.categories:
+            # 정제된 요약이 있으면 사용, 없으면 원본 요약 유지
+            final_summary = refined_map.get(base_cat.key, base_cat.summary)
+            
+            refine_highlights = [
+                RefineHighlightItem(
+                    id=h.id,
+                    keyword=h.keyword,
+                    highlight=h.highlight,
+                    content=h.content
+                ) for h in base_cat.highlights
+            ]
+            
+            refined_categories.append(RefineCategoryItem(
+                name=base_cat.name,
+                key=base_cat.key,
+                summary=final_summary,
+                display_highlight=base_cat.display_highlight,
+                sentiment_type=base_cat.sentiment_type,
+                positive_count=len(base_cat.positive_contents),
+                negative_count=len(base_cat.negative_contents),
+                highlights=refine_highlights
+            ))
+            
+        logger.info("Detailed analysis and refinement completed successfully")
         
-        for category in base_analysis.categories:
-            if category.category_key in refined_map:
-                category.summary = refined_map[category.category_key]
-        
-        logger.info("Detailed analysis completed successfully")
-        
-        return base_analysis
+        return StructuredAnalysisRefineResult(
+            summary=refinement_result.summary,
+            categories=refined_categories
+        )
 
     async def funding_preorder_project_analysis(
             self,
             project_id: int,
             content_type: ExternalContentType,
             analysis_mode: AnalysisMode
-    ) -> StructuredAnalysisResponse:
+    ) -> StructuredAnalysisRefineResult:
         return await self.project_analysis(project_id, ProjectType.FUNDING_AND_PREORDER, content_type, analysis_mode)
 
     async def project_analysis(
@@ -137,7 +163,7 @@ class AgentOrchestrator:
         project_type: ProjectType,
         content_type: ExternalContentType,
         analysis_mode: AnalysisMode
-    ) -> StructuredAnalysisResponse:
+    ) -> StructuredAnalysisRefineResult:
         """
         Performs project-based analysis by retrieving content from Elasticsearch.
         
@@ -148,7 +174,7 @@ class AgentOrchestrator:
             analysis_mode: 분석 모드
             
         Returns:
-            StructuredAnalysisResponse: 분석 결과
+            StructuredAnalysisRefineResult: 분석 결과
         """
         logger.info(f"Starting project analysis for Project: {project_id}, Content Type: {content_type}, Mode: {analysis_mode}")
         

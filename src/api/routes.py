@@ -6,7 +6,7 @@ from src.agent.agent import ContentAnalysisAgent
 from src.core.config import settings
 from src.schemas.models.api.analyze_request import AnalyzeRequest
 from src.schemas.models.api.project_analysis_request import ProjectAnalysisRequest
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
 from src.services.orchestrator import AgentOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ orchestrator = AgentOrchestrator()
 def health_check():
     return {"status": "healthy", "env": settings.ENV}
 
-@router.post("/analysis", response_model=StructuredAnalysisResponse)
+@router.post("/analysis", response_model=StructuredAnalysisRefineResult)
 async def analysis(request: AnalyzeRequest):
     """
     Executes the 2-step detailed analysis.
@@ -48,7 +48,7 @@ async def analysis(request: AnalyzeRequest):
         logger.error(f"Detailed Analysis API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/project-analysis", response_model=StructuredAnalysisResponse)
+@router.post("/project-analysis", response_model=StructuredAnalysisRefineResult)
 async def project_analysis(request: ProjectAnalysisRequest):
     """
     프로젝트 기반 콘텐츠 분석 API

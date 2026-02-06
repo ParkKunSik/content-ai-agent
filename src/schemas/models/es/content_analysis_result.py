@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
-from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 
 
 class ContentAnalysisResultState(str, Enum):
@@ -23,12 +23,12 @@ class ContentAnalysisResult(BaseModel):
     version: int = Field(description="결과 데이터 버전 (Discriminator)")
 
 class ContentAnalysisResultDataV1(ContentAnalysisResult):
-    """분석 결과 데이터 V1 - StructuredAnalysisResponse 기반"""
+    """분석 결과 데이터 V1 - StructuredAnalysisResult 기반"""
     version: Literal[1] = 1
-    persona: PersonaType = Field(description="분석에 사용된 페르소나")
-    data: StructuredAnalysisResponse = Field(description="V1 구조화된 분석 응답")
-    refine_persona: Optional[PersonaType] = Field(default=None, description="요약 정제에 사용된 페르소나")
-    refined_summary: Optional[StructuredAnalysisRefinedResponse] = Field(default=None, description="정제된 요약 결과")
+    meta_persona: PersonaType = Field(description="분석에 사용된 페르소나")
+    meta_data: StructuredAnalysisResult = Field(description="V1 구조화된 분석 결과")
+    persona: PersonaType = Field(description="요약 정제에 사용된 페르소나")
+    data: StructuredAnalysisRefineResult = Field(description="정제된 최종 분석 결과")
 
 class ContentAnalysisResultDocument(BaseModel):
     """ES에 저장될 분석 결과 문서"""
@@ -64,6 +64,12 @@ class ContentAnalysisResultDocument(BaseModel):
                         "type": "object",
                         "properties": {
                             "version": {"type": "integer"},
+                            "meta_persona": {"type": "keyword"},
+                            "meta_data": {
+                                "type": "object",
+                                "enabled": True
+                            },
+                            "persona": {"type": "keyword"},
                             "data": {
                                 "type": "object",
                                 "enabled": True

@@ -18,7 +18,8 @@ Google Vertex AI의 **Gemini 2.5/3.0** 모델을 활용하여, 효율적인 단�
     *   **Step 2. 요약 정제 (Refinement):** 생성된 분석 데이터를 바탕으로 페르소나별 최적의 요약문 생성.
 *   **프롬프트 템플릿 엔진 & Controlled Generation:**
     *   `Jinja2`를 활용한 동적 프롬프트 생성과 함께, Vertex AI의 `response_schema` 기능을 도입하여 100% 유효한 JSON 출력을 보장합니다.
-    *   Pydantic 모델을 통해 데이터 구조와 지침을 일원화하여 관리합니다.
+    *   **Pydantic 모델의 이중 역할:** `src/schemas/models/prompt/` 아래의 모델들은 단순한 데이터 검증을 넘어, 각 필드의 `description`이 LLM에게 직접적인 작업 지침(Prompt)으로 전달되는 핵심적인 역할을 수행합니다.
+    *   **지침 기반 모델 분리:** 동일한 데이터 구조를 가지더라도 분석 단계(구조화 vs 정제)에 따라 LLM에게 전달할 지침이 다르므로, 입력용(`Summary`)과 출력용(`RefinedSummary`) 모델을 엄격히 분리하여 각 단계에 최적화된 출력을 유도합니다.
 *   **Elasticsearch 통합:** 기존 와디즈 데이터를 조회하고 분석 결과를 영구 저장하여 버전별 관리가 가능합니다.
 
 ---

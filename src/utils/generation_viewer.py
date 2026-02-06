@@ -1,7 +1,7 @@
 import re
 import html
 
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 
 # PDF 생성을 위한 선택적 임포트
 try:
@@ -74,7 +74,7 @@ class GenerationViewer:
     @classmethod
     def generate_pdf_optimized_html(
         cls, 
-        result: StructuredAnalysisResponse,
+        result: StructuredAnalysisResult,
         project_id: int,
         total_items: int,
         executed_at: str,
@@ -264,7 +264,7 @@ class GenerationViewer:
         # 카테고리별 상세 정보 생성
         for category in categories:
             sentiment = category.sentiment_type.value if hasattr(category.sentiment_type, 'value') else str(category.sentiment_type)
-            category_name = category.category
+            category_name = category.name
             category_summary = category.summary
             pos_count = len(category.positive_contents)
             neg_count = len(category.negative_contents)
@@ -328,7 +328,7 @@ class GenerationViewer:
     @classmethod
     def generate_amazon_style_html(
         cls,
-        result: StructuredAnalysisResponse,
+        result: StructuredAnalysisResult,
         project_id: int,
         total_items: int,
         executed_at: str,
@@ -690,7 +690,7 @@ class GenerationViewer:
 
         # 카테고리 상세 정보 생성
         for idx, category in enumerate(categories):
-            category_name = category.category
+            category_name = category.name
             category_display = category.display_highlight
             category_summary = category.summary
             pos_count = len(category.positive_contents)

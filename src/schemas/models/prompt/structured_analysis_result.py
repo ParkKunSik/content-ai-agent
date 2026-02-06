@@ -4,11 +4,11 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from src.core.config import settings
 
-from ..common.category_summary import CategorySummary
+from ..common.category_item import CategoryItem
 from ..common.etc_content import EtcContent
 
 
-class StructuredAnalysisResponse(BaseModel):
+class StructuredAnalysisResult(BaseModel):
     """
     상세 분석 응답 모델
     
@@ -19,13 +19,13 @@ class StructuredAnalysisResponse(BaseModel):
     """
     
     summary: str = Field(..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)")
-    categories: list[CategorySummary] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
+    categories: list[CategoryItem] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
     harmful_contents: list[int] = Field(default_factory=list, description="유해한 콘텐츠 content_id 리스트 (욕설, 비난, 비방 등)")
     etc_contents: list[EtcContent] = Field(default_factory=list, description="분석에 영향을 주지 않는 기타 콘텐츠 배열")
     
     @field_validator('categories')
     @classmethod
-    def validate_categorys_count(cls, v: list[CategorySummary]) -> list[CategorySummary]:
+    def validate_categorys_count(cls, v: list[CategoryItem]) -> list[CategoryItem]:
         if not settings.STRICT_VALIDATION:
             return v
 
@@ -36,15 +36,15 @@ class StructuredAnalysisResponse(BaseModel):
     
     @field_validator('categories')
     @classmethod
-    def validate_unique_category_keys(cls, v: list[CategorySummary]) -> list[CategorySummary]:
+    def validate_unique_category_keys(cls, v: list[CategoryItem]) -> list[CategoryItem]:
         if not settings.STRICT_VALIDATION:
             return v
 
         """카테고리 키 중복 검증"""
-        category_keys = [cat.category_key for cat in v]
+        category_keys = [cat.key for cat in v]
         if len(category_keys) != len(set(category_keys)):
             duplicates = [key for key in category_keys if category_keys.count(key) > 1]
-            raise ValueError(f"중복된 category_key가 있습니다: {duplicates}")
+            raise ValueError(f"중복된 key가 있습니다: {duplicates}")
         return v
     
     @field_validator('harmful_contents', 'etc_contents', 'categories')
@@ -97,7 +97,7 @@ class StructuredAnalysisResponse(BaseModel):
                     if content.id in used_content_ids:
                         raise ValueError(
                             f"content_id {content.id}이 중복되었습니다. "
-                            f"현재 필드: categories.{category.category_key}.positive_contents"
+                            f"현재 필드: categories.{category.key}.positive_contents"
                         )
                     used_content_ids.add(content.id)
 
@@ -105,7 +105,7 @@ class StructuredAnalysisResponse(BaseModel):
                     if content.id in used_content_ids:
                         raise ValueError(
                             f"content_id {content.id}이 중복되었습니다. "
-                            f"현재 필드: categories.{category.category_key}.negative_contents"
+                            f"현재 필드: categories.{category.key}.negative_contents"
                         )
                     used_content_ids.add(content.id)
 
