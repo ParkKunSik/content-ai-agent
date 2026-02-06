@@ -41,6 +41,7 @@ class PromptManager:
         self,
         project_id: int,
         project_type: ProjectType,
+        content_type: str,
         analysis_content_items: List[AnalysisContentItem]
     ) -> str:
         """
@@ -49,6 +50,7 @@ class PromptManager:
         Args:
             project_id: 프로젝트 ID
             project_type: 프로젝트 타입
+            content_type: 콘텐츠 타입 (문자열)
             analysis_content_items: 분석 대상 콘텐츠 아이템 리스트
         """
         template = PromptTemplate.CONTENT_ANALYSIS_STRUCTURING.get_template(self._renderer)
@@ -61,6 +63,7 @@ class PromptManager:
             template,
             project_id=project_id,
             project_type=project_type,
+            content_type=content_type,
             content_items=content_items_json
         )
 
@@ -68,6 +71,7 @@ class PromptManager:
         self,
         project_id: int,
         project_type: ProjectType,
+        content_type: str,
         refine_content_items: StructuredAnalysisSummary
     ) -> str:
         """
@@ -76,6 +80,7 @@ class PromptManager:
         Args:
             project_id: 프로젝트 ID
             project_type: 프로젝트 타입
+            content_type: 콘텐츠 타입 (문자열)
             refine_content_items: 정제 대상 분석 요약 데이터
         """
         template = PromptTemplate.CONTENT_ANALYSIS_SUMMARY_REFINE.get_template(self._renderer)
@@ -84,6 +89,7 @@ class PromptManager:
             template,
             project_id=project_id,
             project_type=project_type,
+            content_type=content_type,
             raw_analysis_data=raw_analysis_data,
             max_main_summary_chars=self.MAX_MAIN_SUMMARY_CHARS,
             max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS

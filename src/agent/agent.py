@@ -1,11 +1,12 @@
 import logging
-from typing import List, Union
+from typing import List, Optional, Union
 
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.analysis_mode import AnalysisMode
+from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
-from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
+from src.schemas.models.es.content_analysis_result import ContentAnalysisResultDataV1
 from src.services.orchestrator import AgentOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -43,8 +44,9 @@ class ContentAnalysisAgent:
         project_id: int,
         project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
-        analysis_mode: AnalysisMode = AnalysisMode.DATA_ANALYST
-    ) -> StructuredAnalysisRefineResult:
+        analysis_mode: AnalysisMode = AnalysisMode.REVIEW_BOT,
+        content_type: Optional[ExternalContentType] = None
+    ) -> ContentAnalysisResultDataV1:
         """
         Executes the detailed analysis pipeline (2-step).
         """
@@ -56,7 +58,8 @@ class ContentAnalysisAgent:
                 project_id=project_id,
                 project_type=project_type,
                 contents=contents,
-                analysis_mode=analysis_mode
+                analysis_mode=analysis_mode,
+                content_type=content_type
             )
         except Exception as e:
             logger.error(f"Error during detailed analysis: {e}")

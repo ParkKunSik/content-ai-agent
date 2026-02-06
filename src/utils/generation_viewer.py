@@ -1,5 +1,5 @@
-import re
 import html
+import re
 
 from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 

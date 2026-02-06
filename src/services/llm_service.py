@@ -5,6 +5,7 @@ from google.genai import errors, types
 
 from src.core.session_factory import SessionFactory
 from src.core.validation_error_handler import ValidationErrorHandler
+from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.mime_type import MimeType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
@@ -119,7 +120,8 @@ class LLMService:
         self,
         project_id: int,
         project_type: ProjectType,
-        content_items: List[ContentItem]
+        content_items: List[ContentItem],
+        content_type: Optional[ExternalContentType] = None
     ) -> StructuredAnalysisResult:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
@@ -130,6 +132,7 @@ class LLMService:
         prompt = self.prompt_manager.get_content_analysis_structuring_prompt(
             project_id=project_id,
             project_type=project_type,
+            content_type=content_type.value if content_type else "ALL",
             analysis_content_items=analysis_items
         )
 
@@ -150,7 +153,8 @@ class LLMService:
         project_id: int,
         project_type: ProjectType,
         refine_content_items: StructuredAnalysisSummary,
-        persona_type: PersonaType
+        persona_type: PersonaType,
+        content_type: Optional[ExternalContentType] = None
     ) -> StructuredAnalysisRefinedSummary:
         """
         분석 요약 정제 (Refinement) - Phase 2 세션 기반 검증 적용
@@ -159,6 +163,7 @@ class LLMService:
         prompt = self.prompt_manager.get_content_analysis_summary_refine_prompt(
             project_id=project_id,
             project_type=project_type,
+            content_type=content_type.value if content_type else "ALL",
             refine_content_items=refine_content_items
         )
 

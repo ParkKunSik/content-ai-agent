@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
@@ -30,6 +30,11 @@ class ContentAnalysisResultDataV1(ContentAnalysisResult):
     persona: PersonaType = Field(description="요약 정제에 사용된 페르소나")
     data: StructuredAnalysisRefineResult = Field(description="정제된 최종 분석 결과")
 
+    @field_serializer('meta_persona', 'persona')
+    def serialize_persona(self, persona: PersonaType, _info):
+        """PersonaType Enum을 문자열(이름)로 직렬화하여 내부 함수 객체가 포함되지 않도록 함"""
+        return persona.name
+
 class ContentAnalysisResultDocument(BaseModel):
     """ES에 저장될 분석 결과 문서"""
     project_id: str = Field(description="프로젝트 ID")
@@ -47,6 +52,11 @@ class ContentAnalysisResultDocument(BaseModel):
     # 메타데이터
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="생성 시간")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="수정 시간")
+
+    @field_serializer('project_type')
+    def serialize_project_type(self, project_type: ProjectType, _info):
+        """ProjectType Enum 직렬화"""
+        return project_type.value
     
     @classmethod
     def get_es_mapping(cls) -> Dict[str, Any]:

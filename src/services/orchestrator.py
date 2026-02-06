@@ -1,10 +1,11 @@
 import logging
-from typing import List, Union
+from typing import List, Optional, Union
 
 from src.core.config import settings
 from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.content_type import ExternalContentType
+from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.common.structured_analysis_refine_result import (
@@ -12,14 +13,21 @@ from src.schemas.models.common.structured_analysis_refine_result import (
     RefineHighlightItem,
     StructuredAnalysisRefineResult,
 )
+from src.schemas.models.es.content_analysis_result import (
+    ContentAnalysisResultDataV1,
+    ContentAnalysisResultDocument,
+    ContentAnalysisResultState,
+)
 from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
+from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
 from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
 from src.services.request_content_loader import RequestContentLoader
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
+
 
 class AgentOrchestrator:
     """
@@ -29,12 +37,13 @@ class AgentOrchestrator:
     def __init__(self):
         # ES 매니저 초기화 (아직 초기화되지 않은 경우)
         self._ensure_es_manager_initialized()
-        
+
         self.loader = RequestContentLoader()
         self.prompt_manager = PromptManager()
         self.llm_service = LLMService(self.prompt_manager)
         self.es_content_service = ESContentRetrievalService()
-    
+        self.es_result_service = ESContentAnalysisResultService()
+
     def _ensure_es_manager_initialized(self):
         """ES 매니저가 초기화되지 않은 경우 초기화"""
         try:
@@ -53,7 +62,7 @@ class AgentOrchestrator:
                 verify_certs=settings.ES_REFERENCE_VERIFY_CERTS,
                 timeout=settings.ES_REFERENCE_TIMEOUT
             )
-            
+
             main_config = ElasticsearchConfig(
                 host=settings.ES_MAIN_HOST,
                 port=settings.ES_MAIN_PORT,
@@ -63,41 +72,41 @@ class AgentOrchestrator:
                 verify_certs=settings.ES_MAIN_VERIFY_CERTS,
                 timeout=settings.ES_MAIN_TIMEOUT
             )
-            
+
             es_manager.initialize(reference_config, main_config)
             logger.info("ES manager initialized successfully")
 
     async def analysis(
-        self, 
+        self,
         project_id: int,
         project_type: ProjectType,
         contents: List[Union[str, ContentItem]],
-        analysis_mode: AnalysisMode
-    ) -> StructuredAnalysisRefineResult:
+        analysis_mode: AnalysisMode,
+        content_type: Optional[ExternalContentType] = None
+    ) -> ContentAnalysisResultDataV1:
         """
-        Performs a detailed 2-step analysis:
-        Step 1: Structure & Extract (Main Analysis)
-        Step 2: Refine & Summarize (Optimization)
-        Returns a refined analysis result combining both steps.
+        Internal 2-step analysis logic.
+        Returns ContentAnalysisResultDataV1 containing both raw and refined results.
         """
-        logger.info(f"Starting detailed analysis for Project: {project_id}, Mode: {analysis_mode}")
-        
+        logger.info(f"Executing core analysis for Project: {project_id}, Mode: {analysis_mode}, Content Type: {content_type}")
+
         # 1. Preprocess contents
         content_items = self._preprocess_contents(contents)
-        
+
         # 2. Step 1: Main Analysis (PRO_DATA_ANALYST)
         logger.info("Executing Step 1: Main Analysis")
         base_analysis: StructuredAnalysisResult = await self.llm_service.structure_content_analysis(
             project_id=project_id,
             project_type=project_type,
-            content_items=content_items
+            content_items=content_items,
+            content_type=content_type
         )
         logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categories)}")
-        
+
         # 3. Step 2: Refine Summary
         # Uses the persona defined in AnalysisMode for refinement
         logger.info(f"Executing Step 2: Refinement with persona {analysis_mode.persona_type}")
-        
+
         # Step1 결과를 StructuredAnalysisSummary로 변환
         refine_content_items = StructuredAnalysisSummary(
             summary=base_analysis.summary,
@@ -106,22 +115,23 @@ class AgentOrchestrator:
                 for cat in base_analysis.categories
             ]
         )
-        
+
         refinement_result = await self.llm_service.refine_analysis_summary(
             project_id=project_id,
             project_type=project_type,
             refine_content_items=refine_content_items,
-            persona_type=analysis_mode.persona_type
+            persona_type=analysis_mode.persona_type,
+            content_type=content_type
         )
-        
+
         # 4. Construct Final Refined Result
         refined_categories = []
         refined_map = {cat.key: cat.summary for cat in refinement_result.categories}
-        
+
         for base_cat in base_analysis.categories:
             # 정제된 요약이 있으면 사용, 없으면 원본 요약 유지
             final_summary = refined_map.get(base_cat.key, base_cat.summary)
-            
+
             refine_highlights = [
                 RefineHighlightItem(
                     id=h.id,
@@ -130,7 +140,7 @@ class AgentOrchestrator:
                     content=h.content
                 ) for h in base_cat.highlights
             ]
-            
+
             refined_categories.append(RefineCategoryItem(
                 name=base_cat.name,
                 key=base_cat.key,
@@ -141,19 +151,25 @@ class AgentOrchestrator:
                 negative_count=len(base_cat.negative_contents),
                 highlights=refine_highlights
             ))
-            
-        logger.info("Detailed analysis and refinement completed successfully")
-        
-        return StructuredAnalysisRefineResult(
+
+        final_refined_result = StructuredAnalysisRefineResult(
             summary=refinement_result.summary,
             categories=refined_categories
         )
 
+        # 5. Wrap into V1 Result Data object
+        return ContentAnalysisResultDataV1(
+            meta_persona=PersonaType.PRO_DATA_ANALYST,
+            meta_data=base_analysis,
+            persona=analysis_mode.persona_type,
+            data=final_refined_result
+        )
+
     async def funding_preorder_project_analysis(
-            self,
-            project_id: int,
-            content_type: ExternalContentType,
-            analysis_mode: AnalysisMode
+        self,
+        project_id: int,
+        content_type: ExternalContentType,
+        analysis_mode: AnalysisMode
     ) -> StructuredAnalysisRefineResult:
         return await self.project_analysis(project_id, ProjectType.FUNDING_AND_PREORDER, content_type, analysis_mode)
 
@@ -165,48 +181,58 @@ class AgentOrchestrator:
         analysis_mode: AnalysisMode
     ) -> StructuredAnalysisRefineResult:
         """
-        Performs project-based analysis by retrieving content from Elasticsearch.
-        
-        Args:
-            project_id: 프로젝트 ID
-            project_type: 프로젝트 타입
-            content_type: 외부 콘텐츠 타입 (ExternalContentType)
-            analysis_mode: 분석 모드
-            
-        Returns:
-            StructuredAnalysisRefineResult: 분석 결과
+        Performs project-based analysis and saves the result to Elasticsearch.
         """
         logger.info(f"Starting project analysis for Project: {project_id}, Content Type: {content_type}, Mode: {analysis_mode}")
-        
+
         # 1. ES에서 콘텐츠 조회
         logger.info(f"Retrieving content from ES for project {project_id}")
         content_items = await self.es_content_service.get_funding_preorder_project_contents(
             project_id=project_id,
             content_type=content_type
         )
-        
+
         if not content_items:
             logger.warning(f"No content found for project {project_id} with content type {content_type}")
-            # TODO: 빈 결과에 대한 처리 로직 추가 필요
             raise ValueError(f"프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
-        
+
         logger.info(f"Retrieved {len(content_items)} content items from ES")
-        
-        # 2. 기존 analysis 메서드 활용
-        analysis_result = await self.analysis(
+
+        # 2. 분석 수행
+        result_v1 = await self.analysis(
             project_id=project_id,
             project_type=project_type,
             contents=content_items,
-            analysis_mode=analysis_mode
+            analysis_mode=analysis_mode,
+            content_type=content_type
         )
-        
-        # 3. 저장 로직은 추후 구현 예정 (현재는 분석만 수행)
-        # TODO: ESContentAnalysisResultService를 통한 결과 저장 구현
-        # await self.save_analysis_result(...)
-        
+
+        # 3. 분석 결과 저장 (프로젝트 분석 모드에서만 수행)
+        try:
+            logger.info(f"Saving analysis result to ES for project {project_id}")
+            # 다음 버전 조회
+            next_version = await self.es_result_service.get_next_version(str(project_id), content_type)
+
+            # 문서 생성
+            document = ContentAnalysisResultDocument(
+                project_id=str(project_id),
+                project_type=project_type,
+                content_type=content_type,
+                version=next_version,
+                state=ContentAnalysisResultState.COMPLETED,
+                result=result_v1
+            )
+
+            # 저장
+            await self.es_result_service.save_result(document)
+            logger.info(f"Successfully saved project analysis result (version: {next_version})")
+        except Exception as e:
+            logger.error(f"Failed to save analysis result to ES: {e}")
+            # 저장 실패가 사용자 응답을 방해하지 않도록 예외는 로깅만 수행
+
         logger.info(f"Project analysis completed for project {project_id}")
-        
-        return analysis_result
+
+        return result_v1.data
 
     def _preprocess_contents(self, contents: List[Union[str, ContentItem]]) -> List[ContentItem]:
         """Converts raw strings to ContentItem objects if necessary."""
