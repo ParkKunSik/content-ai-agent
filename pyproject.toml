@@ -45,9 +45,14 @@ dev = [
     "ruff",
     "black",
     "ipython",
-    
+
     # PDF Generation (Optional)
     "weasyprint>=62.0"
+]
+
+viewer = [
+    # Content Analysis Viewer UI
+    "streamlit>=1.30.0"
 ]
 
 [tool.setuptools.packages.find]
