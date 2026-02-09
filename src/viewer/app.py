@@ -1,5 +1,5 @@
 """
-Content Analysis Viewer - Streamlit 앱
+커뮤니티 요약 뷰어 - Streamlit 앱
 
 ES에 저장된 콘텐츠 분석 결과를 시각화하는 로컬 뷰어입니다.
 
@@ -8,12 +8,13 @@ ES에 저장된 콘텐츠 분석 결과를 시각화하는 로컬 뷰어입니�
     streamlit run src/viewer/app.py --server.port 8501
 """
 import logging
+from typing import Dict, Optional
 
 import streamlit as st
 
 from src.schemas.enums.content_type import ExternalContentType
 from src.viewer.refine_result_renderer import RefineResultRenderer
-from src.viewer.viewer_data_service import ViewerDataService
+from src.viewer.viewer_data_service import ProjectInfo, ViewerDataService
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Content Analysis Viewer",
+    page_title="커뮤니티 요약 뷰어",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -46,9 +47,39 @@ def get_service():
         return None
 
 
+@st.cache_data(ttl=3600)
+def get_project_info_map(_service: ViewerDataService, project_ids: tuple) -> Dict[str, Optional[ProjectInfo]]:
+    """
+    프로젝트 ID 목록에 대한 ProjectInfo 매핑을 캐싱하여 반환
+
+    Args:
+        _service: ViewerDataService (언더스코어로 해싱 제외)
+        project_ids: 프로젝트 ID 튜플 (캐싱 키로 사용)
+
+    Returns:
+        {project_id: ProjectInfo} 딕셔너리
+    """
+    result = {}
+    for pid in project_ids:
+        try:
+            info = _service.get_project_info(int(pid))
+            result[pid] = info
+        except Exception as e:
+            logger.warning(f"Failed to get project info for {pid}: {e}")
+            result[pid] = None
+    return result
+
+
+def get_project_display_name(project_id: str, project_info: Optional[ProjectInfo]) -> str:
+    """프로젝트 표시명 생성 (제목이 있으면 제목, 없으면 ID)"""
+    if project_info and project_info.title:
+        return f"{project_info.title} ({project_id})"
+    return f"프로젝트 {project_id}"
+
+
 def main():
     # 헤더
-    st.title("📊 Content Analysis Viewer")
+    st.title("📊 커뮤니티 요약 뷰어")
     st.caption("Elasticsearch에 저장된 콘텐츠 분석 결과를 조회합니다.")
 
     # 서비스 초기화
@@ -65,25 +96,37 @@ def main():
         )
         return
 
+    # 프로젝트 ID 목록 조회
+    project_ids = service.get_project_ids()
+    if not project_ids:
+        st.warning("저장된 분석 결과가 없습니다.")
+        return
+
+    # 프로젝트 정보 매핑 조회 (캐싱)
+    project_info_map = get_project_info_map(service, tuple(project_ids))
+
+    # 프로젝트 표시명 → ID 매핑 생성
+    project_display_to_id = {
+        get_project_display_name(pid, project_info_map.get(pid)): pid
+        for pid in project_ids
+    }
+    project_display_names = list(project_display_to_id.keys())
+
     # 컨트롤 패널
     col1, col2, col3 = st.columns([2, 2, 1])
 
     with col1:
-        # Project ID Dropdown
-        project_ids = service.get_project_ids()
-        if not project_ids:
-            st.warning("저장된 분석 결과가 없습니다.")
-            return
-
-        selected_project = st.selectbox(
-            "Project ID",
-            project_ids,
+        # 프로젝트 Dropdown (제목으로 표시)
+        selected_display_name = st.selectbox(
+            "프로젝트",
+            project_display_names,
             index=0,
             help="분석 결과가 있는 프로젝트 목록입니다.",
         )
+        selected_project = project_display_to_id[selected_display_name]
 
     with col2:
-        # Content Type Dropdown (project_id에 따라 동적 변경)
+        # 커뮤니티 댓글 종류 Dropdown (project_id에 따라 동적 변경)
         selected_content_type = None
         selected_content_type_desc = None
         if selected_project:
@@ -94,7 +137,7 @@ def main():
                     get_content_type_description(ct): ct for ct in content_types
                 }
                 selected_desc = st.selectbox(
-                    "Content Type",
+                    "커뮤니티 댓글 종류",
                     list(content_type_options.keys()),
                     index=0,
                     help="선택한 프로젝트의 콘텐츠 타입입니다.",
@@ -110,6 +153,7 @@ def main():
         # Refresh 버튼
         if st.button("🔄 Refresh", use_container_width=True):
             st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
 
     # 구분선
@@ -119,8 +163,8 @@ def main():
     if selected_project and selected_content_type:
         with st.spinner("분석 결과를 조회하는 중..."):
             result_doc = service.get_result(selected_project, selected_content_type)
-            # 프로젝트 정보 조회 (Wadiz API)
-            project_info = service.get_project_info(int(selected_project))
+            # 프로젝트 정보는 이미 캐싱된 매핑에서 조회
+            project_info = project_info_map.get(selected_project)
 
         if result_doc:
             # 결과 데이터 확인
