@@ -6,12 +6,13 @@ import pytest
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
 from src.schemas.models.es.content_analysis_result import (
     ContentAnalysisResultDataV1,
     ContentAnalysisResultDocument,
     ContentAnalysisResultState,
 )
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
 
 
@@ -38,9 +39,14 @@ class TestESContentSummaryService:
         """분석 결과 저장 테스트"""
         # Given
         result_data = ContentAnalysisResultDataV1(
-            persona=PersonaType.PRO_DATA_ANALYST,
-            data=StructuredAnalysisResponse(
+            meta_persona=PersonaType.PRO_DATA_ANALYST,
+            meta_data=StructuredAnalysisResult(
                 summary="test result",
+                categories=[]
+            ),
+            persona=PersonaType.CUSTOMER_FACING_SMART_BOT,
+            data=StructuredAnalysisRefineResult(
+                summary="refined test result",
                 categories=[]
             )
         )
@@ -72,8 +78,12 @@ class TestESContentSummaryService:
     async def test_save_analysis_result(self, service, mock_es_client):
         """새로운 save_analysis_result 헬퍼 메서드 테스트"""
         # Given
-        structured_response = StructuredAnalysisResponse(
+        structured_response = StructuredAnalysisResult(
             summary="분석 요약",
+            categories=[]
+        )
+        refined_result = StructuredAnalysisRefineResult(
+            summary="정제된 요약",
             categories=[]
         )
 
@@ -84,7 +94,9 @@ class TestESContentSummaryService:
             content_type=ExternalContentType.REVIEW,
             version=1,
             state=ContentAnalysisResultState.COMPLETED,
-            structured_response=structured_response
+            structured_response=structured_response,
+            refine_persona=PersonaType.CUSTOMER_FACING_SMART_BOT,
+            refined_result=refined_result
         )
 
         # Then
@@ -95,7 +107,7 @@ class TestESContentSummaryService:
         call_args = mock_es_client.index.call_args
         document = call_args.kwargs['document']
         assert document['result']['version'] == 1
-        assert document['result']['data']['summary'] == "분석 요약"
+        assert document['result']['meta_data']['summary'] == "분석 요약"
 
     @pytest.mark.asyncio
     async def test_get_result_found(self, service, mock_es_client):

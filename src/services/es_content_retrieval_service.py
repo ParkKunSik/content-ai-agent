@@ -20,7 +20,7 @@ class ESContentRetrievalService:
         self, 
         project_id: int, 
         content_type: ExternalContentType,
-        size: int = 1000,
+        size: int = 2000,
         from_: int = 0
     ) -> List[ContentItem]:
         """

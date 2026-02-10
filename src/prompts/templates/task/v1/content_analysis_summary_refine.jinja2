@@ -33,6 +33,7 @@
     
     프로젝트 ID: {{ project_id }}
     프로젝트 타입: {{ project_type }}
+    콘텐츠 타입: {{ content_type }}
     
     분석 데이터:
     ```json
@@ -50,7 +51,7 @@
     - 완전한 문단: 개조식이 아닌 응집력 있는 서술체로 요약 작성
     - 통합된 분석: 긍정적이고 부정적인 측면을 자연스러운 흐름으로 결합
     - 문자 제한: 메인 요약 {{ max_main_summary_chars }}자, 카테고리 요약 {{ max_category_summary_chars }}자 엄격 준수
-    - 데이터 무결성 보존: category_key 값을 제공된 그대로 정확히 유지 (대소문자 포함, 수정 금지)
+    - 데이터 무결성 보존: key 값을 제공된 그대로 정확히 유지 (대소문자 포함, 수정 금지)
 #}
 
 # Task: Summary Refinement and Length Optimization
@@ -76,6 +77,7 @@ Optimize the summary lengths of the provided detailed analysis data.
 
 Project ID: {{ project_id }}
 Project Type: {{ project_type }}
+Content Type: {{ content_type }}
 
 Analysis Data:
 ```json
@@ -93,6 +95,6 @@ Output must be a valid JSON object adhering to the provided JSON schema.
 - **Complete paragraphs**: Write summaries as cohesive narratives, not bullet points
 - **Integrated analysis**: Combine positive and negative aspects into natural flow
 - **Character limits**: Strictly enforce {{ max_main_summary_chars }}-character main summary, {{ max_category_summary_chars }}-character category summaries
-- **Preserve data integrity**: Keep category_key values exactly as provided, including original casing (do not modify)
+- **Preserve data integrity**: Keep key values exactly as provided, including original casing (do not modify)
 
 {% endblock %}

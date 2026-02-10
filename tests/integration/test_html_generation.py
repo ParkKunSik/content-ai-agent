@@ -198,10 +198,11 @@ async def _execute_content_analysis_with_html(
     step2_start_time = time.time()
 
     # Step1 결과를 StructuredAnalysisSummary로 변환
+    # Step1 결과를 StructuredAnalysisSummary로 변환
     refine_content_items = StructuredAnalysisSummary(
         summary=step1_response.summary,
         categories=[
-            CategorySummaryItem(category_key=cat.category_key, summary=cat.summary)
+            CategorySummaryItem(key=cat.key, summary=cat.summary)
             for cat in step1_response.categories
         ]
     )
@@ -235,10 +236,10 @@ async def _execute_content_analysis_with_html(
     final_response = step1_response.model_copy(deep=True)
     final_response.summary = step2_response.summary
 
-    refined_map = {cat.category_key: cat.summary for cat in step2_response.categories}
+    refined_map = {cat.key: cat.summary for cat in step2_response.categories}
     for category in final_response.categories:
-        if category.category_key in refined_map:
-            category.summary = refined_map[category.category_key]
+        if category.key in refined_map:
+            category.summary = refined_map[category.key]
 
     total_duration = time.time() - total_start_time
     total_duration_formatted = _format_duration(total_duration)

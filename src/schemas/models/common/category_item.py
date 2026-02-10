@@ -13,18 +13,18 @@ from .sentiment_content import SentimentContent
 logger = logging.getLogger(__name__)
 
 
-class CategorySummary(BaseModel):
+class CategoryItem(BaseModel):
     """
     카테고리별 상세 분석 결과 모델
     
     Note:
-        이 모델은 'DetailedAnalysisResponse'의 하위 모델로서,
+        이 모델은 'StructuredAnalysisResult'의 하위 모델로서,
         API의 'response_schema'를 통해 LLM에게 카테고리 분석 지침을 전달합니다.
         필드 설명(description)은 LLM이 데이터를 추출하고 분류하는 기준이 됩니다.
     """
     
-    category: str = Field(..., description="사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠와 동일한 언어 사용)")
-    category_key: str = Field(..., description="category의 공백을 '_'로 대체한 키값 (기타 변형 없이 대소문자 유지, 예: 'Product Quality' -> 'Product_Quality')")
+    name: str = Field(..., description="사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠와 동일한 언어 사용)")
+    key: str = Field(..., description="name의 공백을 '_'로 대체한 키값 (기타 변형 없이 대소문자 유지, 예: 'Product Quality' -> 'Product_Quality')")
     display_highlight: str = Field(..., description="highlights 배열 중 카테고리를 가장 잘 대표하는 highlight의 keyword 값 (highlights[].keyword에서 선택, 그대로 복사)")
     sentiment_type: SentimentType = Field(..., description="카테고리별 감정 유형 (평균 점수 기준: negative < 0.45, positive >= 0.55, neutral 0.45 ~ 0.55)")
     summary: str = Field(..., description="상세한 카테고리 분석 및 인사이트")
@@ -32,18 +32,18 @@ class CategorySummary(BaseModel):
     negative_contents: list[SentimentContent] = Field(default_factory=list, description="평가 대상에 대한 감정 점수가 0.5 미만인 부정적 콘텐츠 리스트")
     highlights: list[HighlightItem] = Field(default_factory=list, description="핵심 하이라이트 배열 (원문 언어 유지, 번역 금지)")
     
-    @field_validator('category_key')
+    @field_validator('key')
     @classmethod
-    def validate_category_key(cls, v: str, info: ValidationInfo) -> str:
+    def validate_key(cls, v: str, info: ValidationInfo) -> str:
         if not settings.STRICT_VALIDATION:
             return v
 
         """카테고리명을 기반으로 공백만 '_'로 대체한 키 생성 및 검증"""
         data = info.data
-        if 'category' in data:
-            expected_key = data['category'].replace(' ', '_')
+        if 'name' in data:
+            expected_key = data['name'].replace(' ', '_')
             if v != expected_key:
-                error_msg = f"category_key '{v}'이 category '{data['category']}'에서 생성된 예상 키 '{expected_key}'와 다릅니다"
+                error_msg = f"key '{v}'이 name '{data['name']}'에서 생성된 예상 키 '{expected_key}'와 다릅니다"
                 raise ValueError(error_msg)
         return v
     

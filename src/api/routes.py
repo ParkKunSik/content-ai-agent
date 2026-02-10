@@ -6,7 +6,7 @@ from src.agent.agent import ContentAnalysisAgent
 from src.core.config import settings
 from src.schemas.models.api.analyze_request import AnalyzeRequest
 from src.schemas.models.api.project_analysis_request import ProjectAnalysisRequest
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
 from src.services.orchestrator import AgentOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ orchestrator = AgentOrchestrator()
 def health_check():
     return {"status": "healthy", "env": settings.ENV}
 
-@router.post("/analysis", response_model=StructuredAnalysisResponse)
+@router.post("/analysis", response_model=StructuredAnalysisRefineResult)
 async def analysis(request: AnalyzeRequest):
     """
     Executes the 2-step detailed analysis.
@@ -37,19 +37,20 @@ async def analysis(request: AnalyzeRequest):
     Returns the detailed analysis with refined summaries.
     """
     try:
-        result = await agent.analysis(
+        result = await orchestrator.analysis(
             project_id=request.project_id,
             project_type=request.project_type,
             contents=request.contents,
-            analysis_mode=request.analysis_mode
+            analysis_mode=request.analysis_mode,
+            content_type=request.content_type
         )
-        return result
+        return result.data
     except Exception as e:
         logger.error(f"Detailed Analysis API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/project-analysis", response_model=StructuredAnalysisResponse)
-async def project_analysis(request: ProjectAnalysisRequest):
+@router.post("/project/funding-preorder/analysis", response_model=StructuredAnalysisRefineResult)
+async def funding_preorder_project_analysis(request: ProjectAnalysisRequest):
     """
     프로젝트 기반 콘텐츠 분석 API
     
@@ -58,12 +59,14 @@ async def project_analysis(request: ProjectAnalysisRequest):
     - force_refresh 옵션: 향후 캐시 기능을 위한 placeholder
     """
     try:
-        logger.info(f"Project analysis requested - Project: {request.project_id}, Content Type: {request.content_type}")
+        logger.info(
+            f"Project analysis requested - Project: {request.project_id}, "
+            f"Type: FUNDING_AND_PREORDER, Content Type: {request.content_type}"
+        )
         
         # 오케스트레이터를 통한 분석 수행
-        analysis_result = await orchestrator.project_analysis(
+        analysis_result = await orchestrator.funding_preorder_project_analysis(
             project_id=request.project_id,
-            project_type=request.project_type,
             content_type=request.content_type,
             analysis_mode=request.analysis_mode
         )

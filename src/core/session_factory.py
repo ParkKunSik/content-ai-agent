@@ -31,18 +31,22 @@ class SessionFactory:
         # Resolve credentials with proper scope for google-genai
         credentials = None
         if settings.GOOGLE_APPLICATION_CREDENTIALS:
-            from google.oauth2 import service_account
-            try:
-                base_credentials = service_account.Credentials.from_service_account_file(
-                    settings.GOOGLE_APPLICATION_CREDENTIALS
-                )
-                # Add required scope for Vertex AI
-                credentials = base_credentials.with_scopes([
-                    'https://www.googleapis.com/auth/cloud-platform'
-                ])
-                logger.info(f"Loaded credentials from: {settings.GOOGLE_APPLICATION_CREDENTIALS}")
-            except Exception as e:
-                logger.warning(f"Failed to load credentials file, falling back to default: {e}")
+            import os
+            if not os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS):
+                logger.error(f"Credentials file NOT FOUND at: {settings.GOOGLE_APPLICATION_CREDENTIALS}")
+            else:
+                from google.oauth2 import service_account
+                try:
+                    base_credentials = service_account.Credentials.from_service_account_file(
+                        settings.GOOGLE_APPLICATION_CREDENTIALS
+                    )
+                    # Add required scope for Vertex AI
+                    credentials = base_credentials.with_scopes([
+                        'https://www.googleapis.com/auth/cloud-platform'
+                    ])
+                    logger.info(f"Successfully loaded credentials from: {settings.GOOGLE_APPLICATION_CREDENTIALS}")
+                except Exception as e:
+                    logger.warning(f"Failed to load credentials file: {e}")
 
         # Initialize google-genai client
         cls._client = genai.Client(
@@ -59,13 +63,10 @@ class SessionFactory:
 
         try:
             for persona_type in PersonaType:
-                # 1. Resolve Model Name
-                model_name = persona_type.model_name_getter(settings)
-
-                # 2. Resolve System Instruction
+                # 1. Resolve System Instruction
                 system_instruction = persona_type.get_instruction(prompt_renderer)
                 
-                # 3. Register Config
+                # 2. Register Config
                 cls._register_config(persona_type, system_instruction)
 
             logger.info(f"SessionFactory initialized with {len(cls._configs)} configs.")

@@ -70,11 +70,11 @@ graph TD
     1.  **Validation:** `RequestContentLoader`를 통해 파일 크기 검증(10MB) 및 일괄 로드.
     2.  **Step 1: Structuring (PRO_DATA_ANALYST):**
         *   비정형 텍스트를 입력받아 카테고리별 분류, 감정 점수 계산, 핵심 하이라이트 추출 수행.
-        *   `StructuredAnalysisResponse` 스키마에 따라 정형 데이터 생성.
+        *   `StructuredAnalysisResult` 스키마에 따라 정형 데이터 생성.
     3.  **Step 2: Refinement (Persona-based):**
         *   1단계의 정밀 분석 데이터를 바탕으로 사용자가 선택한 페르소나에 맞춰 요약문 정제 및 길이 최적화.
         *   `StructuredAnalysisRefinedResponse` 스키마 사용.
-    4.  **Merging:** 두 단계의 결과를 병합하여 최종 `StructuredAnalysisResponse` 반환.
+    4.  **Merging:** 두 단계의 결과를 병합하여 최종 `StructuredAnalysisResult` 반환.
 
 ### 3.5. LLM Service (Reliability & Stateful Interaction)
 *   **역할:** `Orchestrator`와 Vertex AI 사이의 통신을 전담하며, **AsyncGenAISession** 기반의 상태 유지형 대화를 관리.
@@ -86,7 +86,7 @@ graph TD
 *   **System Prompt Structure:** 
     *   `base.jinja2`를 상속받아 모든 페르소나의 공통 언어 규칙 및 행동 양식을 정의.
     *   **Controlled Generation:** `GenerationConfig`의 `response_mime_type="application/json"` 및 `response_schema`를 사용하여 구조적 출력을 강제.
-    *   **Schema-Driven Instructions:** Pydantic 모델(`StructuredAnalysisResponse` 등)의 `Field(description=...)`가 LLM에게 세부 지침을 전달하는 역할을 수행.
+    *   **Schema-Driven Instructions:** Pydantic 모델(`StructuredAnalysisResult` 등)의 `Field(description=...)`가 LLM에게 세부 지침을 전달하는 역할을 수행.
     *   **Temperature Strategy:** `PersonaType`별로 최적화된 Temperature 설정 (0.1 ~ 0.7) 적용.
 *   **CUSTOMER_FACING_ANALYST (구 판매자 도우미):**
     *   **Goal:** 고객의 관점에서 제품 가치를 발굴하고 신뢰를 형성.

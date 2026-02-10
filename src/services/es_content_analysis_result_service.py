@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -9,13 +10,13 @@ from src.core.elasticsearch_config import es_manager
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
 from src.schemas.models.es.content_analysis_result import (
     ContentAnalysisResultDataV1,
     ContentAnalysisResultDocument,
     ContentAnalysisResultState,
 )
-from src.schemas.models.prompt.structured_analysis_refined_response import StructuredAnalysisRefinedResponse
-from src.schemas.models.prompt.structured_analysis_response import StructuredAnalysisResponse
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,9 @@ class ESContentAnalysisResultService:
             self.client.indices.create(index=self.index_name, body=mappings)
             logger.info(f"Created index: {self.index_name}")
 
-    def _generate_doc_id(self, project_id: str, content_type: ExternalContentType, version: int) -> str:
-        """문서 ID 생성 (멱등성 보장)"""
-        return f"{project_id}_{content_type.value}_v{version}"
+    def _generate_doc_id(self, project_id: str, project_type: ProjectType, content_type: ExternalContentType) -> str:
+        """문서 ID 생성 (프로젝트+타입 조합으로 고유성 보장)"""
+        return f"{project_id}_{project_type.value}_{content_type.value}"
 
     async def get_result(
         self, 
@@ -79,30 +80,40 @@ class ESContentAnalysisResultService:
         return 1
 
     async def save_result(self, document: ContentAnalysisResultDocument) -> str:
-        """분석 결과 저장 (새 버전 생성)"""
+        """분석 결과 저장 (동일 프로젝트/타입 조합은 덮어쓰기됨)"""
+        doc_id = None
         try:
             self.ensure_index_exists()
             
-            # 문서 ID 생성
+            # 문서 ID 생성 (version 제외)
             doc_id = self._generate_doc_id(
                 document.project_id, 
-                document.content_type, 
-                document.version
+                document.project_type,
+                document.content_type
             )
+            
+            # Pydantic V2의 model_dump_json()을 사용하여 직렬화 안정성 확보
+            doc_dict = json.loads(document.model_dump_json())
+            
+            logger.info(f"Indexing document to ES: {doc_id} in index {self.index_name}")
             
             # 저장
-            self.client.index(
+            response = self.client.index(
                 index=self.index_name,
                 id=doc_id,
-                document=document.model_dump(mode='json'),
-                refresh=True # 테스트를 위해 즉시 반영
+                document=doc_dict,
+                refresh=True
             )
             
-            logger.info(f"Saved result: {doc_id} (State: {document.state})")
+            es_result = response.get('result')
+            logger.info(f"ES Save Result: {es_result} for doc_id: {doc_id}")
+            
             return doc_id
             
         except Exception as e:
-            logger.error(f"Failed to save result: {e}")
+            logger.error(f"Failed to save result to ES (doc_id: {doc_id if 'doc_id' in locals() else 'unknown'}): {e}")
+            if hasattr(e, 'info'):
+                logger.error(f"ES Error Detailed Info: {e.info}")
             raise
 
     async def save_analysis_result(
@@ -112,20 +123,20 @@ class ESContentAnalysisResultService:
         content_type: ExternalContentType,
         version: int,
         state: ContentAnalysisResultState,
-        structured_response: StructuredAnalysisResponse,
+        structured_response: StructuredAnalysisResult,
+        refine_persona: PersonaType,
+        refined_result: StructuredAnalysisRefineResult,
         persona: PersonaType = PersonaType.PRO_DATA_ANALYST,
-        refine_persona: Optional[PersonaType] = None,
-        refined_summary: Optional[StructuredAnalysisRefinedResponse] = None,
         reason: str = None
     ) -> str:
         """구조화된 분석 응답을 V1 형식으로 저장하는 헬퍼 메서드"""
         
         # V1 결과 데이터 생성
         result_data = ContentAnalysisResultDataV1(
-            persona=persona,
-            data=structured_response,
-            refine_persona=refine_persona,
-            refined_summary=refined_summary
+            meta_persona=persona,
+            meta_data=structured_response,
+            persona=refine_persona,
+            data=refined_result
         )
         
         # 문서 생성
@@ -144,14 +155,14 @@ class ESContentAnalysisResultService:
     async def update_state(
         self, 
         project_id: str, 
+        project_type: ProjectType,
         content_type: ExternalContentType, 
-        version: int,
         state: ContentAnalysisResultState,
         reason: str = None
     ):
-        """특정 버전의 상태 업데이트"""
+        """특정 프로젝트 분석 결과의 상태 업데이트"""
         try:
-            doc_id = self._generate_doc_id(project_id, content_type, version)
+            doc_id = self._generate_doc_id(project_id, project_type, content_type)
             
             update_body = {
                 "doc": {

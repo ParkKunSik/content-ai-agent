@@ -144,6 +144,15 @@ def init_settings() -> Settings:
             secrets = fetch_config_from_gsm(env_profile, project_id)
             return Settings(**secrets)
 
+    # Convert relative path to absolute path for credentials if needed
+    if config.GOOGLE_APPLICATION_CREDENTIALS and not os.path.isabs(config.GOOGLE_APPLICATION_CREDENTIALS):
+        if ENV_LOCAL_PATH:
+            root_dir = os.path.dirname(ENV_LOCAL_PATH)
+            config.GOOGLE_APPLICATION_CREDENTIALS = os.path.abspath(
+                os.path.join(root_dir, config.GOOGLE_APPLICATION_CREDENTIALS)
+            )
+            logger.info(f"Resolved credentials path to: {config.GOOGLE_APPLICATION_CREDENTIALS}")
+
     logger.info(f"Loaded Config - Project: {config.GCP_PROJECT_ID}, Region: {config.GCP_REGION}")
     return config
 

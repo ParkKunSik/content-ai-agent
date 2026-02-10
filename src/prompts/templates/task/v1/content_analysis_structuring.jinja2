@@ -60,7 +60,7 @@
       (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
     
     ### 3. 카테고리 키 생성
-    - **규칙**: category에서 공백만 '_'로 대체하여 category_key 생성 (대소문자 유지, 기타 가공 금지)
+    - **규칙**: name에서 공백만 '_'로 대체하여 key 생성 (대소문자 유지, 기타 가공 금지)
     
     ### 4. 하이라이트 추출 (핵심 인사이트)
     - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 언어 그대로 유지)
@@ -93,11 +93,12 @@
 
     {{ json_response_rule() }}
 
-    **중요**: category_key는 category에서 공백을 '_'로 대체한 결과입니다 (대소문자 유지)
+    **중요**: key는 name에서 공백을 '_'로 대체한 결과입니다 (대소문자 유지)
     
     ## 분석할 콘텐츠
     프로젝트 ID: {{ project_id }}
     프로젝트 타입: {{ project_type }}
+    콘텐츠 타입: {{ content_type }}
     
     콘텐츠 아이템들:
     ```json
@@ -159,7 +160,7 @@ You will receive a JSON array of content items:
   (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
 
 ### 3. Category Key Generation
-- **Rule**: Replace spaces with '_' in category to create category_key. Keep original casing and do not apply other processing.
+- **Rule**: Replace spaces with '_' in name to create key. Keep original casing and do not apply other processing.
 - **Examples**: "Product Quality" → "Product_Quality", "제품 품질" → "제품_품질"
 
 ### 4. Highlight Extraction (Key Insights)
@@ -194,12 +195,13 @@ Output must be a valid JSON object adhering to the provided JSON schema.
 
 {{ json_response_rule() }}
 
-**CRITICAL**: category_key MUST be exactly category with spaces replaced by '_'. Keep original casing.
+**CRITICAL**: key MUST be exactly name with spaces replaced by '_'. Keep original casing.
 
 ## Content to Analyze
 
 Project ID: {{ project_id }}
 Project Type: {{ project_type }}
+Content Type: {{ content_type }}
 
 Content Items:
 ```json
