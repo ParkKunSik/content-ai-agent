@@ -107,10 +107,17 @@ async def viewer_detail(
             "error": "ES 연결에 실패했습니다. 설정을 확인해주세요."
         })
 
-    # 데이터 조회
-    result_doc = service.get_result(str(project_id), content_type)
+    # 프로젝트 정보 및 content_types 먼저 조회
     project_info = service.get_project_info(project_id)
     content_types = service.get_content_types_by_project(str(project_id))
+
+    # content_type이 해당 프로젝트에 없으면 첫 번째 content_type으로 fallback
+    if content_type not in content_types and content_types:
+        content_type = content_types[0]
+        logger.info(f"Content type fallback to {content_type} for project {project_id}")
+
+    # 데이터 조회
+    result_doc = service.get_result(str(project_id), content_type)
 
     # 전체 프로젝트 정보 조회 (combobox용, 배치 쿼리로 최적화)
     all_projects = service.get_all_projects_with_info()
