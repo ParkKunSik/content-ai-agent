@@ -6,7 +6,7 @@ ES에 저장된 콘텐츠 분석 결과를 조회하는 독립 웹 서비스입�
 
 - **독립 배포**: 메인 Agent와 분리되어 독립적으로 배포 가능
 - **최소 의존성**: ES 연결 + FastAPI만 필요 (GCP SDK 불필요)
-- **Lambda 지원**: AWS Lambda + API Gateway 배포 지원
+- **Lambda 지원**: AWS Lambda + API Gateway 배포 지원 (SAM)
 
 ## 설치
 
@@ -39,7 +39,7 @@ cp .env.example .env
 | 변수 | 설명 | 기본값 |
 |------|------|--------|
 | `ES_HOST` | Elasticsearch 호스트 | localhost |
-| `ES_PORT` | Elasticsearch 포트 | 9200 |
+| `ES_PORT` | Elasticsearch 포트 | (없음) |
 | `ES_USERNAME` | ES 인증 사용자 | (없음) |
 | `ES_PASSWORD` | ES 인증 비밀번호 | (없음) |
 | `ES_INDEX` | 분석 결과 인덱스 | core-content-analysis-result |
@@ -72,17 +72,47 @@ http://localhost:8701/
 Ctrl+C
 ```
 
-### Lambda 배포
+## AWS Lambda 배포
+
+### 사전 요구사항
+
+- AWS CLI 설치 및 설정 (`aws configure`)
+- AWS SAM CLI 설치 (`brew install aws-sam-cli`)
+
+### 배포 (SAM)
 
 ```bash
-# 패키지 생성
-pip install . -t package/
-cd package && zip -r ../deployment.zip .
+cd viewer
 
-# Lambda 설정
-Handler: viewer.main.handler
-Runtime: Python 3.10+
+# 1. samconfig.toml 설정 수정
+vi deploy/samconfig.toml
+
+# 2. 배포 스크립트 실행
+chmod +x deploy/deploy.sh
+./deploy/deploy.sh          # dev 환경 배포
 ```
+
+### 배포 파라미터 설정
+
+`deploy/samconfig.toml`에서 환경별 ES 설정:
+
+```toml
+[dev.deploy.parameters]
+parameter_overrides = [
+    "Environment=dev",
+    "ESHost=https://your-es-host.com",
+    "ESUsername=your-username",
+    "ESPassword=your-password",
+]
+```
+
+### 배포 결과
+
+```
+API URL: https://xxx.execute-api.ap-northeast-2.amazonaws.com/dev/
+```
+
+자세한 배포 가이드는 [deploy/README.md](deploy/README.md)를 참조하세요.
 
 ## 프로젝트 구조
 
@@ -91,6 +121,12 @@ viewer/
 ├── pyproject.toml          # 의존성 관리
 ├── README.md
 ├── .env.example
+│
+├── deploy/                 # AWS 배포 설정
+│   ├── template.yaml       # CloudFormation/SAM 템플릿
+│   ├── samconfig.toml      # SAM 환경별 설정
+│   ├── deploy.sh           # 배포 스크립트
+│   └── README.md           # 배포 가이드
 │
 └── viewer/                 # Python 패키지
     ├── main.py             # FastAPI + Lambda handler
@@ -103,6 +139,9 @@ viewer/
     ├── schemas/
     │   ├── enums.py        # ContentType 등
     │   └── models.py       # Pydantic 모델
+    ├── streamlit/          # Streamlit 뷰어
+    │   ├── app.py
+    │   └── renderer.py
     └── templates/          # Jinja2 템플릿
 ```
 
@@ -110,6 +149,6 @@ viewer/
 
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/` | 프로젝트 목록 (페이징) |
-| GET | `/{project_id}` | 프로젝트 상세 |
-| GET | `/health` | 헬스체크 |
+| GET | `/viewer/` | 프로젝트 목록 (페이징) |
+| GET | `/viewer/{project_id}` | 프로젝트 상세 |
+| GET | `/viewer/health` | 헬스체크 |

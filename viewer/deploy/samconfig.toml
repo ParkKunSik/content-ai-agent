@@ -1,0 +1,28 @@
+# AWS SAM CLI Configuration
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html
+
+version = 0.1
+
+# ============================================================
+# Development Environment
+# ============================================================
+[dev]
+[dev.deploy]
+[dev.deploy.parameters]
+stack_name = "content-viewer-dev"
+region = "ap-northeast-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = [
+    "Environment=dev",
+    "ESHost=https://your-cluster.es.ap-northeast-2.aws.elastic-cloud.com",
+    "ESUsername=elastic",
+    "ESPassword=your-password",
+    "ESIndex=core-content-analysis-result",
+]
+tags = "Project=content-ai-agent Component=viewer Environment=dev"
+
+[dev.build]
+[dev.build.parameters]
+use_container = false
+parallel = true
