@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}오류 - 커뮤니티 요약 뷰어{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-container {
+        text-align: center;
+        padding: 80px 20px;
+    }
+
+    .error-icon {
+        font-size: 64px;
+        margin-bottom: 24px;
+    }
+
+    .error-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #0F1111;
+        margin-bottom: 16px;
+    }
+
+    .error-message {
+        font-size: 16px;
+        color: #565959;
+        margin-bottom: 32px;
+    }
+
+    .back-button {
+        display: inline-block;
+        padding: 12px 24px;
+        background-color: #FFD814;
+        border: 1px solid #FCD200;
+        border-radius: 8px;
+        color: #0F1111;
+        text-decoration: none;
+        font-weight: 600;
+        transition: background-color 0.2s;
+    }
+
+    .back-button:hover {
+        background-color: #F7CA00;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-icon">⚠️</div>
+    <h1 class="error-title">데이터를 불러올 수 없습니다</h1>
+    <p class="error-message">{{ error }}</p>
+    <a href="{{ url_for('viewer_list') }}" class="back-button">프로젝트 목록으로 돌아가기</a>
+</div>
+{% endblock %}

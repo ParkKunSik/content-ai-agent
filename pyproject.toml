@@ -13,30 +13,37 @@ authors = [
   {name = "Wadiz AI Team", email = "ai-team@wadiz.kr"}
 ]
 dependencies = [
-    # Core Agent & Google Cloud
-    "google-cloud-aiplatform>=1.60.0",
-    "google-genai>=0.3.0",
-    "google-cloud-storage",
-    "google-cloud-secret-manager",
-    
     # Data Validation & Settings
     "pydantic>=2.0.0",
     "pydantic-settings",
-    
-    # Infrastructure
+
+    # Infrastructure (Core)
     "python-dotenv",
-    "tenacity",
     "jinja2",
-    
+
     # Elasticsearch (8.x only - ES server 8.11.0 compatibility)
     "elasticsearch>=8.0.0,<9.0.0",
-    
+
     # Interface (FastAPI / Uvicorn)
     "fastapi",
     "uvicorn[standard]"
 ]
 
 [project.optional-dependencies]
+# GCP/Vertex AI 기반 분석 기능 (기본 Agent 기능)
+gcp = [
+    "google-cloud-aiplatform>=1.60.0",
+    "google-genai>=0.3.0",
+    "google-cloud-storage",
+    "google-cloud-secret-manager",
+    "tenacity"
+]
+
+# 전체 기능 (기존 pip install . 과 동일)
+full = [
+    "content-ai-agent[gcp]"
+]
+
 dev = [
     # Testing & Quality
     "pytest",
@@ -48,11 +55,6 @@ dev = [
 
     # PDF Generation (Optional)
     "weasyprint>=62.0"
-]
-
-viewer = [
-    # Content Analysis Viewer UI
-    "streamlit>=1.30.0"
 ]
 
 [tool.setuptools.packages.find]

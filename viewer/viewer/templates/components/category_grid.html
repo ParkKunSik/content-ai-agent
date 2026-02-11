@@ -1,0 +1,24 @@
+{# 카테고리 버튼 그리드 컴포넌트 #}
+{# 필요 변수: categories (CategoryItem 리스트) #}
+
+<div class="category-grid">
+    {% for category in categories %}
+    {% set sentiment = category.sentiment_type.value if category.sentiment_type.value is defined else category.sentiment_type %}
+    {% set total_count = category.positive_count + category.negative_count %}
+
+    {# 아이콘 선택 #}
+    {% if sentiment == 'positive' %}
+        {% set icon = '✓' %}
+    {% elif sentiment == 'negative' %}
+        {% set icon = '✗' %}
+    {% else %}
+        {% set icon = '●' %}
+    {% endif %}
+
+    <div class="category-item {{ sentiment }}" onclick="toggleCategory({{ loop.index0 }})">
+        <span class="category-icon">{{ icon }}</span>
+        <span class="category-name">{{ category.display_highlight }}</span>
+        <span class="category-count">({{ total_count }})</span>
+    </div>
+    {% endfor %}
+</div>

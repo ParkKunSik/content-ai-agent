@@ -1,0 +1,19 @@
+# 가상환경
+.venv-viewer/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 환경설정
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# 빌드
+dist/
+build/
+package/
