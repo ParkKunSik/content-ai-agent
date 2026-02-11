@@ -95,8 +95,14 @@ source .venv/bin/activate
 # 전체 기능 설치 (GCP/Vertex AI 포함, 개발용)
 pip install -e ".[full,dev]"
 
-# 서버 실행
+# 서버 실행 (기본 포트: 8000, SERVER_PORT 환경변수로 변경 가능)
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# 서버 중단
+Ctrl+C
+
+# 또는 포트 기준으로 프로세스 중단
+lsof -ti:8000 | xargs kill -9
 ```
 
 ### 4. API 문서 확인
@@ -157,12 +163,14 @@ source .venv-viewer/bin/activate
 # 설치
 pip install -e ".[server,streamlit]"
 
-# FastAPI 서버 실행
+# FastAPI 서버 실행 (포트: 환경변수 SERVER_PORT 또는 기본값 8787)
 uvicorn viewer.main:app --reload --port 8787
 
-# 또는 Streamlit 뷰어 실행
+# 또는 Streamlit 뷰어 실행 (--server.port 옵션으로 포트 지정)
 streamlit run viewer/streamlit/app.py --server.port 8701
 ```
+
+> 포트는 고정값이 아니며, FastAPI는 `SERVER_PORT` 환경변수로, Streamlit은 `--server.port` 옵션으로 변경 가능합니다.
 
 자세한 내용은 [viewer/README.md](viewer/README.md)를 참조하세요.
 
