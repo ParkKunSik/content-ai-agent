@@ -34,7 +34,16 @@ cp .env.example .env
 # .env 파일 편집
 ```
 
-### 필수 환경변수
+### 환경변수
+
+#### 서버 설정
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `SERVER_HOST` | FastAPI 서버 호스트 | 0.0.0.0 |
+| `SERVER_PORT` | FastAPI 서버 포트 | 8787 |
+
+#### ES 연결 설정
 
 | 변수 | 설명 | 기본값 |
 |------|------|--------|
@@ -46,31 +55,45 @@ cp .env.example .env
 
 ## 실행
 
-### 로컬 개발
+### 로컬 개발 (FastAPI)
 
 ```bash
-# FastAPI 서버 실행
+# FastAPI 서버 실행 (기본 포트: 8787, SERVER_PORT 환경변수로 변경 가능)
 uvicorn viewer.main:app --reload --port 8787
+
+# 또는 환경변수로 포트 지정
+SERVER_PORT=9000 python -m viewer.main
 
 # 브라우저 접속
 http://localhost:8787/
 
 # 서버 중단
 Ctrl+C
+
+# 또는 포트 기준으로 프로세스 중단
+lsof -ti:8787 | xargs kill -9
 ```
 
 ### Streamlit 뷰어
 
 ```bash
-# Streamlit 앱 실행
+# Streamlit 앱 실행 (--server.port 옵션으로 포트 지정)
 streamlit run viewer/streamlit/app.py --server.port 8701
+
+# 다른 포트로 실행
+streamlit run viewer/streamlit/app.py --server.port 9001
 
 # 브라우저 접속
 http://localhost:8701/
 
 # 앱 중단
 Ctrl+C
+
+# 또는 포트 기준으로 프로세스 중단
+lsof -ti:8701 | xargs kill -9
 ```
+
+> Streamlit 포트는 실행 시 `--server.port` 옵션으로 지정합니다. 고정값이 아닙니다.
 
 ## AWS Lambda 배포
 

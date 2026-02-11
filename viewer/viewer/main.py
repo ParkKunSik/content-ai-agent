@@ -47,4 +47,5 @@ except ImportError:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("viewer.main:app", host="0.0.0.0", port=8787, reload=True)
+    from viewer.config import settings
+    uvicorn.run("viewer.main:app", host=settings.SERVER_HOST, port=settings.SERVER_PORT, reload=True)

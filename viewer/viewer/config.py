@@ -17,6 +17,10 @@ logger = logging.getLogger("viewer.config")
 class Settings(BaseSettings):
     """Viewer 설정 (ES 연결 정보)"""
 
+    # 서버 설정
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 8787
+
     # ES 설정
     ES_HOST: str = "localhost"
     ES_PORT: Optional[int] = None  # 포트 없으면 None (기본 포트 사용)

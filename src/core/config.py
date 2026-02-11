@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     """
     Application settings and configuration.
     """
+    # [Server Configuration]
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 8000
+
     # [Profile Configuration]
     ENV: str = "local"
 
