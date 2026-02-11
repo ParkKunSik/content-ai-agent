@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}커뮤니티 요약 뷰어 - 프로젝트 목록{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #D5D9D9;
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+        font-size: 14px;
+        color: #565959;
+    }
+
+    .project-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .project-card {
+        display: flex;
+        padding: 16px;
+        background-color: #fff;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .project-card:hover {
+        border-color: #008296;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .project-card-thumbnail {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin-right: 16px;
+        flex-shrink: 0;
+        background-color: #F7FAFA;
+    }
+
+    .project-card-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .project-card-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .project-card-title a {
+        color: #007185;
+        text-decoration: none;
+    }
+
+    .project-card-title a:hover {
+        color: #C7511F;
+        text-decoration: underline;
+    }
+
+    .project-card-thumbnail-link {
+        flex-shrink: 0;
+    }
+
+    .project-card-id {
+        font-size: 12px;
+        color: #565959;
+        margin-bottom: 8px;
+    }
+
+    .content-type-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .content-type-tag {
+        display: inline-block;
+        padding: 4px 8px;
+        background-color: #F7FAFA;
+        border: 1px solid #D5D9D9;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #007185;
+        text-decoration: none;
+    }
+
+    .content-type-tag:hover {
+        background-color: #E3F1F1;
+        border-color: #007185;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #565959;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    /* 페이징 스타일 */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #D5D9D9;
+    }
+
+    .pagination-btn {
+        padding: 8px 16px;
+        border: 1px solid #D5D9D9;
+        border-radius: 4px;
+        background-color: #fff;
+        color: #0F1111;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .pagination-btn:hover:not(.disabled) {
+        border-color: #008296;
+        background-color: #F7FAFA;
+    }
+
+    .pagination-btn.active {
+        border-color: #007185;
+        background-color: #E7F4F5;
+        color: #007185;
+        font-weight: 600;
+    }
+
+    .pagination-btn.disabled {
+        color: #D5D9D9;
+        cursor: not-allowed;
+    }
+
+    .pagination-info {
+        font-size: 14px;
+        color: #565959;
+        margin: 0 16px;
+    }
+
+    .page-stats {
+        font-size: 14px;
+        color: #565959;
+        margin-bottom: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📊 커뮤니티 요약 뷰어</h1>
+    <p class="page-subtitle">Elasticsearch에 저장된 콘텐츠 분석 결과를 조회합니다.</p>
+</div>
+
+{% if projects %}
+<div class="page-stats">
+    전체 {{ total_count }}개 프로젝트 중 {{ (page - 1) * 20 + 1 }} - {{ (page - 1) * 20 + projects|length }}번째
+</div>
+
+<div class="project-list">
+    {% for project in projects %}
+    <div class="project-card">
+        {% if project.link %}
+        <a href="{{ project.link }}" target="_blank" class="project-card-thumbnail-link">
+            {% if project.thumbnail_url %}
+            <img src="{{ project.thumbnail_url }}" alt="썸네일" class="project-card-thumbnail">
+            {% else %}
+            <div class="project-card-thumbnail"></div>
+            {% endif %}
+        </a>
+        {% else %}
+            {% if project.thumbnail_url %}
+            <img src="{{ project.thumbnail_url }}" alt="썸네일" class="project-card-thumbnail">
+            {% else %}
+            <div class="project-card-thumbnail"></div>
+            {% endif %}
+        {% endif %}
+        <div class="project-card-content">
+            <div class="project-card-title">
+                {% if project.link %}
+                <a href="{{ project.link }}" target="_blank">{{ project.title or '제목 없음' }}</a>
+                {% else %}
+                {{ project.title or '제목 없음' }}
+                {% endif %}
+            </div>
+            <div class="project-card-id">프로젝트 ID: {{ project.id }}</div>
+            <div class="content-type-tags">
+                {% for ct in project.content_types %}
+                <a href="{{ url_for('viewer_detail', project_id=project.id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# 페이징 UI #}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {# 이전 버튼 #}
+    {% if page > 1 %}
+    <a href="{{ url_for('viewer_list') }}?page={{ page - 1 }}" class="pagination-btn">← 이전</a>
+    {% else %}
+    <span class="pagination-btn disabled">← 이전</span>
+    {% endif %}
+
+    {# 페이지 번호 #}
+    {% set start_page = [1, page - 2]|max %}
+    {% set end_page = [total_pages, page + 2]|min %}
+
+    {% if start_page > 1 %}
+    <a href="{{ url_for('viewer_list') }}?page=1" class="pagination-btn">1</a>
+    {% if start_page > 2 %}<span class="pagination-info">...</span>{% endif %}
+    {% endif %}
+
+    {% for p in range(start_page, end_page + 1) %}
+    <a href="{{ url_for('viewer_list') }}?page={{ p }}"
+       class="pagination-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+    {% endfor %}
+
+    {% if end_page < total_pages %}
+    {% if end_page < total_pages - 1 %}<span class="pagination-info">...</span>{% endif %}
+    <a href="{{ url_for('viewer_list') }}?page={{ total_pages }}" class="pagination-btn">{{ total_pages }}</a>
+    {% endif %}
+
+    {# 다음 버튼 #}
+    {% if page < total_pages %}
+    <a href="{{ url_for('viewer_list') }}?page={{ page + 1 }}" class="pagination-btn">다음 →</a>
+    {% else %}
+    <span class="pagination-btn disabled">다음 →</span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📭</div>
+    <p>저장된 분석 결과가 없습니다.</p>
+</div>
+{% endif %}
+
+<div class="footer">
+    Generated by Content AI Agent | Wadiz
+</div>
+{% endblock %}

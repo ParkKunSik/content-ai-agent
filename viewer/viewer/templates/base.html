@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}커뮤니티 요약 뷰어{% endblock %}</title>
+    <style>
+/**
+ * 커뮤니티 요약 뷰어 스타일
+ * Amazon 스타일 리뷰 요약 UI
+ */
+
+body {
+    font-family: "Amazon Ember", Arial, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #fff;
+    color: #0F1111;
+}
+
+.header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #D5D9D9;
+}
+
+.meta-info {
+    font-size: 12px;
+    color: #565959;
+    margin-bottom: 10px;
+}
+
+h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+/* 프로젝트 정보 섹션 */
+.project-info-section {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: #F7FAFA;
+    border-radius: 8px;
+    border: 1px solid #D5D9D9;
+}
+
+.project-info-content {
+    flex: 1;
+}
+
+.project-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0F1111;
+}
+
+.project-title-link {
+    color: #007185;
+    text-decoration: none;
+}
+
+.project-title-link:hover {
+    color: #C7511F;
+    text-decoration: underline;
+}
+
+.project-thumbnail {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-right: 16px;
+    flex-shrink: 0;
+}
+
+/* 요약 섹션 */
+.summary-section {
+    margin-bottom: 30px;
+    line-height: 1.6;
+}
+
+.ai-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.learn-more {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 20px 0 10px 0;
+}
+
+/* 카테고리 그리드 */
+.category-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+.category-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #fff;
+    border: 1px solid #D5D9D9;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.category-item:hover {
+    background-color: #F7FAFA;
+    border-color: #008296;
+}
+
+.category-item.positive {
+    border-color: #067D62;
+}
+
+.category-item.negative {
+    border-color: #CC0C39;
+}
+
+.category-icon {
+    margin-right: 8px;
+    font-size: 16px;
+}
+
+.positive .category-icon {
+    color: #067D62;
+}
+
+.negative .category-icon {
+    color: #CC0C39;
+}
+
+.neutral .category-icon {
+    color: #565959;
+}
+
+.category-name {
+    color: #007185;
+    font-size: 14px;
+    margin-right: 4px;
+}
+
+.category-count {
+    color: #565959;
+    font-size: 14px;
+}
+
+/* 카테고리 상세 */
+.category-detail {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #F7FAFA;
+    border-radius: 8px;
+    border: 1px solid #D5D9D9;
+}
+
+.category-detail.active {
+    display: block;
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #D5D9D9;
+}
+
+.detail-title {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #565959;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    color: #0F1111;
+}
+
+.sentiment-counts {
+    font-size: 14px;
+    color: #565959;
+    margin-bottom: 12px;
+}
+
+.sentiment-counts .positive-text {
+    color: #067D62;
+}
+
+.sentiment-counts .negative-text {
+    color: #CC0C39;
+}
+
+.category-summary {
+    margin-bottom: 16px;
+    line-height: 1.6;
+}
+
+/* 하이라이트 섹션 */
+.highlights-section {
+    margin-top: 16px;
+}
+
+.highlight-item {
+    margin-bottom: 12px;
+    padding: 12px;
+    background-color: #fff;
+    border-radius: 4px;
+    border-left: 3px solid #067D62;
+}
+
+.highlight-keyword {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.highlight-text {
+    color: #565959;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.highlight-text strong {
+    font-weight: 900;
+    color: #0F1111;
+}
+
+.read-more {
+    color: #007185;
+    text-decoration: none;
+    font-size: 13px;
+    margin-left: 4px;
+}
+
+.read-more:hover {
+    color: #C7511F;
+    text-decoration: underline;
+}
+
+/* 푸터 */
+.footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #D5D9D9;
+    font-size: 12px;
+    color: #565959;
+}
+
+/* 모달 스타일 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: #fff;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #D5D9D9;
+    background-color: #F7FAFA;
+    flex-shrink: 0;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0F1111;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #565959;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    color: #0F1111;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    line-height: 1.6;
+    color: #0F1111;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    flex-grow: 1;
+}
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+
+    <script>
+/**
+ * 커뮤니티 요약 뷰어 JavaScript
+ * 카테고리 토글 및 모달 기능
+ */
+
+/**
+ * 카테고리 상세 정보 토글
+ * @param {number} index - 카테고리 인덱스
+ */
+function toggleCategory(index) {
+    const detail = document.getElementById(`category-${index}`);
+    const isActive = detail.classList.contains('active');
+
+    // 모든 카테고리 상세 정보 닫기
+    document.querySelectorAll('.category-detail').forEach(el => {
+        el.classList.remove('active');
+    });
+
+    // 클릭한 카테고리만 열기 (이미 열려있지 않은 경우)
+    if (!isActive) {
+        detail.classList.add('active');
+        detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+/**
+ * 하이라이트 요소에서 모달 열기
+ * @param {string} elementId - 하이라이트 요소 ID
+ */
+function openModalFromElement(elementId) {
+    const element = document.getElementById(elementId);
+    const keyword = element.dataset.keyword;
+    const content = element.dataset.content;
+    document.getElementById('modal-title').innerText = '"' + keyword + '" 원본 콘텐츠';
+    document.getElementById('modal-body').textContent = content;
+    document.getElementById('content-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 모달 닫기
+ * @param {Event} event - 클릭 이벤트 (선택적)
+ */
+function closeModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('content-modal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeModal();
+    }
+});
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Content Analysis Viewer - ES 분석 결과 조회 서비스
+
+# ============================================================
+# Parameters
+# ============================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+    Description: Deployment environment
+
+  ESHost:
+    Type: String
+    Description: Elasticsearch host URL (e.g., https://es-cluster.es.ap-northeast-2.aws.elastic-cloud.com)
+
+  ESUsername:
+    Type: String
+    Default: ''
+    Description: Elasticsearch username (optional)
+
+  ESPassword:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Elasticsearch password (optional)
+
+  ESIndex:
+    Type: String
+    Default: core-content-analysis-result
+    Description: Elasticsearch index name
+
+# ============================================================
+# Conditions
+# ============================================================
+Conditions:
+  HasESAuth: !Not [!Equals [!Ref ESUsername, '']]
+
+# ============================================================
+# Globals
+# ============================================================
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+
+# ============================================================
+# Resources
+# ============================================================
+Resources:
+  # ------------------------------------------------------------
+  # Lambda Function
+  # ------------------------------------------------------------
+  ViewerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: community-summary-viewer
+      Description: Content Analysis Viewer API
+      CodeUri: ../
+      Handler: viewer.main.handler
+
+      # Environment Variables
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          ES_HOST: !Ref ESHost
+          ES_INDEX: !Ref ESIndex
+          ES_USE_SSL: 'true'
+          ES_VERIFY_CERTS: 'true'
+          ES_USERNAME: !If [HasESAuth, !Ref ESUsername, !Ref 'AWS::NoValue']
+          ES_PASSWORD: !If [HasESAuth, !Ref ESPassword, !Ref 'AWS::NoValue']
+
+      # API Gateway Event
+      Events:
+        RootPath:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ViewerApi
+            Path: /
+            Method: ANY
+        ProxyPath:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ViewerApi
+            Path: /{proxy+}
+            Method: ANY
+
+      # Tags
+      Tags:
+        Project: content-ai-agent
+        Component: viewer
+        Environment: !Ref Environment
+
+  # ------------------------------------------------------------
+  # API Gateway
+  # ------------------------------------------------------------
+  ViewerApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: community-data
+      StageName: !Ref Environment
+      Description: Content Analysis Viewer API Gateway
+
+      # CORS Configuration
+      Cors:
+        AllowMethods: "'GET, POST, OPTIONS'"
+        AllowHeaders: "'Content-Type, Authorization'"
+        AllowOrigin: "'*'"
+
+      # Tags
+      Tags:
+        Project: content-ai-agent
+        Component: viewer
+        Environment: !Ref Environment
+
+# ============================================================
+# Outputs
+# ============================================================
+Outputs:
+  ViewerApiUrl:
+    Description: API Gateway URL for Viewer
+    Value: !Sub https://${ViewerApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+    Export:
+      Name: !Sub ${AWS::StackName}-ViewerApiUrl
+
+  ViewerFunctionArn:
+    Description: Viewer Lambda Function ARN
+    Value: !GetAtt ViewerFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ViewerFunctionArn
+
+  ViewerApiId:
+    Description: API Gateway ID
+    Value: !Ref ViewerApi
+    Export:
+      Name: !Sub ${AWS::StackName}-ViewerApiId

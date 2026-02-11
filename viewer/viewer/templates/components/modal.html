@@ -1,0 +1,11 @@
+{# 원본 콘텐츠 모달 컴포넌트 #}
+
+<div id="content-modal" class="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div class="modal-title" id="modal-title">원본 콘텐츠</div>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+    </div>
+</div>

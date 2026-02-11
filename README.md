@@ -21,7 +21,7 @@ Google Vertex AI의 **Gemini 2.5/3.0** 모델을 활용하여, 효율적인 단�
     *   **Pydantic 모델의 이중 역할:** `src/schemas/models/prompt/` 아래의 모델들은 단순한 데이터 검증을 넘어, 각 필드의 `description`이 LLM에게 직접적인 작업 지침(Prompt)으로 전달되는 핵심적인 역할을 수행합니다.
     *   **지침 기반 모델 분리:** 동일한 데이터 구조를 가지더라도 분석 단계(구조화 vs 정제)에 따라 LLM에게 전달할 지침이 다르므로, 입력용(`Summary`)과 출력용(`RefinedSummary`) 모델을 엄격히 분리하여 각 단계에 최적화된 출력을 유도합니다.
 *   **Elasticsearch 통합:** 기존 와디즈 데이터를 조회하고 분석 결과를 영구 저장하여 버전별 관리가 가능합니다.
-*   **분석 결과 뷰어 (Content Analysis Viewer):** ES에 저장된 분석 결과를 Streamlit 기반 웹 UI로 시각화하여 조회할 수 있습니다.
+*   **분석 결과 뷰어 (Content Analysis Viewer):** ES에 저장된 분석 결과를 웹 UI로 시각화하여 조회할 수 있습니다. (독립 프로젝트 `viewer/` 참조)
 
 ---
 
@@ -47,8 +47,11 @@ src/
 ├── prompts/        # Jinja2 템플릿 (System, Task)
 ├── schemas/        # Pydantic 모델 및 Enum (PersonaType, AnalysisMode)
 ├── services/       # 핵심 로직 (Orchestrator, LLMService)
-├── utils/          # 공통 유틸리티 (PromptManager, PromptRenderer)
-└── viewer/         # 분석 결과 뷰어 (Streamlit 기반, 독립 실행)
+└── utils/          # 공통 유틸리티 (PromptManager, PromptRenderer)
+
+viewer/             # 분석 결과 뷰어 (독립 프로젝트, AWS Lambda 배포 지원)
+├── pyproject.toml  # 독립 의존성 관리
+└── viewer/         # FastAPI + Streamlit 기반 뷰어
 ```
 
 ---
@@ -57,9 +60,12 @@ src/
 
 프로젝트는 **`pyproject.toml`**을 사용하여 의존성을 표준화된 방식으로 관리합니다.
 
-*   **운영 의존성 (`dependencies`)**: 배포 및 실행에 필수적인 패키지 (Vertex AI SDK, Pydantic, FastAPI 등).
-*   **개발 의존성 (`dev`)**: 로컬 개발, 테스트, 린팅을 위한 추가 패키지 (pytest, ruff, black 등).
-*   **뷰어 의존성 (`viewer`)**: 분석 결과 뷰어 실행을 위한 패키지 (Streamlit).
+*   **기본 의존성 (`dependencies`)**: ES 연결, FastAPI 등 최소 필수 패키지.
+*   **GCP 의존성 (`gcp`)**: Vertex AI SDK, Google Cloud Storage 등 분석 기능용.
+*   **전체 의존성 (`full`)**: 기본 + GCP (기존 설치와 동일).
+*   **개발 의존성 (`dev`)**: 테스트, 린팅용 패키지 (pytest, ruff, black 등).
+
+> **Note:** 분석 결과 뷰어는 독립 프로젝트 `viewer/`로 분리되었습니다. 뷰어 설치 및 실행은 [viewer/README.md](viewer/README.md)를 참조하세요.
 
 ---
 
@@ -86,15 +92,17 @@ docker-compose up -d
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 개발용 패키지 포함 설치 (Editable 모드 권장)
-pip install -e ".[dev]"
+# 전체 기능 설치 (GCP/Vertex AI 포함, 개발용)
+pip install -e ".[full,dev]"
 
-# 운영용 필수 패키지만 설치할 경우
-pip install .
-
-# 서버 실행 (.venv 환경에서)
-source .venv/bin/activate
+# 서버 실행 (기본 포트: 8000, SERVER_PORT 환경변수로 변경 가능)
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# 서버 중단
+Ctrl+C
+
+# 또는 포트 기준으로 프로세스 중단
+lsof -ti:8000 | xargs kill -9
 ```
 
 ### 4. API 문서 확인
@@ -134,26 +142,37 @@ http://localhost:8000/redoc
 
 ## 📊 분석 결과 뷰어 (Content Analysis Viewer)
 
-ES에 저장된 분석 결과를 웹 UI로 조회할 수 있는 Streamlit 기반 뷰어입니다.
+ES에 저장된 분석 결과를 웹 UI로 조회할 수 있는 **독립 프로젝트**입니다.
 
-### 뷰어 실행
+### 특징
+
+*   **독립 배포:** 메인 Agent와 분리되어 독립적으로 배포 가능
+*   **최소 의존성:** ES 연결 + FastAPI만 필요 (GCP SDK 불필요)
+*   **AWS Lambda 지원:** API Gateway + Lambda 배포 지원
+*   **Streamlit UI:** 로컬 개발용 Streamlit 뷰어 제공
+
+### 설치 및 실행
 
 ```bash
-# 뷰어 의존성 설치
-pip install -e ".[viewer]"
+cd viewer
 
-# 뷰어 실행
-streamlit run src/viewer/app.py --server.port 8501
+# 가상환경 생성
+python3 -m venv .venv-viewer
+source .venv-viewer/bin/activate
 
-# 브라우저 접속
-http://localhost:8501
+# 설치
+pip install -e ".[server,streamlit]"
+
+# FastAPI 서버 실행 (포트: 환경변수 SERVER_PORT 또는 기본값 8787)
+uvicorn viewer.main:app --reload --port 8787
+
+# 또는 Streamlit 뷰어 실행 (--server.port 옵션으로 포트 지정)
+streamlit run viewer/streamlit/app.py --server.port 8701
 ```
 
-### 주요 기능
+> 포트는 고정값이 아니며, FastAPI는 `SERVER_PORT` 환경변수로, Streamlit은 `--server.port` 옵션으로 변경 가능합니다.
 
-*   **프로젝트/콘텐츠 타입 선택:** ES에 저장된 분석 결과를 드롭다운으로 필터링
-*   **프로젝트 정보 표시:** Wadiz API에서 프로젝트 썸네일 및 제목 조회
-*   **Amazon 스타일 리포트:** 카테고리별 감정 분석, 하이라이트, 원본 콘텐츠 모달
+자세한 내용은 [viewer/README.md](viewer/README.md)를 참조하세요.
 
 ---
 
