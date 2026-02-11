@@ -3,18 +3,27 @@
 
 ES에 저장된 콘텐츠 분석 결과를 시각화하는 로컬 뷰어입니다.
 
-실행 방법:
-    pip install -e ".[viewer]"
-    streamlit run src/viewer/app.py --server.port 8501
+실행:
+    cd viewer
+    pip install -e ".[streamlit]"
+    streamlit run viewer/streamlit/app.py --server.port 8701
 """
 import logging
+import sys
+from pathlib import Path
 from typing import Dict, Optional
+
+# viewer 패키지 경로를 sys.path에 추가
+_viewer_root = Path(__file__).parent.parent.parent
+if str(_viewer_root) not in sys.path:
+    sys.path.insert(0, str(_viewer_root))
 
 import streamlit as st
 
-from src.schemas.enums.content_type import ExternalContentType
-from src.viewer.refine_result_renderer import RefineResultRenderer
-from src.viewer.viewer_data_service import ProjectInfo, ViewerDataService
+from viewer.schemas.enums import ContentType
+from viewer.schemas.models import ProjectInfo
+from viewer.services.data_service import ViewerDataService
+from viewer.streamlit.renderer import RefineResultRenderer
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +41,7 @@ st.set_page_config(
 def get_content_type_description(content_type_name: str) -> str:
     """Content Type 이름으로 description 조회"""
     try:
-        return ExternalContentType[content_type_name].description
+        return ContentType[content_type_name].description
     except KeyError:
         return content_type_name
 
@@ -87,12 +96,12 @@ def main():
 
     if service is None:
         st.error(
-            "ES 연결에 실패했습니다. `.env.local` 파일의 ES 설정을 확인해주세요.\n\n"
+            "ES 연결에 실패했습니다. `.env` 파일의 ES 설정을 확인해주세요.\n\n"
             "필요한 설정:\n"
-            "- `ES_MAIN_HOST`\n"
-            "- `ES_MAIN_PORT`\n"
-            "- `ES_MAIN_USERNAME` (선택)\n"
-            "- `ES_MAIN_PASSWORD` (선택)"
+            "- `ES_HOST`\n"
+            "- `ES_PORT` (선택)\n"
+            "- `ES_USERNAME` (선택)\n"
+            "- `ES_PASSWORD` (선택)"
         )
         return
 

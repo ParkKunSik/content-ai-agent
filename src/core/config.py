@@ -4,9 +4,16 @@ import os
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from google.cloud import secretmanager
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# GCP SDK는 필요할 때만 import (Lambda viewer 모드에서는 불필요)
+try:
+    from google.cloud import secretmanager
+    HAS_GCP_SECRET_MANAGER = True
+except ImportError:
+    secretmanager = None
+    HAS_GCP_SECRET_MANAGER = False
 
 # Configure Logger
 logging.basicConfig(level=logging.INFO)
@@ -121,9 +128,15 @@ class Settings(BaseSettings):
 
 def fetch_config_from_gsm(env: str, project_id: str) -> Dict[str, Any]:
     """Fetches configuration JSON from Google Secret Manager."""
+    if not HAS_GCP_SECRET_MANAGER:
+        raise RuntimeError(
+            "google-cloud-secret-manager is not installed. "
+            "Install with: pip install google-cloud-secret-manager"
+        )
+
     secret_id = f"{env}-content-ai-config"
     logger.info(f"Loading configuration from Secret Manager: {secret_id}")
-    
+
     try:
         client = secretmanager.SecretManagerServiceClient()
         name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"

@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "content-viewer"
+version = "0.1.0"
+description = "Content Analysis Viewer - ES 분석 결과 조회 서비스"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [
+    {name = "Wadiz AI Team", email = "ai-team@wadiz.kr"}
+]
+dependencies = [
+    "fastapi",
+    "jinja2",
+    "pydantic>=2.0.0",
+    "pydantic-settings",
+    "python-dotenv",
+    "elasticsearch>=8.0.0,<9.0.0",
+    "requests",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn[standard]"
+]
+lambda = [
+    "mangum>=0.17.0"
+]
+streamlit = [
+    "streamlit>=1.30.0"
+]
+dev = [
+    "pytest",
+    "ruff",
+    "black"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["viewer*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

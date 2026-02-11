@@ -1,0 +1,17 @@
+{# 프로젝트 정보 섹션 컴포넌트 #}
+{# 필요 변수: project_info (ProjectInfo 객체) #}
+
+<div class="project-info-section">
+    {% if project_info.thumbnail_url %}
+    <img src="{{ project_info.thumbnail_url }}" alt="썸네일" class="project-thumbnail">
+    {% endif %}
+    <div class="project-info-content">
+        <div class="project-title">
+            {% if project_info.link %}
+            <a href="{{ project_info.link }}" target="_blank" class="project-title-link">{{ project_info.title }}</a>
+            {% else %}
+            {{ project_info.title }}
+            {% endif %}
+        </div>
+    </div>
+</div>

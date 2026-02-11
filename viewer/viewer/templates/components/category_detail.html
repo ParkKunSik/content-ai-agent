@@ -1,0 +1,37 @@
+{# 카테고리 상세 정보 컴포넌트 #}
+{# 필요 변수: category (CategoryItem), idx (인덱스) #}
+
+<div id="category-{{ idx }}" class="category-detail">
+    <div class="detail-header">
+        <div class="detail-title">{{ category.display_highlight }}</div>
+        <button class="close-btn" onclick="toggleCategory({{ idx }})">×</button>
+    </div>
+    <div class="sentiment-counts">
+        {{ category.positive_count + category.negative_count }}명의 고객이 "<strong>{{ category.name }}</strong>"을(를) 언급
+        <span class="positive-text">{{ category.positive_count }}개 긍정</span>
+        <span class="negative-text">{{ category.negative_count }}개 부정</span>
+    </div>
+    <div class="category-summary">
+        {{ category.summary }}
+    </div>
+
+    {% if category.highlights %}
+    <div class="highlights-section">
+        {% for highlight in category.highlights[:4] %}
+        {% set highlight_id = 'highlight-' ~ idx ~ '-' ~ loop.index0 %}
+        {% set display_text = highlight.highlight[:150] ~ '...' if highlight.highlight|length > 150 else highlight.highlight %}
+        {% set content = highlight.content if highlight.content else highlight.highlight %}
+
+        <div class="highlight-item" id="{{ highlight_id }}"
+             data-keyword="{{ highlight.keyword | e }}"
+             data-content="{{ content | e }}">
+            <div class="highlight-keyword">"{{ highlight.keyword }}"</div>
+            <div class="highlight-text">
+                {{ display_text | replace(highlight.keyword, '<strong>' ~ highlight.keyword ~ '</strong>') | safe }}
+                <a href="#" class="read-more" onclick="openModalFromElement('{{ highlight_id }}'); return false;">자세히 보기 ›</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
