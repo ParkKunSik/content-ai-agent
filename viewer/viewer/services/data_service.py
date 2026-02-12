@@ -28,13 +28,13 @@ class ViewerDataService:
     def __init__(self):
         es = ESClient()
         self.client = es.client
-        self.index_name = es.index_name
+        self.result_index_alias = es.result_index_alias
 
     def get_project_ids(self) -> List[str]:
         """고유 project_id 목록 조회"""
         try:
             response = self.client.search(
-                index=self.index_name,
+                index=self.result_index_alias,
                 size=0,
                 aggs={"unique_projects": {"terms": {"field": "project_id", "size": 10000}}},
             )
@@ -57,7 +57,7 @@ class ViewerDataService:
         """특정 프로젝트의 content_type 목록 조회"""
         try:
             response = self.client.search(
-                index=self.index_name,
+                index=self.result_index_alias,
                 size=0,
                 query={"term": {"project_id": project_id}},
                 aggs={"content_types": {"terms": {"field": "content_type"}}},
@@ -74,7 +74,7 @@ class ViewerDataService:
         try:
             # ES 복합 집계로 한 번에 조회
             response = self.client.search(
-                index=self.index_name,
+                index=self.result_index_alias,
                 size=0,
                 aggs={
                     "projects": {
@@ -102,7 +102,7 @@ class ViewerDataService:
         """특정 project/content_type의 최신 결과 조회"""
         try:
             response = self.client.search(
-                index=self.index_name,
+                index=self.result_index_alias,
                 query={
                     "bool": {
                         "must": [

@@ -22,17 +22,32 @@ logger = logging.getLogger(__name__)
 
 class ESContentAnalysisResultService:
     """Elasticsearch 기반 분석 결과 저장 및 조회 서비스"""
-    
+
     def __init__(self):
         self.client: Elasticsearch = es_manager.main_client
-        self.index_name = settings.CONTENT_ANALYSIS_RESULT_INDEX
-    
-    def ensure_index_exists(self):
-        """인덱스가 없으면 생성"""
-        if not self.client.indices.exists(index=self.index_name):
+        self.result_index_alias = settings.ANALYSIS_RESULT_ALIAS
+        self.result_index_name = settings.ANALYSIS_RESULT_INDEX  # 인덱스 생성용
+        self.ensure_alias_exists()
+
+    def ensure_alias_exists(self):
+        """인덱스와 Alias가 없으면 생성 후 연결"""
+        alias_name = self.result_index_alias
+        index_name = self.result_index_name
+
+        # 1. Alias 존재 여부 확인 (있으면 index도 존재한다고 간주)
+        if self.client.indices.exists_alias(name=alias_name):
+            logger.debug(f"Alias already exists: {alias_name}")
+            return
+
+        # 2. 인덱스 존재 여부 확인 및 생성
+        if not self.client.indices.exists(index=index_name):
             mappings = ContentAnalysisResultDocument.get_es_mapping()
-            self.client.indices.create(index=self.index_name, body=mappings)
-            logger.info(f"Created index: {self.index_name}")
+            self.client.indices.create(index=index_name, body=mappings)
+            logger.info(f"Created index: {index_name}")
+
+        # 3. Alias 생성
+        self.client.indices.put_alias(index=index_name, name=alias_name)
+        logger.info(f"Created alias: {alias_name} -> {index_name}")
 
     def _generate_doc_id(self, project_id: str, project_type: ProjectType, content_type: ExternalContentType) -> str:
         """문서 ID 생성 (프로젝트+타입 조합으로 고유성 보장)"""
@@ -57,7 +72,7 @@ class ESContentAnalysisResultService:
             }
             
             response = self.client.search(
-                index=self.index_name,
+                index=self.result_index_alias,
                 query=query,
                 sort=[{"version": {"order": "desc"}}],
                 size=1
@@ -83,23 +98,21 @@ class ESContentAnalysisResultService:
         """분석 결과 저장 (동일 프로젝트/타입 조합은 덮어쓰기됨)"""
         doc_id = None
         try:
-            self.ensure_index_exists()
-            
             # 문서 ID 생성 (version 제외)
             doc_id = self._generate_doc_id(
-                document.project_id, 
+                document.project_id,
                 document.project_type,
                 document.content_type
             )
-            
+
             # Pydantic V2의 model_dump_json()을 사용하여 직렬화 안정성 확보
             doc_dict = json.loads(document.model_dump_json())
-            
-            logger.info(f"Indexing document to ES: {doc_id} in index {self.index_name}")
-            
+
+            logger.info(f"Indexing document to ES: {doc_id} in alias {self.result_index_alias}")
+
             # 저장
             response = self.client.index(
-                index=self.index_name,
+                index=self.result_index_alias,
                 id=doc_id,
                 document=doc_dict,
                 refresh=True
@@ -175,7 +188,7 @@ class ESContentAnalysisResultService:
                 update_body["doc"]["reason"] = reason
                 
             self.client.update(
-                index=self.index_name,
+                index=self.result_index_alias,
                 id=doc_id,
                 body=update_body,
                 refresh=True

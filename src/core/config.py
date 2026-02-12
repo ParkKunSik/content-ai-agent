@@ -97,8 +97,9 @@ class Settings(BaseSettings):
     ES_MAIN_VERIFY_CERTS: bool = False
     ES_MAIN_TIMEOUT: int = 30
     
-    # ES 인덱스 설정
-    CONTENT_ANALYSIS_RESULT_INDEX: str = "core-content-analysis-result"
+    # ES 인덱스/Alias 설정
+    ANALYSIS_RESULT_INDEX: str = "core-content-analysis-result"  # 인덱스 생성용
+    ANALYSIS_RESULT_ALIAS: str = "core-content-analysis-result-alias"  # 조회/저장용
 
     @field_validator('ES_REFERENCE_PORT', 'ES_MAIN_PORT', mode='before')
     @classmethod

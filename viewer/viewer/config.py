@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ES_USE_SSL: bool = False
     ES_VERIFY_CERTS: bool = False
     ES_TIMEOUT: int = 30
-    ES_INDEX: str = "core-content-analysis-result"
+    ES_ANALYSIS_RESULT_ALIAS: str = "core-content-analysis-result-alias"
 
     @field_validator('ES_PORT', mode='before')
     @classmethod
