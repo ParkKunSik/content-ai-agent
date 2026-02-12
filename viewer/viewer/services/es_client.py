@@ -79,6 +79,6 @@ class ESClient:
         return self._client
 
     @property
-    def index_name(self) -> str:
-        """분석 결과 인덱스 이름"""
-        return settings.ES_INDEX
+    def result_index_alias(self) -> str:
+        """분석 결과 Alias 이름"""
+        return settings.ES_ANALYSIS_RESULT_ALIAS

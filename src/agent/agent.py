@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.analysis_mode import AnalysisMode
@@ -43,12 +43,15 @@ class ContentAnalysisAgent:
         self,
         project_id: int,
         project_type: ProjectType,
-        contents: List[Union[str, ContentItem]],
+        contents: List[ContentItem],
         analysis_mode: AnalysisMode = AnalysisMode.REVIEW_BOT,
         content_type: Optional[ExternalContentType] = None
     ) -> ContentAnalysisResultDataV1:
         """
         Executes the detailed analysis pipeline (2-step).
+
+        Args:
+            contents: List of ContentItem objects (content_id required for traceability)
         """
         if not self.orchestrator:
             raise RuntimeError("Agent not set up. Call set_up() before detailed_analysis().")
