@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from src.core.config import settings
 from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
@@ -80,18 +80,21 @@ class AgentOrchestrator:
         self,
         project_id: int,
         project_type: ProjectType,
-        contents: List[Union[str, ContentItem]],
+        contents: List[ContentItem],
         analysis_mode: AnalysisMode,
         content_type: Optional[ExternalContentType] = None
     ) -> ContentAnalysisResultDataV1:
         """
         Internal 2-step analysis logic.
         Returns ContentAnalysisResultDataV1 containing both raw and refined results.
+
+        Args:
+            contents: List of ContentItem objects (content_id required for traceability)
         """
         logger.info(f"Executing core analysis for Project: {project_id}, Mode: {analysis_mode}, Content Type: {content_type}")
 
-        # 1. Preprocess contents
-        content_items = self._preprocess_contents(contents)
+        # 1. Validate contents
+        content_items = self._validate_contents(contents)
 
         # 2. Step 1: Main Analysis (PRO_DATA_ANALYST)
         logger.info("Executing Step 1: Main Analysis")
@@ -234,15 +237,15 @@ class AgentOrchestrator:
 
         return result_v1.data
 
-    def _preprocess_contents(self, contents: List[Union[str, ContentItem]]) -> List[ContentItem]:
-        """Converts raw strings to ContentItem objects if necessary."""
-        processed = []
-        for idx, item in enumerate(contents):
-            if isinstance(item, str):
-                # Generate a temporary ID for string inputs
-                processed.append(ContentItem(content_id=idx + 1, content=item))
-            elif isinstance(item, ContentItem):
-                processed.append(item)
+    def _validate_contents(self, contents: List[ContentItem]) -> List[ContentItem]:
+        """Validates ContentItem list and filters out invalid items."""
+        validated = []
+        for item in contents:
+            if isinstance(item, ContentItem):
+                if item.content and item.content.strip():
+                    validated.append(item)
+                else:
+                    logger.warning(f"Skipping ContentItem with empty content: id={item.content_id}")
             else:
                 logger.warning(f"Skipping invalid content type: {type(item)}")
-        return processed
+        return validated

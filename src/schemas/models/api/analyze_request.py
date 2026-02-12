@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,7 @@ class AnalyzeRequest(BaseModel):
         default=AnalysisMode.REVIEW_BOT,
         description="Type of persona to adopt for analysis"
     )
-    contents: list[Union[str, ContentItem]] = Field(
-        ..., 
-        description="List of text content, GCS URIs, or ContentItem objects to analyze"
+    contents: List[ContentItem] = Field(
+        ...,
+        description="List of ContentItem objects to analyze (content_id required for traceability)"
     )
