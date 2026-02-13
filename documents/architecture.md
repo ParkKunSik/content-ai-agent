@@ -13,25 +13,31 @@
 
 ```mermaid
 graph TD
-    Client[Spring Boot / Client] -- "Gen AI SDK / REST" --> AE[Vertex AI Agent Engine]
-    
-    subgraph "Agent Engine Runtime (Managed)"
+    Client[Spring Boot / Client] -- "REST API" --> AE[Agent Runtime]
+
+    subgraph "Agent Runtime (GCP/AWS)"
         AE -->|Invoke| Agent[ContentAgent Class]
         Agent -->|Workflow| Orch[Orchestrator]
-        
+
         subgraph "Core Services"
             Orch -->|Step 1: Structuring| LLM1[LLM Service: PRO_DATA_ANALYST]
             Orch -->|Step 2: Refinement| LLM2[LLM Service: SMART_BOT]
             Orch -->|Data| Load[Content Loader]
+            LLM1 & LLM2 -->|Session| Registry[ProviderRegistry]
         end
     end
-    
-    subgraph "External Resources"
-        Load -->|Read| GCS[Google Cloud Storage]
-        LLM1 -->|Gen AI SDK| Vertex[Vertex AI Gemini 2.5 Pro]
-        LLM2 -->|Gen AI SDK| Vertex
+
+    subgraph "LLM Providers"
+        Registry -->|VERTEX_AI| Vertex[Vertex AI Gemini]
+        Registry -->|OPENAI| OpenAI[OpenAI GPT-4o]
     end
-    
+
+    subgraph "Storage Providers"
+        Load -->|GCS| GCS[Google Cloud Storage]
+        Load -->|S3| S3[AWS S3]
+        Load -->|Local| Local[Local File]
+    end
+
     subgraph "Local Dev"
         LocalClient -- "HTTP POST" --> Fast[FastAPI Wrapper]
         Fast -->|Wrap| Agent
@@ -54,11 +60,28 @@ graph TD
 ### 3.2. 데이터 수집 및 처리 제약 조건 (Processing Constraints)
 안정적인 메모리 관리와 효율적인 LLM 분석을 위해 다음 제약 조건을 적용합니다.
 
-#### **A. Gemini 모델 스펙 및 선정 근거**
-| 모델명 | Context Window | 특징 | 역할 |
-| :--- | :--- | :--- | :--- |
-| **Gemini 2.5 Pro** | **2M Tokens** | 최상위 추론 능력, 안정된 성능 | **Structuring** (1단계 메인 분석) |
-| **Gemini 2.5 Flash** | **1M Tokens** | Pro 대비 10배 빠른 속도, 낮은 비용 | **Refinement** (2단계 요약 정제) |
+#### **A. LLM 모델 스펙 및 선정 근거**
+
+**Vertex AI (Gemini) 모델** (2026-02 기준)
+| 모델명 | Context Window | Max Output | 특징 | 역할 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Gemini 2.5 Pro** | **1M Tokens** | 65,535 | 최상위 추론 능력, 안정된 성능 | **Structuring** (1단계 메인 분석) |
+| **Gemini 2.5 Flash** | **1M Tokens** | 65,535 | Pro 대비 10배 빠른 속도, 낮은 비용 | **Refinement** (2단계 요약 정제) |
+| Gemini 3.0 Pro Preview | 1M Tokens | 32,768* | 최신 Preview, 고급 추론 | 실험/테스트용 |
+| Gemini 3.0 Flash Preview | 1M Tokens | 32,768* | 최신 Preview, 빠른 처리 | 실험/테스트용 |
+
+> *Preview 모델은 실제 호출 시 32,768 토큰까지만 안정적으로 반환되는 제약이 있음.
+
+**OpenAI 모델** (2026-02 기준)
+| 모델명 | Context Window | Max Output | 가격 (per 1M tokens) | 역할 |
+| :--- | :--- | :--- | :--- | :--- |
+| **GPT-4o** | **128K Tokens** | 16,384 | $2.50 / $10.00 | **Structuring** (1단계 메인 분석) |
+| **GPT-4o-mini** | **128K Tokens** | 16,384 | $0.15 / $0.60 | **Refinement** (2단계 요약 정제) |
+| GPT-4.1 | 1M Tokens | 32,768 | - | 대용량 컨텍스트 처리 |
+| o1 / o3 | 200K Tokens | 100,000 | $10.00 (reasoning) | 복잡한 추론 작업 |
+| o4-mini | 200K Tokens | 100,000 | - | 빠른 reasoning, 비용 효율 |
+
+> **[주의]** o-series 모델은 내부 reasoning tokens가 output으로 과금되므로 실제 비용이 예상보다 높을 수 있음.
 
 #### **B. 제약 설정 (Constraints)**
 *   **파일 크기 제한: 10MB**
@@ -76,8 +99,13 @@ graph TD
         *   `StructuredAnalysisRefinedResponse` 스키마 사용.
     4.  **Merging:** 두 단계의 결과를 병합하여 최종 `StructuredAnalysisResult` 반환.
 
-### 3.5. LLM Service (Reliability & Stateful Interaction)
-*   **역할:** `Orchestrator`와 Vertex AI 사이의 통신을 전담하며, **AsyncGenAISession** 기반의 상태 유지형 대화를 관리.
+### 3.5. LLM Service (Reliability & Multi-Provider Support)
+*   **역할:** `Orchestrator`와 LLM Provider 사이의 통신을 전담하며, Provider 중립적인 세션 관리.
+*   **멀티 Provider 지원:**
+    *   **ProviderRegistry:** Provider Factory를 등록하고 관리하는 중앙 레지스트리.
+    *   **LLMProviderFactory (ABC):** Provider별 세션 생성 팩토리 인터페이스.
+    *   **LLMProviderSession (ABC):** Provider 중립적 세션 인터페이스.
+    *   **지원 Provider:** Vertex AI (Google), OpenAI (환경변수 `LLM_PROVIDER`로 선택).
 *   **재시도 전략 (Retry Policy):**
     *   **Quota Error (429):** Exponential Backoff with Jitter 적용.
     *   **Validation Error:** `ValidationErrorHandler`를 통한 자동 재시도 및 자가 교정 수행.
@@ -102,18 +130,82 @@ graph TD
 *   **Runtime:** Python 3.10+
 *   **IDE:** IntelliJ IDEA (Ultimate/Community with Python Plugin)
 *   **Core Framework:** Pure Python (No Web Framework Dependency in Core)
-*   **AI Model:** Gemini 2.5 Pro (Structuring) / Gemini 2.5 Flash (Refinement)
-*   **Deployment:** 
-    *   **Prod:** Vertex AI Agent Engine (Managed Runtime).
+*   **AI Model (Multi-Provider):**
+    *   **Vertex AI (기본):**
+        *   Gemini 2.5 Pro (Structuring) / Gemini 2.5 Flash (Refinement)
+        *   Gemini 3.0 Pro/Flash Preview (실험용)
+    *   **OpenAI:**
+        *   GPT-4o (Structuring) / GPT-4o-mini (Refinement)
+        *   GPT-4.1 (대용량 컨텍스트), o1/o3/o4-mini (고급 추론)
+    *   **Provider 선택:** 환경변수 `LLM_PROVIDER` (VERTEX_AI | OPENAI)
+*   **Deployment:**
+    *   **Prod (GCP):** Vertex AI Agent Engine (Managed Runtime).
+    *   **Prod (AWS):** Lambda + API Gateway (SAM 배포).
     *   **Dev/Test:** Local FastAPI Wrapper.
 *   **Infrastructure:**
-    *   **Google Cloud Storage:** Raw Content.
+    *   **Storage:** Google Cloud Storage, AWS S3, Local File.
 *   **Secret Management (Configuration):**
-    *   **로컬 환경:** `.env.local` 파일 사용.
-    *   **배포 환경:** Google Secret Manager의 **JSON Secret** 로드.
+    *   **로컬 환경:** `.env.local` 파일 또는 `EnvSecretProvider`.
+    *   **GCP 환경:** Google Secret Manager (`GSMSecretProvider`).
+    *   **AWS 환경:** AWS Secrets Manager (`AWSSecretsProvider`).
     *   **Naming Convention:** `{ENV}-content-ai-config` (예: `dev-content-ai-config`).
     *   **동작 방식:** 앱 시작 시 `ENV` 프로필에 맞는 JSON Secret을 통째로 가져와 설정(`Settings`)에 주입. `.env.local`이 없고 `ENV` 변수도 없으면 실행 차단.
     *   **장점:** 설정값의 버전 관리 용이, 런타임 API 호출 최소화.
-*   **Dev Ops:** 
+*   **Dev Ops:**
     *   **Local:** Docker, `pip` (via `pyproject.toml`).
-    *   **Production:** `google-genai` SDK + Vertex AI Agent Engine.
+    *   **Production (GCP):** `google-genai` SDK + Vertex AI Agent Engine.
+    *   **Production (AWS):** `openai` SDK + Lambda.
+
+## 6. 분석 결과 뷰어 (Content Analysis Viewer)
+
+ES에 저장된 분석 결과를 웹 UI로 시각화하여 조회할 수 있는 **독립 프로젝트**입니다.
+
+### 6.1. 아키텍처
+```mermaid
+graph LR
+    subgraph "Viewer (독립 프로젝트)"
+        UI[Streamlit UI] --> API[FastAPI Server]
+        API --> ES[Elasticsearch]
+    end
+
+    subgraph "Main Agent"
+        Agent[Content AI Agent] -->|분석 결과 저장| ES
+    end
+```
+
+### 6.2. 주요 특징
+*   **독립 배포:** 메인 Agent와 분리되어 독립적으로 배포 가능
+*   **최소 의존성:** ES 연결 + FastAPI만 필요 (GCP SDK 불필요)
+*   **AWS Lambda 지원:** API Gateway + Lambda 배포 지원
+*   **Streamlit UI:** 로컬 개발용 Streamlit 뷰어 제공
+
+### 6.3. 디렉토리 구조
+```
+viewer/                     # 독립 프로젝트 루트
+├── pyproject.toml          # 독립 의존성 관리
+├── viewer/
+│   ├── main.py             # FastAPI 엔트리포인트
+│   ├── api/                # API 라우터
+│   ├── services/           # ES 조회 서비스
+│   └── streamlit/          # Streamlit 뷰어 앱
+└── README.md
+```
+
+### 6.4. 실행 방법
+```bash
+cd viewer
+pip install -e ".[server,streamlit]"
+
+# FastAPI 서버 (API 제공)
+uvicorn viewer.main:app --reload --port 8787
+
+# Streamlit 뷰어 (웹 UI)
+streamlit run viewer/streamlit/app.py --server.port 8701
+```
+
+### 6.5. HTML 리포트 생성
+*   **GenerationViewer:** 분석 결과를 아마존 스타일 HTML 또는 PDF로 변환
+*   **기능:**
+    *   `generate_amazon_style_html()`: 인터랙티브 HTML 보고서 생성
+    *   `generate_pdf_optimized_html()`: PDF 출력용 HTML 생성
+    *   모달 창을 통한 원본 콘텐츠 확인 기능

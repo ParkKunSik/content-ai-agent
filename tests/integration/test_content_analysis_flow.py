@@ -9,6 +9,7 @@ import pytest
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
@@ -45,38 +46,45 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
                                          ):
     """
     상세 분석 플로우 공통 실행 로직
-    
+
     Args:
         project_id: 프로젝트 ID
-        sample_contents: 분석할 콘텐츠 리스트
+        sample_contents: 분석할 콘텐츠 리스트 (dict 또는 ContentItem)
         show_content_details: 콘텐츠 상세 내용 출력 여부
         save_output: 결과를 파일로 저장 여부
         output_file_path: 출력 파일 경로
-    
+
     Returns:
         tuple: (step1_response, step2_response, final_response, total_duration)
-        :type project_id: int
     """
+    # dict 형식의 데이터를 ContentItem 객체로 변환
+    content_items = []
+    for item in sample_contents:
+        if isinstance(item, dict):
+            content_items.append(ContentItem(
+                content_id=item.get('id') or item.get('content_id'),
+                content=item['content'],
+                has_image=item.get('has_image', False)
+            ))
+        else:
+            content_items.append(item)
     # 1. Setup Service
     SessionFactory.initialize()
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 
     # 2. Display Input Summary
-    print(f"\n>>> Total input items: {len(sample_contents)}")
+    print(f"\n>>> Total input items: {len(content_items)}")
     if show_content_details:
-        for item in sample_contents:
-            img_icon = "📷" if item.get('has_image', False) else "📝"
-            # Support both id and content_id for display
-            item_id = item.get('id') or item.get('content_id')
-            print(f"  - [{item_id}] {img_icon} {item['content'][:30]}...")
+        for item in content_items:
+            img_icon = "📷" if item.has_image else "📝"
+            print(f"  - [{item.content_id}] {img_icon} {item.content[:30]}...")
     else:
         # Only show counts and image distribution
-        image_count = sum(1 for item in sample_contents if item.get('has_image', False))
-        print(f"  - Content items: {len(sample_contents)}")
+        image_count = sum(1 for item in content_items if item.has_image)
+        print(f"  - Content items: {len(content_items)}")
         print(f"  - With images: {image_count} 📷")
-        print(f"  - Without images: {len(sample_contents) - image_count} 📝")
-        print(f"  - Optimized: has_image field removed from {len(sample_contents) - image_count} items")
+        print(f"  - Without images: {len(content_items) - image_count} 📝")
 
     total_start_time = time.time()
 
@@ -87,7 +95,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
     step1_response = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
-        content_items=sample_contents
+        content_items=content_items
     )
     step1_duration = time.time() - step1_start_time
     
@@ -178,8 +186,8 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
                 "executed_at": datetime.now().isoformat()
             },
             "input_summary": {
-                "total_items": len(sample_contents),
-                "items_with_image": sum(1 for item in sample_contents if item.get('has_image', False)),
+                "total_items": len(content_items),
+                "items_with_image": sum(1 for item in content_items if item.has_image),
                 "project_id": project_id,
                 "project_type": project_type.value
             },

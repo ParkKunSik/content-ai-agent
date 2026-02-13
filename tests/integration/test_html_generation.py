@@ -2,12 +2,14 @@ import json
 import os
 import random
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import List
 
 import pytest
 
 from src.core.config import settings
+from src.core.llm.registry import ProviderRegistry
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
@@ -19,8 +21,34 @@ from src.services.llm_service import LLMService
 from src.utils.generation_viewer import PDF_AVAILABLE, GenerationViewer
 from src.utils.prompt_manager import PromptManager
 
+
+@contextmanager
+def switch_llm_provider(provider: str):
+    """
+    LLM Provider를 임시로 변경하는 Context Manager.
+    테스트 종료 후 원래 Provider로 복원한다.
+    """
+    original_provider = settings.LLM_PROVIDER
+    original_initialized = ProviderRegistry._initialized.copy()
+    original_current = ProviderRegistry._current_provider
+    try:
+        settings.LLM_PROVIDER = provider
+        # Provider 변경 시 Registry 초기화 상태 리셋
+        ProviderRegistry._initialized = {k: False for k in ProviderRegistry._initialized}
+        ProviderRegistry._current_provider = None
+        print(f"\n🔄 LLM Provider 변경: {original_provider} → {provider}")
+        yield
+    finally:
+        settings.LLM_PROVIDER = original_provider
+        ProviderRegistry._initialized = original_initialized
+        ProviderRegistry._current_provider = original_current
+        print(f"\n🔄 LLM Provider 복원: {provider} → {original_provider}")
+
 TOKEN_COST_CURRENCY = "USD"
+
+# Provider별 모델 가격 테이블
 MODEL_PRICING_TABLE = {
+    # Google Vertex AI / Gemini 모델
     "gemini_2_5_pro": {
         "input_cost_per_million": 1.25,
         "output_cost_per_million": 5.00
@@ -36,14 +64,27 @@ MODEL_PRICING_TABLE = {
     "gemini_3_flash_preview": {
         "input_cost_per_million": 0.15,
         "output_cost_per_million": 0.60
+    },
+    # OpenAI 모델
+    "gpt_4o": {
+        "input_cost_per_million": 2.50,
+        "output_cost_per_million": 10.00
+    },
+    "gpt_4o_mini": {
+        "input_cost_per_million": 0.15,
+        "output_cost_per_million": 0.60
     }
 }
 
 MODEL_ALIASES = {
+    # Google Vertex AI / Gemini
     "gemini_2_5_pro": ["gemini-2.5-pro", "gemini-2.5-pro-preview", "gemini 2.5 pro"],
     "gemini_2_5_flash": ["gemini-2.5-flash", "gemini-2.5-flash-preview", "gemini 2.5 flash"],
     "gemini_3_pro_preview": ["gemini-3.0-pro-preview", "gemini-3-pro-preview", "gemini 3 pro (preview)", "gemini 3 pro"],
-    "gemini_3_flash_preview": ["gemini-3.0-flash-preview", "gemini-3-flash-preview", "gemini 3 flash (preview)", "gemini 3 flash"]
+    "gemini_3_flash_preview": ["gemini-3.0-flash-preview", "gemini-3-flash-preview", "gemini 3 flash (preview)", "gemini 3 flash"],
+    # OpenAI
+    "gpt_4o": ["gpt-4o", "gpt4o"],
+    "gpt_4o_mini": ["gpt-4o-mini", "gpt4o-mini"]
 }
 
 
@@ -127,6 +168,7 @@ async def _execute_content_analysis_with_html(
     output_html_path: str = None,
     output_pdf_path: str = None,
     persona_type: PersonaType = None,
+    content_type: ExternalContentType = None,
     content_type_description: str = "고객 의견"
 ):
     """
@@ -173,6 +215,7 @@ async def _execute_content_analysis_with_html(
     step1_prompt = prompt_manager.get_content_analysis_structuring_prompt(
         project_id=project_id,
         project_type=project_type,
+        content_type=content_type.value if content_type else "ALL",
         analysis_content_items=analysis_items
     )
     step1_response = await llm_service.structure_content_analysis(
@@ -185,7 +228,7 @@ async def _execute_content_analysis_with_html(
         llm_service,
         step1_prompt,
         step1_response.model_dump_json(),
-        settings.VERTEX_AI_MODEL_PRO
+        PersonaType.PRO_DATA_ANALYST.get_model_name()
     )
 
     print(f"\n✅ [Step 1 Result] (Duration: {step1_duration:.2f}s)")
@@ -209,6 +252,7 @@ async def _execute_content_analysis_with_html(
     step2_prompt = prompt_manager.get_content_analysis_summary_refine_prompt(
         project_id=project_id,
         project_type=project_type,
+        content_type=content_type.value if content_type else "ALL",
         refine_content_items=refine_content_items
     )
     step2_response = await llm_service.refine_analysis_summary(
@@ -222,7 +266,7 @@ async def _execute_content_analysis_with_html(
         llm_service,
         step2_prompt,
         step2_response.model_dump_json(),
-        settings.VERTEX_AI_MODEL_FLASH
+        PersonaType.CUSTOMER_FACING_SMART_BOT.get_model_name()
     )
 
     print(f"\n✅ [Step 2 Result] (Duration: {step2_duration:.2f}s)")
@@ -344,23 +388,40 @@ async def _execute_content_analysis_with_html(
     return step1_response, step2_response, final_response, total_duration, html_path, pdf_path
 
 
-async def _execute_html_generation_test(project_id: int, content_items: List[ContentItem], test_name: str, persona_type: PersonaType, content_type_description: str = "고객 의견"):
+async def _execute_html_generation_test(
+    project_id: int,
+    content_items: List[ContentItem],
+    test_name: str,
+    persona_type: PersonaType,
+    content_type: ExternalContentType = None,
+    content_type_description: str = "고객 의견",
+    provider_name: str = None
+):
     """
     공통 HTML 생성 테스트 로직
 
     Args:
+        project_id: 프로젝트 ID
         content_items: 분석할 ContentItem 리스트
         test_name: 테스트명 (파일명에 사용)
         persona_type: 페르소나 타입
+        content_type: 콘텐츠 타입 (ExternalContentType)
         content_type_description: 콘텐츠 타입 설명 (HTML 제목에 표시)
+        provider_name: LLM Provider 이름 (출력 디렉토리 구분용, 기본값: 현재 설정)
     """
     # Validate data structure
     if len(content_items) == 0:
         pytest.skip("No content items provided")
 
+    # Provider 이름 결정 (지정되지 않으면 현재 설정 사용)
+    if provider_name is None:
+        provider_name = settings.LLM_PROVIDER.lower()
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     current_dir = os.path.dirname(__file__)
-    html_dir = os.path.join(current_dir, "..", "data", "html")
+
+    # Provider별 디렉토리 생성
+    html_dir = os.path.join(current_dir, "..", "data", "html", provider_name)
     os.makedirs(html_dir, exist_ok=True)
 
     output_json_path = os.path.join(html_dir, f"project_{project_id}_{test_name}_analysis_{timestamp}.json")
@@ -370,7 +431,7 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
 
     # Sample items for testing (랜덤 또는 순차 선택)
     is_all = False
-    sample_size = 300
+    sample_size = 100
 
     if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
@@ -391,6 +452,7 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
                 output_html_path=output_html_path,
                 output_pdf_path=output_pdf_path,
                 persona_type=persona_type,
+                content_type=content_type,
                 content_type_description=content_type_description
             )
 
@@ -417,14 +479,8 @@ async def _execute_html_generation_test(project_id: int, content_items: List[Con
         pytest.fail(f"{test_name} test failed: {e}")
 
 
-@pytest.mark.asyncio
-async def test_html_generation_from_project_file():
-    """
-    LLMService 상세 분석 후 HTML 생성 테스트 (유틸리티 사용)
-    - 데이터 소스: tests/data/project_365330.json
-    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
-    - HTML 출력 경로: tests/data/html/
-    """
+def _load_project_file_content_items():
+    """프로젝트 파일에서 ContentItem 리스트를 로드한다."""
     current_dir = os.path.dirname(__file__)
     project_file_path = os.path.join(current_dir, "..", "data", "project_365330.json")
 
@@ -434,9 +490,9 @@ async def test_html_generation_from_project_file():
     try:
         with open(project_file_path, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
-        
+
         # JSON dict를 ContentItem 객체로 변환
-        content_items = [
+        return [
             ContentItem(
                 content_id=item.get('id', item.get('content_id')),
                 content=item['content'],
@@ -446,18 +502,78 @@ async def test_html_generation_from_project_file():
     except Exception as e:
         pytest.fail(f"Failed to load project data: {e}")
 
-    project_id = 365330
-    # 공통 테스트 로직 실행
-    await _execute_html_generation_test(project_id, content_items, "file", PersonaType.CUSTOMER_FACING_SMART_BOT, f"고객 의견({ExternalContentType.REVIEW.description})")
 
-
-@pytest.mark.asyncio 
-async def test_html_generation_from_project_ES(setup_elasticsearch):
+async def _test_html_generation_from_project_file(provider_name: str = None):
     """
-    ESContentRetrievalService를 통한 ES 조회 후 HTML 생성 테스트
-    - 데이터 소스: Elasticsearch (project 365330, REVIEW 타입)
-    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)  
-    - HTML 출력 경로: tests/data/html/
+    LLMService 상세 분석 후 HTML 생성 테스트 (내부 구현)
+
+    Args:
+        provider_name: LLM Provider 이름 (출력 디렉토리 구분용)
+    """
+    content_items = _load_project_file_content_items()
+
+    project_id = 365330
+    content_type = ExternalContentType.REVIEW
+
+    # 공통 테스트 로직 실행
+    await _execute_html_generation_test(
+        project_id=project_id,
+        content_items=content_items,
+        test_name="file",
+        persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT,
+        content_type=content_type,
+        content_type_description=f"고객 의견({content_type.description})",
+        provider_name=provider_name
+    )
+
+
+@pytest.mark.asyncio
+async def test_html_generation_from_project_file():
+    """
+    LLMService 상세 분석 후 HTML 생성 테스트 (기본 Provider)
+    - 데이터 소스: tests/data/project_365330.json
+    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
+    - HTML 출력 경로: tests/data/html/{provider}/
+    """
+    await _test_html_generation_from_project_file()
+
+
+@pytest.mark.asyncio
+async def test_vertexai_html_generation_from_project_file():
+    """
+    Vertex AI Provider를 사용한 프로젝트 파일 기반 HTML 생성 테스트
+    - LLM Provider: VERTEX_AI
+    - 데이터 소스: tests/data/project_365330.json
+    - HTML 출력 경로: tests/data/html/vertex_ai/
+    """
+    with switch_llm_provider("VERTEX_AI"):
+        await _test_html_generation_from_project_file(provider_name="vertex_ai")
+
+
+@pytest.mark.asyncio
+async def test_openai_html_generation_from_project_file():
+    """
+    OpenAI Provider를 사용한 프로젝트 파일 기반 HTML 생성 테스트
+    - LLM Provider: OPENAI
+    - 데이터 소스: tests/data/project_365330.json
+    - HTML 출력 경로: tests/data/html/openai/
+
+    Note: OPENAI_API_KEY 환경변수가 설정되어 있어야 합니다.
+    """
+    if not settings.OPENAI_API_KEY:
+        pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
+
+    with switch_llm_provider("OPENAI"):
+        await _test_html_generation_from_project_file(provider_name="openai")
+
+
+async def _test_html_generation_from_project_ES(setup_elasticsearch, provider_name: str = None):
+    """
+    ESContentRetrievalService를 통한 ES 조회 후 HTML 생성 테스트 (내부 구현)
+
+    Args:
+        setup_elasticsearch: ES fixture
+        provider_name: LLM Provider 이름 (출력 디렉토리 구분용)
     """
     try:
         # ES 초기화는 setup_elasticsearch fixture에서 처리
@@ -465,20 +581,68 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
 
         project_id = 376278
         content_type = ExternalContentType.SATISFACTION
-        
+
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
         content_items = await es_service.get_funding_preorder_project_contents(
             project_id=project_id,
             content_type=content_type
         )
-        
+
         if not content_items:
             pytest.skip(f"ES에서 프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
-        
+
         print(f">>> ES에서 {len(content_items)}개 콘텐츠 조회 완료")
 
         # 공통 테스트 로직 실행
-        await _execute_html_generation_test(project_id, content_items, "ES", PersonaType.CUSTOMER_FACING_SMART_BOT, f"고객 의견({content_type.description})")
-        
+        await _execute_html_generation_test(
+            project_id=project_id,
+            content_items=content_items,
+            test_name="ES",
+            persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT,
+            content_type=content_type,
+            content_type_description=f"고객 의견({content_type.description})",
+            provider_name=provider_name
+        )
+
     except Exception as e:
         pytest.fail(f"ES 조회 테스트 실패: {e}")
+
+
+@pytest.mark.asyncio
+async def test_html_generation_from_project_ES(setup_elasticsearch):
+    """
+    ESContentRetrievalService를 통한 ES 조회 후 HTML 생성 테스트 (기본 Provider)
+    - 데이터 소스: Elasticsearch
+    - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
+    - HTML 출력 경로: tests/data/html/{provider}/
+    """
+    await _test_html_generation_from_project_ES(setup_elasticsearch)
+
+
+@pytest.mark.asyncio
+async def test_vertexai_html_generation_from_project_ES(setup_elasticsearch):
+    """
+    Vertex AI Provider를 사용한 ES 조회 후 HTML 생성 테스트
+    - LLM Provider: VERTEX_AI
+    - 데이터 소스: Elasticsearch
+    - HTML 출력 경로: tests/data/html/vertex_ai/
+    """
+    with switch_llm_provider("VERTEX_AI"):
+        await _test_html_generation_from_project_ES(setup_elasticsearch, provider_name="vertex_ai")
+
+
+@pytest.mark.asyncio
+async def test_openai_html_generation_from_project_ES(setup_elasticsearch):
+    """
+    OpenAI Provider를 사용한 ES 조회 후 HTML 생성 테스트
+    - LLM Provider: OPENAI
+    - 데이터 소스: Elasticsearch
+    - HTML 출력 경로: tests/data/html/openai/
+
+    Note: OPENAI_API_KEY 환경변수가 설정되어 있어야 합니다.
+    """
+    if not settings.OPENAI_API_KEY:
+        pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
+
+    with switch_llm_provider("OPENAI"):
+        await _test_html_generation_from_project_ES(setup_elasticsearch, provider_name="openai")

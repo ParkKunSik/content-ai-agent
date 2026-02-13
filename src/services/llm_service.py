@@ -1,9 +1,10 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from google.genai import errors, types
-
-from src.core.session_factory import SessionFactory
+from src.core.config import settings
+from src.core.llm.enums import FinishReason, ProviderType, ResponseFormat
+from src.core.llm.models import LLMResponse, PersonaConfig
+from src.core.llm.registry import ProviderRegistry
 from src.core.validation_error_handler import ValidationErrorHandler
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.mime_type import MimeType
@@ -18,82 +19,90 @@ from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
 
+
 class LLMService:
     """
-    Vertex AI LLM 통신을 전담하는 서비스 클래스.
+    LLM 통신을 전담하는 서비스 클래스.
+    Provider 중립적으로 설계되어 Vertex AI, OpenAI 등을 지원한다.
     """
 
     def __init__(self, prompt_manager: PromptManager):
         self.prompt_manager = prompt_manager
         self.validation_handler = ValidationErrorHandler(max_retries=3, delay_between_retries=1.0)
+        self._ensure_provider_initialized()
+
+    def _ensure_provider_initialized(self) -> None:
+        """현재 설정된 LLM Provider가 초기화되었는지 확인하고 필요시 초기화한다."""
+        provider_type = self._get_provider_type()
+        if not ProviderRegistry.is_initialized(provider_type):
+            ProviderRegistry.initialize(provider_type)
+
+    def _get_provider_type(self) -> ProviderType:
+        """현재 설정된 LLM Provider 타입을 반환한다."""
+        provider_str = settings.LLM_PROVIDER.upper()
+        if provider_str == "OPENAI":
+            return ProviderType.OPENAI
+        else:
+            return ProviderType.VERTEX_AI
 
     async def count_total_tokens(self, contents: List[str]) -> int:
         total = 0
+        model_name = PersonaType.COMMON_TOKEN_COUNTER.get_model_name()
         for text in contents:
             try:
-                token_count = SessionFactory.count_tokens(text, PersonaType.COMMON_TOKEN_COUNTER)
+                token_count = ProviderRegistry.count_tokens(text, model_name)
                 total += token_count
             except Exception as e:
                 logger.warning(f"Failed to count tokens: {e}")
                 total += len(text) // 2
         return total
 
-    async def generate(self, prompt: str, persona_type: PersonaType, mime_type: MimeType = MimeType.TEXT_PLAIN, response_schema: Optional[Dict[str, Any]] = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        persona_type: PersonaType,
+        mime_type: MimeType = MimeType.TEXT_PLAIN,
+        response_schema: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Generic method to generate content using a specific persona."""
-        session = SessionFactory.start_session(
-            persona_type=persona_type,
-            mime_type=mime_type,
-            schema=response_schema
+        # PersonaConfig 생성
+        response_format = ResponseFormat.JSON if mime_type == MimeType.APPLICATION_JSON else ResponseFormat.TEXT
+        persona_config = PersonaConfig(
+            name=persona_type.name,
+            model_name=persona_type.get_model_name(),
+            temperature=persona_type.temperature,
+            system_instruction=persona_type.get_instruction(self.prompt_manager.renderer),
+            response_format=response_format,
+            response_schema=response_schema,
         )
-        
-        # AsyncGenAISession을 사용한 콘텐츠 생성
-        response = session.generate_content(prompt)
-        
-        # GenerateContentResponse에서 텍스트 추출 (고수준 예외처리)
-        return self._extract_text_safely(response, persona_type)
-    
-    def _extract_text_safely(self, response: 'types.GenerateContentResponse', persona_type: PersonaType) -> str:
-        """GenerateContentResponse에서 안전하게 텍스트를 추출한다 (베스트 프랙티스)."""
-        try:
-            # 1. 후보 응답(Candidates) 확인
-            if not response.candidates:
-                raise ValueError(f"모델이 응답을 생성하지 못했습니다 (persona: {persona_type.value})")
-            
-            candidate = response.candidates[0]
-            
-            # 2. 종료 사유에 따른 분기 처리
-            if candidate.finish_reason == types.FinishReason.SAFETY:
-                raise ValueError(f"안전 정책에 의해 응답이 거부되었습니다 (persona: {persona_type.value})")
-            elif candidate.finish_reason == types.FinishReason.PROHIBITED_CONTENT:
-                raise ValueError(f"금지된 콘텐츠로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
-            elif candidate.finish_reason == types.FinishReason.BLOCKLIST:
-                raise ValueError(f"차단 목록 단어로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
-            elif candidate.finish_reason == types.FinishReason.SPII:
-                raise ValueError(f"개인정보 포함으로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
-            elif candidate.finish_reason == types.FinishReason.MAX_TOKENS:
-                logger.warning(f"답변이 너무 길어 중간에 끊겼습니다 (persona: {persona_type.value})")
-                # MAX_TOKENS의 경우 부분 응답이라도 사용
-            
-            # 3. 정상적인 경우에만 텍스트 추출
-            return response.text
-            
-        except errors.ClientError as e:
-            # 429 Rate Limit 에러 특별 처리
-            if "429" in str(e) or "quota" in str(e).lower() or "rate" in str(e).lower():
-                logger.warning(f"Rate limit 도달 (persona: {persona_type.value}): {e}")
-                # ValidationErrorHandler의 재시도 로직에 위임하도록 재발생
-                raise e  # 원본 에러 유지하여 상위 레벨에서 재시도 가능
-            else:
-                # 기타 클라이언트 오류 (인증, 잘못된 파라미터 등)
-                logger.error(f"클라이언트 오류 발생 (persona: {persona_type.value}): {e}")
-                raise ValueError(f"클라이언트 오류: {e}") from e
-        except errors.ServerError as e:
-            # Google 서버 측 문제 (5xx) - 재시도 로직 검토 필요
-            logger.error(f"서버 오류 발생 (persona: {persona_type.value}): {e}")
-            raise ValueError(f"서버 오류: {e}") from e
-        except Exception as e:
-            logger.error(f"예상치 못한 오류 (persona: {persona_type.value}): {e}")
-            raise
+
+        # ProviderRegistry를 통한 세션 생성
+        session = ProviderRegistry.start_session(persona_config, response_schema)
+
+        # LLM 콘텐츠 생성
+        llm_response = session.generate_content(prompt)
+
+        # LLMResponse에서 텍스트 추출 (Provider 중립 예외처리)
+        return self._extract_text_safely(llm_response, persona_type)
+
+    def _extract_text_safely(self, response: LLMResponse, persona_type: PersonaType) -> str:
+        """LLMResponse에서 안전하게 텍스트를 추출한다 (Provider 중립)."""
+        # 종료 사유에 따른 분기 처리
+        if response.finish_reason == FinishReason.SAFETY:
+            raise ValueError(f"안전 정책에 의해 응답이 거부되었습니다 (persona: {persona_type.value})")
+        elif response.finish_reason == FinishReason.CONTENT_FILTER:
+            raise ValueError(f"콘텐츠 필터에 의해 응답이 거부되었습니다 (persona: {persona_type.value})")
+        elif response.finish_reason == FinishReason.RECITATION:
+            raise ValueError(f"인용 감지로 인해 응답이 거부되었습니다 (persona: {persona_type.value})")
+        elif response.finish_reason == FinishReason.MAX_TOKENS:
+            logger.warning(f"답변이 너무 길어 중간에 끊겼습니다 (persona: {persona_type.value})")
+            # MAX_TOKENS의 경우 부분 응답이라도 사용
+
+        # 텍스트가 비어있는 경우 처리
+        if not response.text:
+            raise ValueError(f"모델이 응답을 생성하지 못했습니다 (persona: {persona_type.value})")
+
+        return response.text
 
     def _convert_to_analysis_items(self, content_items: List[ContentItem]) -> List[AnalysisContentItem]:
         """

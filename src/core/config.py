@@ -66,9 +66,27 @@ class Settings(BaseSettings):
     # [System Instruction]
     SYSTEM_INSTRUCTION_VERSION: str = "v1"
 
-    # [Model Configuration]
+    # [LLM Provider Configuration]
+    LLM_PROVIDER: str = "VERTEX_AI"  # VERTEX_AI | OPENAI
+
+    # [Google Vertex AI Model Configuration]
     VERTEX_AI_MODEL_PRO: str = "gemini-2.5-pro"
     VERTEX_AI_MODEL_FLASH: str = "gemini-2.5-flash"
+
+    # [OpenAI Configuration]
+    OPENAI_API_KEY: Optional[str] = None
+    # OPENAI_ORG_ID: OpenAI 조직 식별자 (Optional)
+    # - 용도: API 호출 시 특정 조직의 크레딧/사용량으로 청구할지 지정
+    # - 확인 방법: https://platform.openai.com/settings/organization/general
+    #   Settings(⚙️) → Organization → General → Organization ID
+    # - 형식: "org-xxxxxxxxxxxxxxxxxxxx" (예: org-lyRKfZrmpm4aogwP8hMYtqtb)
+    # - 필요 여부:
+    #   * 개인 계정/단일 조직: 생략 가능 (API 키에 연결된 기본 조직 사용)
+    #   * 여러 조직에 소속된 경우: 필요 (특정 조직 지정)
+    #   * 팀/기업 계정: 권장 (청구 명확화)
+    OPENAI_ORG_ID: Optional[str] = None
+    OPENAI_MODEL_PRO: str = "gpt-4o"
+    OPENAI_MODEL_FLASH: str = "gpt-4o-mini"
 
     # [Analysis Configuration]
     MAX_MAIN_SUMMARY_CHARS: int = 300
@@ -110,19 +128,55 @@ class Settings(BaseSettings):
         return int(v)
 
     # [LLM Generation Configuration]
-    # 입력/출력 토큰 제한 가이드 (Vertex AI 기준):
+    # ============================================================================
+    # [Vertex AI / Gemini 모델 토큰 제한 가이드]
+    # ============================================================================
     # - Gemini 2.5 Pro/Flash:
     #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
     #   * 출력 토큰 제한: 최대 65,535 토큰
     # - Gemini 3.0 Pro/Flash Preview:
     #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
-    #   * 출력 토큰 제한 (Output Token Limit): 공식 사양은 65,536을 명시하나, 
+    #   * 출력 토큰 제한 (Output Token Limit): 공식 사양은 65,536을 명시하나,
     #     Vertex AI Preview 환경 실제 호출 시 32,768 토큰까지만 안정적으로 반환되는 제약이 확인됨.
-    #   * [중요] Preview 안정성 특성: 
+    #   * [중요] Preview 안정성 특성:
     #     - 32,768 미만에서도 불안정한 경우가 있으며, GA(General Availability) 전 자원 보호를 위한 엄격한 가드레일이 존재함.
     #     - 특히 입력 토큰이 매우 큰 경우, 전체 리소스 사용량에 비례하여 출력 토큰 한도가 유동적으로 줄어들 수 있음.
     #     - 출력이 짧더라도 finish_reason='MAX_TOKENS'가 반환되는 현상이 발생할 수 있음.
-    # - 현재 설정값: 65,000 (설정은 최대치로 하되, Preview 모델 사용 시 안정성을 위해 입력을 적절히 청킹하는 전략 권장)
+    #
+    # ============================================================================
+    # [OpenAI 모델 토큰 제한 가이드] (2026-02 기준)
+    # ============================================================================
+    # - GPT-4o (gpt-4o):
+    #   * Context Window: 128,000 토큰
+    #   * 출력 토큰 제한: 16,384 토큰
+    #   * 가격: $2.50/1M input, $10.00/1M output
+    #   * 특징: 멀티모달(텍스트, 이미지, 오디오), 빠른 속도
+    #
+    # - GPT-4o mini (gpt-4o-mini):
+    #   * Context Window: 128,000 토큰
+    #   * 출력 토큰 제한: 16,384 토큰
+    #   * 가격: $0.15/1M input, $0.60/1M output
+    #   * 특징: GPT-4o 대비 60% 이상 저렴, 빠른 처리 속도
+    #
+    # - GPT-4.1 (gpt-4.1):
+    #   * Context Window: 1,000,000 토큰 (1M)
+    #   * 출력 토큰 제한: 32,768 토큰
+    #   * 가격: $2.00/1M input, $8.00/1M output
+    #   * 특징: 대용량 컨텍스트 처리에 적합
+    #
+    # - o1/o3 (Reasoning 모델):
+    #   * Context Window: 200,000 토큰
+    #   * 출력 토큰 제한: 100,000 토큰
+    #   * 가격: $10.00/1M 토큰 (reasoning tokens 별도 과금)
+    #   * 특징: 복잡한 추론 작업에 최적화, 내부 reasoning tokens가 output으로 과금됨
+    #   * [주의] 단순 작업에는 GPT-4o/4.1 사용 권장 (비용 효율)
+    #
+    # - o4-mini (Reasoning 모델, 경량):
+    #   * 특징: o3 대비 빠르고 저렴한 reasoning 모델
+    #   * 수학, 코딩, 시각적 작업에 최적화
+    #
+    # ============================================================================
+    # - 현재 설정값: 65,000 (Vertex AI 최대치 기준, OpenAI 사용 시 모델별 제한 자동 적용)
     MAX_OUTPUT_TOKENS: int = 65000
     
     model_config = SettingsConfigDict(
