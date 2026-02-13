@@ -100,14 +100,12 @@ class VertexAIProviderFactory(LLMProviderFactory):
     def start_session(
         cls,
         persona_config: PersonaConfig,
-        response_schema: Optional[dict] = None,
     ) -> VertexAISession:
         """
         새로운 Vertex AI 세션을 시작한다.
 
         Args:
-            persona_config: 페르소나 설정 (모델명, 온도 등)
-            response_schema: JSON 응답 시 스키마 (optional)
+            persona_config: 페르소나 설정 (모델명, 온도, response_schema 등)
 
         Returns:
             VertexAISession: 세션 인스턴스
@@ -118,12 +116,17 @@ class VertexAIProviderFactory(LLMProviderFactory):
         # response_format에 따른 mime_type 결정
         mime_type = "application/json" if persona_config.response_format == ResponseFormat.JSON else "text/plain"
 
+        # Pydantic 모델 → JSON Schema dict 변환
+        schema_dict = None
+        if persona_config.response_schema:
+            schema_dict = persona_config.response_schema.model_json_schema()
+
         # 세션 설정 생성
         session_config = types.GenerateContentConfig(
             temperature=persona_config.temperature,
             system_instruction=persona_config.system_instruction,
             response_mime_type=mime_type,
-            response_schema=response_schema or persona_config.response_schema,
+            response_schema=schema_dict,
         )
 
         return VertexAISession(

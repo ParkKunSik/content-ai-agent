@@ -4,9 +4,12 @@ from typing import List
 from src.core.config import settings
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.prompt.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
+from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_renderer import PromptRenderer
 from src.utils.prompt_template import PromptTemplate
+from src.utils.schema_description_extractor import extract_schema_description
 
 
 class PromptManager:
@@ -59,12 +62,17 @@ class PromptManager:
             ensure_ascii=False,
             separators=(',', ':')
         )
+
+        # Schema description 추출 (OpenAI 템플릿에서만 사용, Vertex AI는 무시)
+        schema_description = extract_schema_description(StructuredAnalysisResult)
+
         return self._renderer.render_with_template(
             template,
             project_id=project_id,
             project_type=project_type,
             content_type=content_type,
-            content_items=content_items_json
+            content_items=content_items_json,
+            schema_description=schema_description
         )
 
     def get_content_analysis_summary_refine_prompt(
@@ -85,6 +93,10 @@ class PromptManager:
         """
         template = PromptTemplate.CONTENT_ANALYSIS_SUMMARY_REFINE.get_template(self._renderer)
         raw_analysis_data = refine_content_items.model_dump_json(exclude_none=True)
+
+        # Schema description 추출 (OpenAI 템플릿에서만 사용, Vertex AI는 무시)
+        schema_description = extract_schema_description(StructuredAnalysisRefinedSummary)
+
         return self._renderer.render_with_template(
             template,
             project_id=project_id,
@@ -92,5 +104,6 @@ class PromptManager:
             content_type=content_type,
             raw_analysis_data=raw_analysis_data,
             max_main_summary_chars=self.MAX_MAIN_SUMMARY_CHARS,
-            max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS
+            max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS,
+            schema_description=schema_description
         )

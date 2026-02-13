@@ -1,7 +1,7 @@
 """OpenAI Session 구현"""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from src.core.llm.base.session import LLMProviderSession
 from src.core.llm.models import LLMResponse
@@ -23,13 +23,13 @@ class OpenAISession(LLMProviderSession):
         model_name: str,
         temperature: float,
         system_instruction: Optional[str] = None,
-        response_format: Optional[Dict[str, Any]] = None,
+        response_schema: Optional[Type[Any]] = None,  # Pydantic 클래스
     ):
         self._client = client
         self._model_name = model_name
         self._temperature = temperature
         self._system_instruction = system_instruction
-        self._response_format = response_format
+        self._response_schema = response_schema
         self._chat_history: List[Dict[str, str]] = []
         self._chat_session_active = False
 
@@ -50,8 +50,8 @@ class OpenAISession(LLMProviderSession):
         # 저수준 로깅
         self._log_response_metadata(response)
 
-        # Provider 중립 형식으로 변환
-        return OpenAIResponseMapper.map_response(response)
+        # Provider 중립 형식으로 변환 (parse() 사용 시 is_parsed=True)
+        return OpenAIResponseMapper.map_response(response, is_parsed=bool(self._response_schema))
 
     async def start_chat_session(self) -> None:
         """
@@ -91,8 +91,8 @@ class OpenAISession(LLMProviderSession):
             # 저수준 로깅
             self._log_response_metadata(response)
 
-            # 응답 변환
-            llm_response = OpenAIResponseMapper.map_response(response)
+            # 응답 변환 (parse() 사용 시 is_parsed=True)
+            llm_response = OpenAIResponseMapper.map_response(response, is_parsed=bool(self._response_schema))
 
             # 응답을 히스토리에 추가
             self._chat_history.append({"role": "assistant", "content": llm_response.text})
@@ -123,9 +123,8 @@ class OpenAISession(LLMProviderSession):
         """단일 요청용 메시지 목록을 구성한다."""
         messages = []
         if self._system_instruction:
-            # OpenAI에 최적화된 강화 지시문 추가
-            enhanced_instruction = self._enhance_system_instruction(self._system_instruction)
-            messages.append({"role": "system", "content": enhanced_instruction})
+            # Responses API는 developer role 사용
+            messages.append({"role": "developer", "content": self._system_instruction})
         messages.append({"role": "user", "content": prompt})
         return messages
 
@@ -133,61 +132,50 @@ class OpenAISession(LLMProviderSession):
         """채팅 히스토리를 포함한 메시지 목록을 구성한다."""
         messages = []
         if self._system_instruction:
-            enhanced_instruction = self._enhance_system_instruction(self._system_instruction)
-            messages.append({"role": "system", "content": enhanced_instruction})
+            # Responses API는 developer role 사용
+            messages.append({"role": "developer", "content": self._system_instruction})
         messages.extend(self._chat_history)
         return messages
 
-    def _enhance_system_instruction(self, instruction: str) -> str:
-        """OpenAI 모델에 최적화된 강화 지시문을 생성한다."""
-        return f"""{instruction}
-
-    [CRITICAL INSTRUCTIONS]
-    - Follow the system instructions EXACTLY as specified above.
-    - Output MUST be valid JSON matching the required schema precisely.
-    - Be thorough, detailed, and comprehensive in your analysis.
-    - Do NOT skip or omit any required fields in the response."""
-
     def _call_api(self, messages: List[Dict[str, str]]) -> Any:
-        """OpenAI API를 호출한다."""
-        kwargs = {
-            "model": self._model_name,
-            "messages": messages,
-            "temperature": self._temperature,
-        }
-
-        # JSON 응답 형식 설정
-        if self._response_format:
-            kwargs["response_format"] = self._response_format
-
-        return self._client.chat.completions.create(**kwargs)
+        """OpenAI Responses API를 호출한다."""
+        if self._response_schema:
+            # Pydantic 모델로 자동 파싱 (responses.parse)
+            return self._client.responses.parse(
+                model=self._model_name,
+                input=messages,
+                temperature=self._temperature,
+                text_format=self._response_schema,
+            )
+        else:
+            # 일반 텍스트 응답 (responses.create)
+            return self._client.responses.create(
+                model=self._model_name,
+                input=messages,
+                temperature=self._temperature,
+            )
 
     def _log_response_metadata(self, response: Any) -> None:
-        """OpenAI 응답의 저수준 메타데이터를 로깅한다."""
+        """OpenAI Responses API 응답의 저수준 메타데이터를 로깅한다."""
         try:
-            # 토큰 사용량 로깅
+            # 토큰 사용량 로깅 (Responses API: input_tokens, output_tokens)
             if hasattr(response, "usage") and response.usage:
                 usage = response.usage
                 total = getattr(usage, "total_tokens", 0)
                 if total:
                     logger.debug(f"LLM tokens: {total} (model: {self._model_name})")
 
-            # finish_reason 모니터링
-            if hasattr(response, "choices") and response.choices:
-                for i, choice in enumerate(response.choices):
-                    finish_reason = getattr(choice, "finish_reason", None)
-                    if finish_reason:
-                        # 문제 있는 finish_reason 경고
-                        if finish_reason in ["length", "content_filter"]:
-                            logger.warning(
-                                f"LLM finish_reason alert: {finish_reason} "
-                                f"(model: {self._model_name}, choice: {i})"
-                            )
-                        else:
-                            logger.debug(
-                                f"LLM finish_reason: {finish_reason} "
-                                f"(model: {self._model_name}, choice: {i})"
-                            )
+            # status 모니터링 (Responses API)
+            if hasattr(response, "status") and response.status:
+                status = response.status
+                if status in ["failed", "incomplete"]:
+                    logger.warning(
+                        f"LLM status alert: {status} (model: {self._model_name})"
+                    )
+                else:
+                    logger.debug(
+                        f"LLM status: {status} (model: {self._model_name})"
+                    )
 
         except Exception as e:
             logger.debug(f"Failed to log response metadata: {e}")

@@ -193,6 +193,8 @@ You will receive a JSON array of content items:
 
 Output must be a valid JSON object adhering to the provided JSON schema.
 
+{% block schema_description %}{% endblock %}
+
 {{ json_response_rule() }}
 
 **CRITICAL**: key MUST be exactly name with spaces replaced by '_'. Keep original casing.

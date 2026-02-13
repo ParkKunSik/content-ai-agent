@@ -63,9 +63,6 @@ class Settings(BaseSettings):
     # [Internal Identity]
     INTERNAL_AGENT_ID: str = "local-content-ai-agent-v1"
 
-    # [System Instruction]
-    SYSTEM_INSTRUCTION_VERSION: str = "v1"
-
     # [LLM Provider Configuration]
     LLM_PROVIDER: str = "VERTEX_AI"  # VERTEX_AI | OPENAI
 

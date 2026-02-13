@@ -82,11 +82,32 @@ class PersonaType(Enum):
             # VERTEX_AI 또는 기타 → Vertex AI 사용
             return self.vertexai_temperature
 
-    def get_instruction(self, pm: PromptRenderer) -> Optional[str]:
+    def get_instruction(self, pm: PromptRenderer, provider: str = None) -> Optional[str]:
+        """
+        Provider에 따라 최적화된 System Instruction을 반환한다.
+
+        Args:
+            pm: PromptRenderer 인스턴스
+            provider: LLM Provider (OPENAI, VERTEX_AI). None이면 settings에서 가져옴.
+
+        Returns:
+            렌더링된 System Instruction 문자열. role_description이 없으면 None.
+        """
         if self.role_description is None:
             return None
+
+        # Provider 결정 (파라미터 없으면 settings에서)
+        if provider is None:
+            provider = settings.LLM_PROVIDER.upper()
+
+        # 소문자 변환: PRO_DATA_ANALYST → pro_data_analyst
+        template_name = self.name.lower()
+
+        # Provider별 경로: system/openai/pro_data_analyst.j2
+        provider_path = provider.lower()  # OPENAI → openai, VERTEX_AI → vertex_ai
+
         return pm.render(
-            f"system/{settings.SYSTEM_INSTRUCTION_VERSION}/{self.name}.j2", 
-            agent_id=settings.INTERNAL_AGENT_ID, 
+            f"system/{provider_path}/{template_name}.j2",
+            agent_id=settings.INTERNAL_AGENT_ID,
             role=self.role_description
         )

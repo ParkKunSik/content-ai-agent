@@ -579,8 +579,8 @@ async def _test_html_generation_from_project_ES(setup_elasticsearch, provider_na
         # ES 초기화는 setup_elasticsearch fixture에서 처리
         es_service = ESContentRetrievalService()
 
-        project_id = 376278
-        content_type = ExternalContentType.SATISFACTION
+        project_id = 365330
+        content_type = ExternalContentType.REVIEW
 
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
         content_items = await es_service.get_funding_preorder_project_contents(

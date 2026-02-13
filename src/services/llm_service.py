@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional, Type
 
 from src.core.config import settings
 from src.core.llm.enums import FinishReason, ProviderType, ResponseFormat
@@ -62,7 +62,7 @@ class LLMService:
         prompt: str,
         persona_type: PersonaType,
         mime_type: MimeType = MimeType.TEXT_PLAIN,
-        response_schema: Optional[Dict[str, Any]] = None
+        response_schema: Optional[Type[Any]] = None
     ) -> str:
         """Generic method to generate content using a specific persona."""
         # PersonaConfig 생성
@@ -77,7 +77,7 @@ class LLMService:
         )
 
         # ProviderRegistry를 통한 세션 생성
-        session = ProviderRegistry.start_session(persona_config, response_schema)
+        session = ProviderRegistry.start_session(persona_config)
 
         # LLM 콘텐츠 생성
         llm_response = session.generate_content(prompt)
@@ -145,11 +145,9 @@ class LLMService:
             analysis_content_items=analysis_items
         )
 
-        schema = StructuredAnalysisResult.model_json_schema()
-        
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
-            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type=MimeType.APPLICATION_JSON, response_schema=schema)
+            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type=MimeType.APPLICATION_JSON, response_schema=StructuredAnalysisResult)
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,
@@ -176,11 +174,9 @@ class LLMService:
             refine_content_items=refine_content_items
         )
 
-        schema = StructuredAnalysisRefinedSummary.model_json_schema()
-        
         # ValidationErrorHandler를 사용한 재시도 로직 적용
         async def response_generator() -> str:
-            return await self.generate(prompt, persona_type, mime_type=MimeType.APPLICATION_JSON, response_schema=schema)
+            return await self.generate(prompt, persona_type, mime_type=MimeType.APPLICATION_JSON, response_schema=StructuredAnalysisRefinedSummary)
         
         return await self.validation_handler.validate_with_retry(
             response_generator=response_generator,

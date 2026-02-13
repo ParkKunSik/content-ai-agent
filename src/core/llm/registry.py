@@ -80,22 +80,20 @@ class ProviderRegistry:
     def start_session(
         cls,
         persona_config: PersonaConfig,
-        response_schema: Optional[dict] = None,
         provider_type: Optional[ProviderType] = None,
     ) -> LLMProviderSession:
         """
         LLM 세션을 시작한다.
 
         Args:
-            persona_config: 페르소나 설정
-            response_schema: JSON 응답 시 스키마 (optional)
+            persona_config: 페르소나 설정 (모델명, 온도, response_schema 등)
             provider_type: Provider 타입 (None이면 현재 Provider 사용)
 
         Returns:
             LLMProviderSession 인스턴스
         """
         factory = cls.get_factory(provider_type)
-        return factory.start_session(persona_config, response_schema)
+        return factory.start_session(persona_config)
 
     @classmethod
     def count_tokens(

@@ -1,7 +1,6 @@
 """LLM Provider Factory 추상 클래스"""
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from src.core.llm.base.session import LLMProviderSession
 from src.core.llm.models import PersonaConfig
@@ -27,14 +26,12 @@ class LLMProviderFactory(ABC):
     def start_session(
         cls,
         persona_config: PersonaConfig,
-        response_schema: Optional[dict] = None
     ) -> LLMProviderSession:
         """
         새로운 LLM 세션을 시작한다.
 
         Args:
-            persona_config: 페르소나 설정 (모델명, 온도 등)
-            response_schema: JSON 응답 시 스키마 (optional)
+            persona_config: 페르소나 설정 (모델명, 온도, response_schema 등)
 
         Returns:
             LLMProviderSession: Provider 세션 인스턴스
