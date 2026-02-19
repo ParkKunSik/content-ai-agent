@@ -220,7 +220,8 @@ async def _execute_content_analysis_with_html(
     output_pdf_path: str = None,
     persona_type: PersonaType = None,
     content_type: ExternalContentType = None,
-    content_type_description: str = "고객 의견"
+    content_type_description: str = "고객 의견",
+    provider_name: str = None
 ):
     """
     상세 분석 플로우 실행 후 HTML/PDF 생성 유틸리티를 활용
@@ -413,7 +414,8 @@ async def _execute_content_analysis_with_html(
                 total_items=len(sample_contents),
                 executed_at=executed_at,
                 total_duration=total_duration_formatted,
-                content_type_description=content_type_description
+                content_type_description=content_type_description,
+                provider_name=provider_name
             )
             with open(output_html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -428,7 +430,8 @@ async def _execute_content_analysis_with_html(
                 project_id=project_id,
                 total_items=len(sample_contents),
                 executed_at=executed_at,
-                total_duration=total_duration_formatted
+                total_duration=total_duration_formatted,
+                provider_name=provider_name
             )
             if GenerationViewer.generate_pdf_from_html(pdf_html, output_pdf_path):
                 pdf_path = output_pdf_path
@@ -444,9 +447,11 @@ async def _execute_html_generation_test(
     content_items: List[ContentItem],
     test_name: str,
     persona_type: PersonaType,
-    content_type: ExternalContentType = None,
-    content_type_description: str = "고객 의견",
-    provider_name: str = None
+    content_type: ExternalContentType,
+    content_type_description: str,
+    provider_name: str,
+    is_all: bool,
+    sample_size: int
 ):
     """
     공통 HTML 생성 테스트 로직
@@ -481,9 +486,6 @@ async def _execute_html_generation_test(
     output_pdf_path = None
 
     # Sample items for testing (랜덤 또는 순차 선택)
-    is_all = False
-    sample_size = 200
-
     if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
         if use_random_sampling:
@@ -504,7 +506,8 @@ async def _execute_html_generation_test(
                 output_pdf_path=output_pdf_path,
                 persona_type=persona_type,
                 content_type=content_type,
-                content_type_description=content_type_description
+                content_type_description=content_type_description,
+                provider_name=provider_name
             )
 
         # Assertions
@@ -554,17 +557,24 @@ def _load_project_file_content_items():
         pytest.fail(f"Failed to load project data: {e}")
 
 
-async def _test_html_generation_from_project_file(provider_name: str = None):
+async def _test_html_generation_from_project_file(
+    provider_name: str,
+    project_id: int,
+    content_type: ExternalContentType,
+    is_all: bool,
+    sample_size: int
+):
     """
     LLMService 상세 분석 후 HTML 생성 테스트 (내부 구현)
 
     Args:
         provider_name: LLM Provider 이름 (출력 디렉토리 구분용)
+        project_id: 프로젝트 ID
+        content_type: 콘텐츠 타입
+        is_all: 전체 데이터 사용 여부
+        sample_size: 샘플 크기
     """
     content_items = _load_project_file_content_items()
-
-    project_id = 365330
-    content_type = ExternalContentType.REVIEW
 
     # 공통 테스트 로직 실행
     await _execute_html_generation_test(
@@ -574,7 +584,9 @@ async def _test_html_generation_from_project_file(provider_name: str = None):
         persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT,
         content_type=content_type,
         content_type_description=f"고객 의견({content_type.description})",
-        provider_name=provider_name
+        provider_name=provider_name,
+        is_all=is_all,
+        sample_size=sample_size
     )
 
 
@@ -586,7 +598,13 @@ async def test_html_generation_from_project_file():
     - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
     - HTML 출력 경로: tests/data/html/{provider}/
     """
-    await _test_html_generation_from_project_file()
+    await _test_html_generation_from_project_file(
+        provider_name=settings.LLM_PROVIDER.lower(),
+        project_id=365330,
+        content_type=ExternalContentType.REVIEW,
+        is_all=False,
+        sample_size=200
+    )
 
 
 @pytest.mark.asyncio
@@ -598,7 +616,13 @@ async def test_vertexai_html_generation_from_project_file():
     - HTML 출력 경로: tests/data/html/vertex_ai/
     """
     with switch_llm_provider("VERTEX_AI"):
-        await _test_html_generation_from_project_file(provider_name="vertex_ai")
+        await _test_html_generation_from_project_file(
+            provider_name="vertex_ai",
+            project_id=365330,
+            content_type=ExternalContentType.REVIEW,
+            is_all=False,
+            sample_size=200
+        )
 
 
 @pytest.mark.asyncio
@@ -615,23 +639,37 @@ async def test_openai_html_generation_from_project_file():
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
     with switch_llm_provider("OPENAI"):
-        await _test_html_generation_from_project_file(provider_name="openai")
+        await _test_html_generation_from_project_file(
+            provider_name="openai",
+            project_id=365330,
+            content_type=ExternalContentType.REVIEW,
+            is_all=False,
+            sample_size=200
+        )
 
 
-async def _test_html_generation_from_project_ES(setup_elasticsearch, provider_name: str = None):
+async def _test_html_generation_from_project_ES(
+    setup_elasticsearch,
+    provider_name: str,
+    project_id: int,
+    content_type: ExternalContentType,
+    is_all: bool,
+    sample_size: int
+):
     """
     ESContentRetrievalService를 통한 ES 조회 후 HTML 생성 테스트 (내부 구현)
 
     Args:
         setup_elasticsearch: ES fixture
         provider_name: LLM Provider 이름 (출력 디렉토리 구분용)
+        project_id: 프로젝트 ID
+        content_type: 콘텐츠 타입
+        is_all: 전체 데이터 사용 여부
+        sample_size: 샘플 크기
     """
     try:
         # ES 초기화는 setup_elasticsearch fixture에서 처리
         es_service = ESContentRetrievalService()
-
-        project_id = 276504
-        content_type = ExternalContentType.SATISFACTION
 
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
         content_items = await es_service.get_funding_preorder_project_contents(
@@ -652,7 +690,9 @@ async def _test_html_generation_from_project_ES(setup_elasticsearch, provider_na
             persona_type=PersonaType.CUSTOMER_FACING_SMART_BOT,
             content_type=content_type,
             content_type_description=f"고객 의견({content_type.description})",
-            provider_name=provider_name
+            provider_name=provider_name,
+            is_all=is_all,
+            sample_size=sample_size
         )
 
     except Exception as e:
@@ -667,7 +707,14 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
     - 출력: JSON + HTML (아마존 리뷰 하이라이트 스타일)
     - HTML 출력 경로: tests/data/html/{provider}/
     """
-    await _test_html_generation_from_project_ES(setup_elasticsearch)
+    await _test_html_generation_from_project_ES(
+        setup_elasticsearch,
+        provider_name=settings.LLM_PROVIDER.lower(),
+        project_id=276504,
+        content_type=ExternalContentType.SATISFACTION,
+        is_all=False,
+        sample_size=200
+    )
 
 
 @pytest.mark.asyncio
@@ -679,7 +726,14 @@ async def test_vertexai_html_generation_from_project_ES(setup_elasticsearch):
     - HTML 출력 경로: tests/data/html/vertex_ai/
     """
     with switch_llm_provider("VERTEX_AI"):
-        await _test_html_generation_from_project_ES(setup_elasticsearch, provider_name="vertex_ai")
+        await _test_html_generation_from_project_ES(
+            setup_elasticsearch,
+            provider_name="vertex_ai",
+            project_id=276504,
+            content_type=ExternalContentType.SATISFACTION,
+            is_all=False,
+            sample_size=200
+        )
 
 
 @pytest.mark.asyncio
@@ -696,4 +750,11 @@ async def test_openai_html_generation_from_project_ES(setup_elasticsearch):
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
     with switch_llm_provider("OPENAI"):
-        await _test_html_generation_from_project_ES(setup_elasticsearch, provider_name="openai")
+        await _test_html_generation_from_project_ES(
+            setup_elasticsearch,
+            provider_name="openai",
+            project_id=276504,
+            content_type=ExternalContentType.SATISFACTION,
+            is_all=False,
+            sample_size=200
+        )

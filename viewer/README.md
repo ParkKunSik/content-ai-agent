@@ -135,6 +135,20 @@ parameter_overrides = [
 API URL: https://xxx.execute-api.ap-northeast-2.amazonaws.com/dev/
 ```
 
+### Lambda UI 배포 (SAM 없이)
+
+S3/CloudFormation 권한이 없는 경우 Lambda 콘솔에서 직접 배포할 수 있습니다.
+
+```bash
+cd viewer
+
+# 패키징 스크립트 실행
+./deploy/package-lambda.sh          # x86_64 Lambda (기본)
+./deploy/package-lambda.sh arm64    # arm64 Lambda
+
+# Lambda 콘솔에서 lambda-package.zip 업로드
+```
+
 자세한 배포 가이드는 [deploy/README.md](deploy/README.md)를 참조하세요.
 
 ## 프로젝트 구조
