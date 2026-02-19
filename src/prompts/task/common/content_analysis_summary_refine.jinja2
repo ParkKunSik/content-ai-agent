@@ -1,5 +1,4 @@
 {% extends "task/base.jinja2" %}
-{% from 'task/json_format.jinja2' import json_response_rule %}
 
 {% block content %}
 {#
@@ -26,7 +25,7 @@
     - 중복 제거: 반복되는 개념이나 불필요한 단어 제거
     - 명확성 유지: 축약된 텍스트가 여전히 이해 가능하도록 보장
     - 핵심 지표 보존: 가능한 한 중요한 통계나 패턴 포함
-    - 완전한 서술: 응집력 있는 문단으로 작성, 요약에서 개조식 피하기
+    - 완전한 서술: 응집력 있는 문단으로 작성, 개조식/줄임말 스타일 금지 (완전한 문장으로 작성)
     - 통합된 인사이트: 장점과 단점을 자연스러운 흐름으로 매끄럽게 결합
     
     ## 입력 데이터
@@ -44,11 +43,15 @@
 
     제공된 JSON 스키마 형식을 엄격히 준수하는 유효한 JSON 객체여야 합니다.
 
-    {{ json_response_rule() }}
+    {% block schema_description %}{% endblock %}
 
-    **문체 및 품질 요구사항**:
-    - 격식을 갖춘 문서체: 비즈니스 맥락에 적합한 전문적이고 정중한 언어 사용
-    - 완전한 문단: 개조식이 아닌 응집력 있는 서술체로 요약 작성
+    {% block json_response_rule %}{% endblock %}
+
+    {% block writing_style %}{% endblock %}
+    (문체/톤 관련 지시는 Provider별로 override하거나 system prompt에 위임)
+
+    **형식 및 품질 요구사항**:
+    - 완전한 문단: 개조식/줄임말 스타일이 아닌 완전한 문장의 서술체로 요약 작성
     - 통합된 분석: 긍정적이고 부정적인 측면을 자연스러운 흐름으로 결합
     - 문자 제한: 메인 요약 {{ max_main_summary_chars }}자, 카테고리 요약 {{ max_category_summary_chars }}자 엄격 준수
     - 데이터 무결성 보존: key 값을 제공된 그대로 정확히 유지 (대소문자 포함, 수정 금지)
@@ -70,7 +73,7 @@ Optimize the summary lengths of the provided detailed analysis data.
 - **Remove redundancy**: Eliminate repeated concepts or filler words
 - **Maintain clarity**: Ensure abbreviated text remains understandable
 - **Preserve key metrics**: Include important statistics or patterns when possible
-- **Complete narrative**: Write as cohesive paragraphs, avoid bullet points in summaries
+- **Complete narrative**: Write as cohesive paragraphs, avoid bullet points or abbreviated/headline style (use complete sentences)
 - **Integrated insights**: Seamlessly combine strengths and weaknesses into natural flow
 
 ## Input Data
@@ -90,11 +93,12 @@ Output must be a valid JSON object adhering to the provided JSON schema.
 
 {% block schema_description %}{% endblock %}
 
-{{ json_response_rule() }}
+{% block json_response_rule %}{% endblock %}
 
-**Writing Style & Quality Requirements**:
-- **Formal written style**: Use professional, polite language suitable for business contexts
-- **Complete paragraphs**: Write summaries as cohesive narratives, not bullet points
+{% block writing_style %}{% endblock %}
+
+**Format & Quality Requirements**:
+- **Complete paragraphs**: Write summaries as cohesive narratives, not bullet points or abbreviated style (use complete sentences)
 - **Integrated analysis**: Combine positive and negative aspects into natural flow
 - **Character limits**: Strictly enforce {{ max_main_summary_chars }}-character main summary, {{ max_category_summary_chars }}-character category summaries
 - **Preserve data integrity**: Keep key values exactly as provided, including original casing (do not modify)

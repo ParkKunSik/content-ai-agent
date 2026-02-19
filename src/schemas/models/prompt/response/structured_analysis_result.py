@@ -1,28 +1,53 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from src.core.config import settings
-
-from ..common.category_item import CategoryItem
-from ..common.etc_content import EtcContent
+from src.schemas.models.common.category_item import CategoryItem
+from src.schemas.models.common.etc_content import EtcContent
+from src.schemas.models.common.ko_doc import KoDoc
 
 
 class StructuredAnalysisResult(BaseModel):
     """
     상세 분석 응답 모델
-    
+
     Note:
-        이 모델의 JSON 스키마는 Vertex AI의 'response_schema'로 전달되어 
+        이 모델의 JSON 스키마는 Vertex AI의 'response_schema'로 전달되어
         LLM의 출력 구조와 내용을 제어하는 핵심 지침으로 사용됩니다.
         각 필드의 'description'은 LLM에게 전달되는 프롬프트 역할을 하므로 명확하고 상세하게 작성해야 합니다.
     """
-    
-    summary: str = Field(..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)")
-    categories: list[CategoryItem] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")
-    harmful_contents: list[int] = Field(default_factory=list, description="유해한 콘텐츠 content_id 리스트 (욕설, 비난, 비방 등)")
-    etc_contents: list[EtcContent] = Field(default_factory=list, description="분석에 영향을 주지 않는 기타 콘텐츠 배열")
-    
+
+    model_config = ConfigDict(
+        json_schema_extra={"description": "Structured content analysis response model"}
+    )
+
+    summary: Annotated[
+        str,
+        Field(description="Comprehensive analysis summary covering all major topics and insights discovered (escape special characters)"),
+        KoDoc("발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)")
+    ]
+
+    categories: Annotated[
+        list[CategoryItem],
+        Field(description="Array of detailed analysis results per category (max 20)"),
+        KoDoc("카테고리별 상세 분석 결과 배열 (최대 20개)")
+    ]
+
+    harmful_contents: Annotated[
+        list[int],
+        Field(default_factory=list, description="List of content_ids containing harmful content (profanity, abuse, slander, hate speech, etc.)"),
+        KoDoc("유해한 콘텐츠 content_id 리스트 (욕설, 학대, 비방, 혐오 표현 등)")
+    ]
+
+    etc_contents: Annotated[
+        list[EtcContent],
+        Field(default_factory=list, description="Array of other contents that do not affect analysis"),
+        KoDoc("분석에 영향을 주지 않는 기타 콘텐츠 배열")
+    ]
+
     @field_validator('categories')
     @classmethod
     def validate_categorys_count(cls, v: list[CategoryItem]) -> list[CategoryItem]:
@@ -33,7 +58,7 @@ class StructuredAnalysisResult(BaseModel):
         if len(v) > 20:
             raise ValueError(f"카테고리는 최대 20개까지만 허용됩니다. 현재: {len(v)}개")
         return v
-    
+
     @field_validator('categories')
     @classmethod
     def validate_unique_category_keys(cls, v: list[CategoryItem]) -> list[CategoryItem]:
@@ -46,7 +71,7 @@ class StructuredAnalysisResult(BaseModel):
             duplicates = [key for key in category_keys if category_keys.count(key) > 1]
             raise ValueError(f"중복된 key가 있습니다: {duplicates}")
         return v
-    
+
     @field_validator('harmful_contents', 'etc_contents', 'categories')
     @classmethod
     def validate_no_content_id_duplication(cls, v, info: ValidationInfo) -> list:
@@ -57,20 +82,20 @@ class StructuredAnalysisResult(BaseModel):
         # data는 현재까지 검증이 완료된 다른 필드들의 딕셔너리 (V2 스타일)
         data = info.data
         used_content_ids: set[int] = set()
-        
+
         # field_name에 따라 분기 처리
         field_name = info.field_name
-        
+
         # 1. 이미 데이터에 있는 content_id 수집 (이전 필드들)
         if 'harmful_contents' in data and field_name != 'harmful_contents':
             used_content_ids.update(data['harmful_contents'])
-        
+
         if 'etc_contents' in data and field_name != 'etc_contents':
             for etc_content in data['etc_contents']:
                 used_content_ids.add(etc_content.id)
-        
+
         if 'categories' in data and field_name != 'categories':
-             for category in data['categories']:
+            for category in data['categories']:
                 for content in category.positive_contents + category.negative_contents:
                     used_content_ids.add(content.id)
 
@@ -110,5 +135,5 @@ class StructuredAnalysisResult(BaseModel):
                     used_content_ids.add(content.id)
 
                 # highlights는 참조용이므로 중복 검사 제외
-        
+
         return v

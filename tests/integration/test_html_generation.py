@@ -65,7 +65,7 @@ MODEL_PRICING_TABLE = {
         "input_cost_per_million": 0.15,
         "output_cost_per_million": 0.60
     },
-    # OpenAI 모델
+    # OpenAI GPT-4o 시리즈
     "gpt_4o": {
         "input_cost_per_million": 2.50,
         "output_cost_per_million": 10.00
@@ -73,7 +73,46 @@ MODEL_PRICING_TABLE = {
     "gpt_4o_mini": {
         "input_cost_per_million": 0.15,
         "output_cost_per_million": 0.60
-    }
+    },
+    # OpenAI GPT-4.1 시리즈 (2025년 4월)
+    "gpt_4_1": {
+        "input_cost_per_million": 2.00,
+        "output_cost_per_million": 8.00
+    },
+    "gpt_4_1_mini": {
+        "input_cost_per_million": 0.40,
+        "output_cost_per_million": 1.60
+    },
+    "gpt_4_1_nano": {
+        "input_cost_per_million": 0.10,
+        "output_cost_per_million": 0.40
+    },
+    # OpenAI GPT-5 시리즈 (2025년 8월, temperature 미지원)
+    "gpt_5": {
+        "input_cost_per_million": 1.25,
+        "output_cost_per_million": 10.00
+    },
+    "gpt_5_mini": {
+        "input_cost_per_million": 0.30,
+        "output_cost_per_million": 1.20
+    },
+    "gpt_5_nano": {
+        "input_cost_per_million": 0.08,
+        "output_cost_per_million": 0.30
+    },
+    # OpenAI O-시리즈 (Reasoning, temperature 미지원, reasoning tokens 별도 과금)
+    "o3": {
+        "input_cost_per_million": 2.00,
+        "output_cost_per_million": 8.00
+    },
+    "o3_mini": {
+        "input_cost_per_million": 1.10,
+        "output_cost_per_million": 4.40
+    },
+    "o4_mini": {
+        "input_cost_per_million": 1.10,
+        "output_cost_per_million": 4.40
+    },
 }
 
 MODEL_ALIASES = {
@@ -82,9 +121,21 @@ MODEL_ALIASES = {
     "gemini_2_5_flash": ["gemini-2.5-flash", "gemini-2.5-flash-preview", "gemini 2.5 flash"],
     "gemini_3_pro_preview": ["gemini-3.0-pro-preview", "gemini-3-pro-preview", "gemini 3 pro (preview)", "gemini 3 pro"],
     "gemini_3_flash_preview": ["gemini-3.0-flash-preview", "gemini-3-flash-preview", "gemini 3 flash (preview)", "gemini 3 flash"],
-    # OpenAI
+    # OpenAI GPT-4o 시리즈
     "gpt_4o": ["gpt-4o", "gpt4o"],
-    "gpt_4o_mini": ["gpt-4o-mini", "gpt4o-mini"]
+    "gpt_4o_mini": ["gpt-4o-mini", "gpt4o-mini"],
+    # OpenAI GPT-4.1 시리즈
+    "gpt_4_1": ["gpt-4.1", "gpt4.1"],
+    "gpt_4_1_mini": ["gpt-4.1-mini", "gpt4.1-mini"],
+    "gpt_4_1_nano": ["gpt-4.1-nano", "gpt4.1-nano"],
+    # OpenAI GPT-5 시리즈
+    "gpt_5": ["gpt-5", "gpt5", "gpt-5.2", "gpt5.2"],
+    "gpt_5_mini": ["gpt-5-mini", "gpt5-mini"],
+    "gpt_5_nano": ["gpt-5-nano", "gpt5-nano"],
+    # OpenAI O-시리즈 (Reasoning)
+    "o3": ["o3"],
+    "o3_mini": ["o3-mini"],
+    "o4_mini": ["o4-mini"],
 }
 
 
@@ -431,7 +482,7 @@ async def _execute_html_generation_test(
 
     # Sample items for testing (랜덤 또는 순차 선택)
     is_all = False
-    sample_size = 100
+    sample_size = 200
 
     if not is_all:
         use_random_sampling = True  # True: 랜덤 샘플링, False: 앞에서부터 순차 선택
@@ -579,8 +630,8 @@ async def _test_html_generation_from_project_ES(setup_elasticsearch, provider_na
         # ES 초기화는 setup_elasticsearch fixture에서 처리
         es_service = ESContentRetrievalService()
 
-        project_id = 365330
-        content_type = ExternalContentType.REVIEW
+        project_id = 276504
+        content_type = ExternalContentType.SATISFACTION
 
         print(f"\n>>> ES에서 프로젝트 {project_id}, 타입 {content_type} 조회 중...")
         content_items = await es_service.get_funding_preorder_project_contents(

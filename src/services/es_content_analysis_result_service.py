@@ -16,7 +16,7 @@ from src.schemas.models.es.content_analysis_result import (
     ContentAnalysisResultDocument,
     ContentAnalysisResultState,
 )
-from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 
 logger = logging.getLogger(__name__)
 

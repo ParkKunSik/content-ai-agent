@@ -12,8 +12,8 @@ from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
-from src.schemas.models.prompt.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
-from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
+from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_manager import PromptManager
 

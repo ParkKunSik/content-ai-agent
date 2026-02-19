@@ -1,2 +1,7 @@
 {% extends "task/common/content_analysis_structuring.jinja2" %}
-{# Vertex AI: common 템플릿 그대로 사용 #}
+{% from 'task/json_format.jinja2' import json_response_rule %}
+{# Vertex AI: JSON 형식 지시가 필요하므로 json_response_rule 블록 override #}
+
+{% block json_response_rule %}
+{{ json_response_rule() }}
+{% endblock %}

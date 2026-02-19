@@ -1,5 +1,4 @@
 {% extends "task/base.jinja2" %}
-{% from 'task/json_format.jinja2' import json_response_rule %}
 
 {% block content %}
 {#
@@ -63,8 +62,8 @@
     - **규칙**: name에서 공백만 '_'로 대체하여 key 생성 (대소문자 유지, 기타 가공 금지)
     
     ### 4. 하이라이트 추출 (핵심 인사이트)
-    - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문 언어 그대로 유지)
-    - **원본 키워드**: 각 하이라이트를 뒷받침하는 특정 용어/구문 식별 (번역하지 않음)
+    - **대표 인용문**: 카테고리 본질을 포착하는 의미있는 문구 추출 (원문에서 그대로 추출, 원문 언어 유지, 요약/의역 금지)
+    - **원본 키워드**: 각 하이라이트를 뒷받침하는 특정 용어/구문 식별 (highlight 텍스트에서 추출 필수, 새 용어 생성 금지, 번역하지 않음)
     - **콘텐츠 추적가능성**: 각 하이라이트를 그 출처 id에 연결
     - **품질 필터**: 카테고리를 잘 대표하는 하이라이트만 포함
     - **이미지 콘텐츠 우선순위**: 하이라이트 선택 시 has_image가 true인 콘텐츠를 우선적으로 고려
@@ -164,8 +163,8 @@ You will receive a JSON array of content items:
 - **Examples**: "Product Quality" → "Product_Quality", "제품 품질" → "제품_품질"
 
 ### 4. Highlight Extraction (Key Insights)
-- **Representative quotes**: Extract meaningful phrases that capture category essence (keep in original language)
-- **Original keywords**: Identify specific terms/phrases that support each highlight (do not translate)
+- **Representative quotes**: Extract meaningful phrases that capture category essence (extract verbatim from source, keep in original language, DO NOT summarize or paraphrase)
+- **Original keywords**: Identify specific terms/phrases that support each highlight (MUST extract from highlight text, DO NOT generate new terms, do not translate)
 - **Content traceability**: Link each highlight to its source id
 - **Quality filter**: Only include highlights that represent the category well
 - **Image content prioritization**: When selecting highlights, prioritize content items where has_image is true
@@ -195,7 +194,7 @@ Output must be a valid JSON object adhering to the provided JSON schema.
 
 {% block schema_description %}{% endblock %}
 
-{{ json_response_rule() }}
+{% block json_response_rule %}{% endblock %}
 
 **CRITICAL**: key MUST be exactly name with spaces replaced by '_'. Keep original casing.
 

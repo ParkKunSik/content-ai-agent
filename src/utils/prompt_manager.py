@@ -4,8 +4,8 @@ from typing import List
 from src.core.config import settings
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
-from src.schemas.models.prompt.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
-from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
+from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_renderer import PromptRenderer
 from src.utils.prompt_template import PromptTemplate
