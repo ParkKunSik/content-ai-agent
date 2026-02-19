@@ -211,26 +211,90 @@ S3/CloudFormation 권한이 없는 경우 **Lambda 콘솔에서 직접 배포**�
 
 ### 1. 코드 패키징 (로컬)
 
+> **중요**: macOS/Windows에서 패키징 시 Lambda(Amazon Linux)와 바이너리 호환성 문제가 발생합니다.
+> `pydantic_core` 등 네이티브 모듈은 반드시 **Linux용 바이너리**로 설치해야 합니다.
+
+#### 방법 A: Docker 사용 (권장)
+
+> **사전 확인 (필수)**
+> - Lambda 런타임 버전과 Docker 이미지 버전 일치 필요 (예: Python 3.12)
+> - Lambda 아키텍처 확인: 콘솔 → 함수 → **일반 구성** → **아키텍처**
+
 ```bash
 cd viewer
 
-# 패키지 디렉토리 생성
-rm -rf package && mkdir package
+# 1. 초기화
+rm -rf lambda-package.zip && docker rm -f lambda-build 2>/dev/null
 
-# 의존성 설치 (pyproject.toml 기반)
-pip install . --target package/           # 기본 의존성
-pip install mangum --target package/      # Lambda 어댑터
+# 2. Lambda 런타임 컨테이너 생성
+#    - x86_64 Lambda: --platform linux/amd64
+#    - arm64 Lambda:  --platform linux/arm64
+docker run -d --name lambda-build --platform linux/amd64 --entrypoint tail \
+    public.ecr.aws/lambda/python:3.12 -f /dev/null
 
-# Lambda 코드 복사
-cp -r viewer/* package/
+# 3. 의존성 설치 + viewer 복사 + zip 생성
+docker exec lambda-build pip install \
+    fastapi jinja2 'pydantic>=2.0.0' pydantic-settings \
+    python-dotenv 'elasticsearch>=8.0.0,<9.0.0' requests 'mangum>=0.17.0' \
+    --target /tmp/package && \
+docker cp viewer lambda-build:/tmp/package/ && \
+docker exec lambda-build python -c "
+import zipfile, os
+with zipfile.ZipFile('/tmp/lambda-package.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
+    for root, dirs, files in os.walk('/tmp/package'):
+        dirs[:] = [d for d in dirs if '__pycache__' not in d and 'streamlit' not in d and '.dist-info' not in d and '.egg-info' not in d]
+        for file in files:
+            filepath = os.path.join(root, file)
+            arcname = os.path.relpath(filepath, '/tmp/package')
+            zf.write(filepath, arcname)
+"
 
-# zip 파일 생성
-cd package && zip -r ../lambda-package.zip . && cd ..
+# 4. zip 추출 및 정리
+docker cp lambda-build:/tmp/lambda-package.zip ./lambda-package.zip && \
+docker rm -f lambda-build
 
-# 결과: lambda-package.zip (약 20-30MB)
+# 5. 결과 확인 (fastapi/, viewer/main.py 포함되어야 함)
+unzip -l lambda-package.zip | grep -E "fastapi/|viewer/main" && ls -lh lambda-package.zip
 ```
 
-> `pip install .` 명령이 `pyproject.toml`의 dependencies를 읽어서 설치합니다.
+#### 방법 B: pip --platform 옵션 (Docker 없이)
+
+```bash
+cd viewer
+
+rm -rf package lambda-package.zip && mkdir package
+
+# Linux용 바이너리 설치 (Python 3.12 기준)
+pip install \
+    fastapi \
+    jinja2 \
+    "pydantic>=2.0.0" \
+    pydantic-settings \
+    python-dotenv \
+    "elasticsearch>=8.0.0,<9.0.0" \
+    requests \
+    "mangum>=0.17.0" \
+    --target package/ \
+    --platform manylinux2014_x86_64 \
+    --implementation cp \
+    --python-version 3.12 \
+    --only-binary=:all:
+
+# Lambda 코드 복사
+cp -r viewer package/
+
+# zip 파일 생성
+cd package && zip -r ../lambda-package.zip . \
+    -x "*__pycache__*" \
+    -x "*.dist-info/*" \
+    -x "*.egg-info/*" \
+    -x "*streamlit*"
+cd ..
+
+rm -rf package
+```
+
+> **참고**: `--only-binary=:all:` 옵션은 모든 패키지를 바이너리(wheel)로만 설치합니다. 순수 Python 패키지 설치 오류 시 해당 패키지만 별도로 설치하세요.
 
 ### 2. Lambda 콘솔 업로드
 
@@ -239,7 +303,8 @@ cd package && zip -r ../lambda-package.zip . && cd ..
 | 1 | AWS Lambda 콘솔 → `community-summary-viewer` 함수 선택 |
 | 2 | **코드** 탭 → **Upload from** → `.zip file` 선택 |
 | 3 | `lambda-package.zip` 업로드 |
-| 4 | **런타임 설정** → 핸들러: `viewer.main.handler` 확인 |
+| 4 | **코드** 탭 하단 → **런타임 설정** → **편집** 클릭 |
+| 5 | 핸들러: `viewer.main.handler` 입력 후 **저장** |
 
 ### 3. 환경변수 설정 (Lambda 콘솔)
 
@@ -267,8 +332,23 @@ API Gateway 콘솔 → `community-data`:
 
 ### 5. 배포 확인
 
+**Lambda 함수 URL 사용 시:**
 ```bash
-# API 테스트
+# 헬스체크
+curl https://{url-id}.lambda-url.ap-northeast-2.on.aws/viewer/health
+
+# 프로젝트 목록 (브라우저)
+https://{url-id}.lambda-url.ap-northeast-2.on.aws/viewer/
+
+# 특정 프로젝트 상세
+https://{url-id}.lambda-url.ap-northeast-2.on.aws/viewer/{project_id}
+
+# 특정 콘텐츠 타입 지정
+https://{url-id}.lambda-url.ap-northeast-2.on.aws/viewer/{project_id}?content_type=REVIEW
+```
+
+**API Gateway 사용 시:**
+```bash
 curl https://{api-id}.execute-api.ap-northeast-2.amazonaws.com/dev/viewer/health
 ```
 

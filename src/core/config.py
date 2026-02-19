@@ -63,12 +63,27 @@ class Settings(BaseSettings):
     # [Internal Identity]
     INTERNAL_AGENT_ID: str = "local-content-ai-agent-v1"
 
-    # [System Instruction]
-    SYSTEM_INSTRUCTION_VERSION: str = "v1"
+    # [LLM Provider Configuration]
+    LLM_PROVIDER: str = "VERTEX_AI"  # VERTEX_AI | OPENAI
 
-    # [Model Configuration]
+    # [Google Vertex AI Model Configuration]
     VERTEX_AI_MODEL_PRO: str = "gemini-2.5-pro"
     VERTEX_AI_MODEL_FLASH: str = "gemini-2.5-flash"
+
+    # [OpenAI Configuration]
+    OPENAI_API_KEY: Optional[str] = None
+    # OPENAI_ORG_ID: OpenAI 조직 식별자 (Optional)
+    # - 용도: API 호출 시 특정 조직의 크레딧/사용량으로 청구할지 지정
+    # - 확인 방법: https://platform.openai.com/settings/organization/general
+    #   Settings(⚙️) → Organization → General → Organization ID
+    # - 형식: "org-xxxxxxxxxxxxxxxxxxxx" (예: org-lyRKfZrmpm4aogwP8hMYtqtb)
+    # - 필요 여부:
+    #   * 개인 계정/단일 조직: 생략 가능 (API 키에 연결된 기본 조직 사용)
+    #   * 여러 조직에 소속된 경우: 필요 (특정 조직 지정)
+    #   * 팀/기업 계정: 권장 (청구 명확화)
+    OPENAI_ORG_ID: Optional[str] = None
+    OPENAI_MODEL_PRO: str = "gpt-4o"
+    OPENAI_MODEL_FLASH: str = "gpt-4o-mini"
 
     # [Analysis Configuration]
     MAX_MAIN_SUMMARY_CHARS: int = 300
@@ -110,19 +125,85 @@ class Settings(BaseSettings):
         return int(v)
 
     # [LLM Generation Configuration]
-    # 입력/출력 토큰 제한 가이드 (Vertex AI 기준):
+    # ============================================================================
+    # [Vertex AI / Gemini 모델 토큰 제한 가이드]
+    # ============================================================================
     # - Gemini 2.5 Pro/Flash:
     #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
     #   * 출력 토큰 제한: 최대 65,535 토큰
     # - Gemini 3.0 Pro/Flash Preview:
     #   * 입력 토큰 제한: 약 1M (1,048,576) 토큰 지원
-    #   * 출력 토큰 제한 (Output Token Limit): 공식 사양은 65,536을 명시하나, 
+    #   * 출력 토큰 제한 (Output Token Limit): 공식 사양은 65,536을 명시하나,
     #     Vertex AI Preview 환경 실제 호출 시 32,768 토큰까지만 안정적으로 반환되는 제약이 확인됨.
-    #   * [중요] Preview 안정성 특성: 
+    #   * [중요] Preview 안정성 특성:
     #     - 32,768 미만에서도 불안정한 경우가 있으며, GA(General Availability) 전 자원 보호를 위한 엄격한 가드레일이 존재함.
     #     - 특히 입력 토큰이 매우 큰 경우, 전체 리소스 사용량에 비례하여 출력 토큰 한도가 유동적으로 줄어들 수 있음.
     #     - 출력이 짧더라도 finish_reason='MAX_TOKENS'가 반환되는 현상이 발생할 수 있음.
-    # - 현재 설정값: 65,000 (설정은 최대치로 하되, Preview 모델 사용 시 안정성을 위해 입력을 적절히 청킹하는 전략 권장)
+    #
+    # ============================================================================
+    # [OpenAI 모델 가이드] (2026-02 기준)
+    # ============================================================================
+    #
+    # [모델 계열 분류]
+    # - GPT-4o 시리즈: 레거시 멀티모달 모델 (temperature 지원)
+    # - GPT-4.1 시리즈: 코딩/지시 따르기 향상 (temperature 지원)
+    # - GPT-5 시리즈: Reasoning 내장 플래그십 (temperature 미지원)
+    # - O-시리즈: Reasoning 전용 모델 (temperature 미지원)
+    #
+    # ----------------------------------------------------------------------------
+    # [GPT-4o 시리즈] - 레거시, temperature 지원 (0-2)
+    # ----------------------------------------------------------------------------
+    # - gpt-4o:
+    #   * Context: 128K, Output: 16K
+    #   * 가격: $2.50/$10.00 per 1M tokens (input/output)
+    #   * 특징: 멀티모달(텍스트, 이미지, 오디오), 빠른 속도
+    #
+    # - gpt-4o-mini:
+    #   * Context: 128K, Output: 16K
+    #   * 가격: $0.15/$0.60 per 1M tokens
+    #   * 특징: GPT-4o 대비 60% 이상 저렴
+    #
+    # ----------------------------------------------------------------------------
+    # [GPT-4.1 시리즈] - 2025년 4월 출시, temperature 지원
+    # ----------------------------------------------------------------------------
+    # - gpt-4.1:
+    #   * Context: 1M, Output: 32K
+    #   * 가격: $2.00/$8.00 per 1M tokens
+    #   * 특징: GPT-4o 대비 코딩/지시 따르기 대폭 향상
+    #
+    # - gpt-4.1-mini / gpt-4.1-nano:
+    #   * Context: 1M
+    #   * 특징: 저비용/초저비용 버전
+    #
+    # ----------------------------------------------------------------------------
+    # [GPT-5 시리즈] - 2025년 8월 출시, temperature 미지원 (1 고정)
+    # ----------------------------------------------------------------------------
+    # - gpt-5:
+    #   * Context: 400K
+    #   * 가격: $1.25/$10.00 per 1M tokens
+    #   * 특징: Reasoning 내장 플래그십 모델
+    #
+    # - gpt-5-mini / gpt-5-nano:
+    #   * 특징: 저비용/초저비용 버전
+    #
+    # - [주의] 샘플링 파라미터 미지원:
+    #   * temperature, top_p, presence_penalty, frequency_penalty 사용 불가
+    #   * 대체 파라미터: reasoning_effort, verbosity
+    #
+    # ----------------------------------------------------------------------------
+    # [O-시리즈 (Reasoning 전용)] - temperature 미지원 (1 고정)
+    # ----------------------------------------------------------------------------
+    # - o1, o1-mini, o1-preview: 초기 Reasoning 모델
+    # - o3, o3-mini, o3-pro: 고급 Reasoning 모델
+    # - o4-mini: 빠른 Reasoning 모델 (수학, 코딩, 시각적 작업 최적화)
+    #
+    # - [주의] 샘플링 파라미터 미지원:
+    #   * temperature, top_p, presence_penalty, frequency_penalty 사용 불가
+    #   * 내부 reasoning tokens가 output으로 과금됨
+    #   * 단순 작업에는 GPT-4o/4.1 사용 권장 (비용 효율)
+    #
+    # ============================================================================
+    # - 현재 설정값: 65,000 (Vertex AI 최대치 기준, OpenAI 사용 시 모델별 제한 자동 적용)
     MAX_OUTPUT_TOKENS: int = 65000
     
     model_config = SettingsConfigDict(

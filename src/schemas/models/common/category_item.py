@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from src.core.config import settings
 
 from ...enums.sentiment_type import SentimentType
 from .highlight_item import HighlightItem
+from .ko_doc import KoDoc
 from .sentiment_content import SentimentContent
 
 logger = logging.getLogger(__name__)
@@ -16,22 +18,65 @@ logger = logging.getLogger(__name__)
 class CategoryItem(BaseModel):
     """
     카테고리별 상세 분석 결과 모델
-    
+
     Note:
         이 모델은 'StructuredAnalysisResult'의 하위 모델로서,
         API의 'response_schema'를 통해 LLM에게 카테고리 분석 지침을 전달합니다.
         필드 설명(description)은 LLM이 데이터를 추출하고 분류하는 기준이 됩니다.
     """
-    
-    name: str = Field(..., description="사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠와 동일한 언어 사용)")
-    key: str = Field(..., description="name의 공백을 '_'로 대체한 키값 (기타 변형 없이 대소문자 유지, 예: 'Product Quality' -> 'Product_Quality')")
-    display_highlight: str = Field(..., description="highlights 배열 중 카테고리를 가장 잘 대표하는 highlight의 keyword 값 (highlights[].keyword에서 선택, 그대로 복사)")
-    sentiment_type: SentimentType = Field(..., description="카테고리별 감정 유형 (평균 점수 기준: negative < 0.45, positive >= 0.55, neutral 0.45 ~ 0.55)")
-    summary: str = Field(..., description="상세한 카테고리 분석 및 인사이트")
-    positive_contents: list[SentimentContent] = Field(default_factory=list, description="평가 대상에 대한 감정 점수가 0.5 이상인 긍정적 콘텐츠 리스트")
-    negative_contents: list[SentimentContent] = Field(default_factory=list, description="평가 대상에 대한 감정 점수가 0.5 미만인 부정적 콘텐츠 리스트")
-    highlights: list[HighlightItem] = Field(default_factory=list, description="핵심 하이라이트 배열 (원문 언어 유지, 번역 금지)")
-    
+
+    model_config = ConfigDict(
+        json_schema_extra={"description": "Detailed analysis result model per category"}
+    )
+
+    name: Annotated[
+        str,
+        Field(description="Clear, descriptive category name understandable by users (use same language as content)"),
+        KoDoc("사용자가 이해할 수 있는 명확하고 설명적인 카테고리명 (콘텐츠와 동일한 언어 사용)")
+    ]
+
+    key: Annotated[
+        str,
+        Field(description="Key derived from name by replacing spaces with '_' (preserve case, e.g., 'Product Quality' -> 'Product_Quality')"),
+        KoDoc("name의 공백을 '_'로 대체한 키값 (기타 변형 없이 대소문자 유지)")
+    ]
+
+    display_highlight: Annotated[
+        str,
+        Field(description="The keyword value from highlights array that best represents the category (select from highlights[].keyword, copy verbatim)"),
+        KoDoc("highlights 배열 중 카테고리를 가장 잘 대표하는 highlight의 keyword 값 (highlights[].keyword에서 선택, 그대로 복사)")
+    ]
+
+    sentiment_type: Annotated[
+        SentimentType,
+        Field(description="Sentiment type per category (based on average score: negative < 0.45, positive >= 0.55, neutral 0.45-0.55)"),
+        KoDoc("카테고리별 감정 유형 (평균 점수 기준: negative < 0.45, positive >= 0.55, neutral 0.45 ~ 0.55)")
+    ]
+
+    summary: Annotated[
+        str,
+        Field(description="Detailed category analysis and insights"),
+        KoDoc("상세한 카테고리 분석 및 인사이트")
+    ]
+
+    positive_contents: Annotated[
+        list[SentimentContent],
+        Field(default_factory=list, description="List of positive contents with sentiment score >= 0.5 for evaluation target"),
+        KoDoc("평가 대상에 대한 감정 점수가 0.5 이상인 긍정적 콘텐츠 리스트")
+    ]
+
+    negative_contents: Annotated[
+        list[SentimentContent],
+        Field(default_factory=list, description="List of negative contents with sentiment score < 0.5 for evaluation target"),
+        KoDoc("평가 대상에 대한 감정 점수가 0.5 미만인 부정적 콘텐츠 리스트")
+    ]
+
+    highlights: Annotated[
+        list[HighlightItem],
+        Field(default_factory=list, description="Array of key highlights (preserve source language, no translation)"),
+        KoDoc("핵심 하이라이트 배열 (원문 언어 유지, 번역 금지)")
+    ]
+
     @field_validator('key')
     @classmethod
     def validate_key(cls, v: str, info: ValidationInfo) -> str:
@@ -46,7 +91,7 @@ class CategoryItem(BaseModel):
                 error_msg = f"key '{v}'이 name '{data['name']}'에서 생성된 예상 키 '{expected_key}'와 다릅니다"
                 raise ValueError(error_msg)
         return v
-    
+
     @field_validator('positive_contents')
     @classmethod
     def validate_positive_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
@@ -58,13 +103,13 @@ class CategoryItem(BaseModel):
         for content in v:
             if content.score < 0.5:
                 invalid_contents.append(f"id {content.id} (score: {content.score})")
-        
+
         if invalid_contents:
             error_msg = f"긍정 리스트에 0.5 미만 점수 포함: {', '.join(invalid_contents)}"
             raise ValueError(error_msg)
-        
+
         return v
-    
+
     @field_validator('negative_contents')
     @classmethod
     def validate_negative_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
@@ -76,13 +121,13 @@ class CategoryItem(BaseModel):
         for content in v:
             if content.score >= 0.5:
                 invalid_contents.append(f"id {content.id} (score: {content.score})")
-        
+
         if invalid_contents:
             error_msg = f"부정 리스트에 0.5 이상 점수 포함: {', '.join(invalid_contents)}"
             raise ValueError(error_msg)
-        
+
         return v
-    
+
     @field_validator('sentiment_type')
     @classmethod
     def validate_sentiment_type(cls, v: SentimentType, info: ValidationInfo) -> SentimentType:
@@ -97,7 +142,7 @@ class CategoryItem(BaseModel):
             pos_count = len(pos_contents)
             neg_count = len(neg_contents)
             total_count = pos_count + neg_count
-            
+
             if total_count > 0:
                 avg_score = 0.0
                 for content in pos_contents:
@@ -105,10 +150,10 @@ class CategoryItem(BaseModel):
                 for content in neg_contents:
                     avg_score += content.score
                 avg_score = avg_score / total_count
-                
+
                 expected_type = SentimentType.from_average_score(avg_score)
                 if v != expected_type:
                     error_msg = f"sentiment_type '{v.value}'이 평균 점수 {avg_score:.2f}와 일치하지 않습니다. 예상: '{expected_type.value}'"
                     raise ValueError(error_msg)
-        
+
         return v

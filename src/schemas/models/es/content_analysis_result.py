@@ -8,7 +8,7 @@ from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
-from src.schemas.models.prompt.structured_analysis_result import StructuredAnalysisResult
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 
 
 class ContentAnalysisResultState(str, Enum):

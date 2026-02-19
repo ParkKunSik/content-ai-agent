@@ -1,0 +1,17 @@
+{% extends "task/common/content_analysis_summary_refine.jinja2" %}
+{% from 'task/json_format.jinja2' import json_response_rule %}
+{#
+    Vertex AI: JSON 형식 지시 및 문체 지시 override
+
+    **문체**:
+    - 격식을 갖춘 문서체: 비즈니스 맥락에 적합한 전문적이고 정중한 언어 사용
+#}
+
+{% block writing_style %}
+**Writing Style**:
+- **Formal written style**: Use professional, polite language suitable for business contexts
+{% endblock %}
+
+{% block json_response_rule %}
+{{ json_response_rule() }}
+{% endblock %}

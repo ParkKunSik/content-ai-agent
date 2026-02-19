@@ -28,10 +28,10 @@ Google Vertex AI의 **Gemini 2.5/3.0** 모델을 활용하여, 효율적인 단�
 ## 🛠 기술 스택 (Tech Stack)
 
 *   **Language:** Python 3.10+
-*   **AI Platform:** Google Vertex AI (Gemini 2.5 / 3.0 Pro & Flash)
+*   **AI Platform:** Google Vertex AI, OpenAI (멀티 Provider 지원)
 *   **Framework:** FastAPI (비동기 API 서버)
 *   **Data Store:** Redis, Elasticsearch
-*   **Infrastructure:** Docker, Docker Compose
+*   **Infrastructure:** Docker, Docker Compose, AWS (S3, Secrets Manager)
 *   **Testing:** pytest (Asyncio 기반 통합 테스트)
 
 ---
@@ -42,10 +42,17 @@ Google Vertex AI의 **Gemini 2.5/3.0** 모델을 활용하여, 효율적인 단�
 src/
 ├── agent/          # Agent 진입점 및 코어 클래스 정의
 ├── api/            # API 라우터 및 엔드포인트 정의
-├── core/           # 설정(Config), 모델 팩토리(ModelFactory), 상수
-├── loaders/        # 데이터 수집 (GCS, Local File)
+├── core/           # 설정(Config), LLM Provider 추상화
+│   └── llm/        # LLM Provider 추상화 모듈
+│       ├── base/   # ABC 정의 (LLMProviderSession, LLMProviderFactory)
+│       ├── providers/
+│       │   ├── google/vertexai/  # Vertex AI Provider
+│       │   └── openai/           # OpenAI Provider
+│       └── registry.py           # ProviderRegistry
+├── loaders/        # 데이터 수집 (GCS, S3, Local File)
 ├── prompts/        # Jinja2 템플릿 (System, Task)
 ├── schemas/        # Pydantic 모델 및 Enum (PersonaType, AnalysisMode)
+├── secrets/        # 시크릿 관리 (ENV, GSM, AWS Secrets Manager)
 ├── services/       # 핵심 로직 (Orchestrator, LLMService)
 └── utils/          # 공통 유틸리티 (PromptManager, PromptRenderer)
 
@@ -62,8 +69,22 @@ viewer/             # 분석 결과 뷰어 (독립 프로젝트, AWS Lambda 배�
 
 *   **기본 의존성 (`dependencies`)**: ES 연결, FastAPI 등 최소 필수 패키지.
 *   **GCP 의존성 (`gcp`)**: Vertex AI SDK, Google Cloud Storage 등 분석 기능용.
+*   **OpenAI 의존성 (`openai`)**: OpenAI SDK, tiktoken 등 OpenAI Provider용.
+*   **AWS 의존성 (`aws`)**: boto3 (S3, Secrets Manager 등 AWS 인프라용).
 *   **전체 의존성 (`full`)**: 기본 + GCP (기존 설치와 동일).
+*   **모든 Provider (`all-providers`)**: GCP + OpenAI + AWS 전체 지원.
 *   **개발 의존성 (`dev`)**: 테스트, 린팅용 패키지 (pytest, ruff, black 등).
+
+```bash
+# GCP/Vertex AI만 사용 (기본)
+pip install -e ".[gcp]"
+
+# OpenAI만 사용
+pip install -e ".[openai]"
+
+# 모든 Provider 지원
+pip install -e ".[all-providers]"
+```
 
 > **Note:** 분석 결과 뷰어는 독립 프로젝트 `viewer/`로 분리되었습니다. 뷰어 설치 및 실행은 [viewer/README.md](viewer/README.md)를 참조하세요.
 
@@ -72,11 +93,33 @@ viewer/             # 분석 결과 뷰어 (독립 프로젝트, AWS Lambda 배�
 ## 🚦 시작하기 (Getting Started)
 
 ### 1. 환경 설정
-프로젝트 루트에 `.env.local` 파일을 생성하고 필요한 GCP 및 인프라 설정을 입력합니다.
+프로젝트 루트에 `.env.local` 파일을 생성하고 필요한 설정을 입력합니다.
 
 ```bash
 cp .env.local.example .env.local
 ```
+
+#### LLM Provider 설정
+
+```bash
+# Provider 선택 (VERTEX_AI | OPENAI)
+LLM_PROVIDER=VERTEX_AI
+
+# Google Vertex AI 설정 (LLM_PROVIDER=VERTEX_AI인 경우)
+GCP_PROJECT_ID=your-project-id
+GCP_REGION=asia-northeast3
+GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+VERTEX_AI_MODEL_PRO=gemini-2.5-pro
+VERTEX_AI_MODEL_FLASH=gemini-2.5-flash
+
+# OpenAI 설정 (LLM_PROVIDER=OPENAI인 경우)
+OPENAI_API_KEY=sk-xxxxx
+OPENAI_ORG_ID=org-xxxxx        # Optional
+OPENAI_MODEL_PRO=gpt-4o
+OPENAI_MODEL_FLASH=gpt-4o-mini
+```
+
+> **Note:** Provider 전환은 `LLM_PROVIDER` 환경변수만 변경하면 됩니다. 코드 수정 불필요.
 
 ### 2. 인프라 실행 (선택 사항)
 필요한 경우 도커를 통해 추가 인프라를 실행합니다. (현재 핵심 기능은 외부 인프라 의존성 없음)

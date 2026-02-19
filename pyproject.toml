@@ -39,9 +39,27 @@ gcp = [
     "tenacity"
 ]
 
+# OpenAI 기반 분석 기능
+openai = [
+    "openai>=1.0.0",
+    "tiktoken"
+]
+
+# AWS 인프라 지원
+aws = [
+    "boto3>=1.28.0"
+]
+
 # 전체 기능 (기존 pip install . 과 동일)
 full = [
     "content-ai-agent[gcp]"
+]
+
+# 모든 Provider 지원 (GCP + OpenAI + AWS)
+all-providers = [
+    "content-ai-agent[gcp]",
+    "content-ai-agent[openai]",
+    "content-ai-agent[aws]"
 ]
 
 dev = [

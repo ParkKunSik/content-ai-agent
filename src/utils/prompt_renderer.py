@@ -12,7 +12,7 @@ class PromptRenderer:
         if template_dir is None:
             # Assume templates are in src/prompts/templates/
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            template_dir = os.path.join(current_dir, "..", "prompts", "templates")
+            template_dir = os.path.join(current_dir, "..", "prompts")
         
         self.env = Environment(loader=FileSystemLoader(template_dir))
 

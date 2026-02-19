@@ -4,8 +4,9 @@ import logging
 import random
 from typing import Any, Awaitable, Callable, Dict, Generic, Optional, TypeVar
 
-from google.genai import errors
 from pydantic import BaseModel, ValidationError
+
+from src.core.llm.exceptions import LLMError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +16,13 @@ T = TypeVar('T', bound=BaseModel)
 class ValidationErrorHandler(Generic[T]):
     """
     JSON 응답 검증 실패 시 자동 재시도 및 에러 복구를 담당하는 핸들러.
-    Phase 2에서 세션 기반 분석의 안정성을 위해 도입된다.
+    Provider 중립적으로 설계되어 Vertex AI, OpenAI 등 모든 LLM Provider를 지원한다.
     """
-    
+
     def __init__(self, max_retries: int = 3, delay_between_retries: float = 1.0):
         self.max_retries = max_retries
         self.delay_between_retries = delay_between_retries
-    
+
     async def validate_with_retry(
         self,
         response_generator: Callable[[], Awaitable[str]],
@@ -31,42 +32,42 @@ class ValidationErrorHandler(Generic[T]):
         """
         응답 생성 함수를 호출하고 지정된 모델로 검증을 시도한다.
         실패 시 자동으로 재시도한다.
-        
+
         Args:
             response_generator: 응답을 생성하는 함수 (재시도 시 다시 호출됨)
             model_class: 검증할 Pydantic 모델 클래스
             error_context: 에러 로깅용 컨텍스트
-        
+
         Returns:
             검증된 모델 인스턴스
-            
+
         Raises:
             ValidationError: 최대 재시도 횟수 초과 시
         """
         last_error = None
         last_response = None
-        
+
         for attempt in range(self.max_retries + 1):
             try:
                 # 응답 생성
                 response_str = await response_generator()
                 last_response = response_str
-                
+
                 # JSON 파싱 및 검증
                 parsed_data = self._parse_json_response(response_str)
                 validated_model = model_class(**parsed_data)
-                
+
                 if attempt > 0:
                     logger.info(f"{error_context} succeeded on attempt {attempt + 1}")
-                
+
                 return validated_model
-                
-            except (json.JSONDecodeError, ValidationError, errors.ClientError) as e:
+
+            except (json.JSONDecodeError, ValidationError, LLMError) as e:
                 last_error = e
-                
+
                 if attempt < self.max_retries:
-                    # 429 Rate Limit 에러는 Exponential backoff with jitter 적용
-                    if isinstance(e, errors.ClientError) and self._is_rate_limit_error(e):
+                    # Rate Limit 에러는 Exponential backoff with jitter 적용
+                    if isinstance(e, RateLimitError) or self._is_rate_limit_error(e):
                         delay = self._calculate_backoff_delay(attempt)
                         logger.warning(
                             f"{error_context} rate limit hit on attempt {attempt + 1}/{self.max_retries + 1}, waiting {delay:.2f}s: {e}"
@@ -143,8 +144,8 @@ class ValidationErrorHandler(Generic[T]):
                 error_context = response[context_start:context_end]
                 logger.error(f"JSON error context around position {error_pos}: ...{error_context}...")
     
-    def _is_rate_limit_error(self, error: errors.ClientError) -> bool:
-        """ClientError가 429 Rate Limit 에러인지 확인한다."""
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """에러가 Rate Limit 에러인지 확인한다 (Provider 중립)."""
         error_str = str(error).lower()
         return any(keyword in error_str for keyword in ["429", "quota", "rate", "limit", "exhausted"])
     
