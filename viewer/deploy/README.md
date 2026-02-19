@@ -214,48 +214,25 @@ S3/CloudFormation 권한이 없는 경우 **Lambda 콘솔에서 직접 배포**�
 > **중요**: macOS/Windows에서 패키징 시 Lambda(Amazon Linux)와 바이너리 호환성 문제가 발생합니다.
 > `pydantic_core` 등 네이티브 모듈은 반드시 **Linux용 바이너리**로 설치해야 합니다.
 
-#### 방법 A: Docker 사용 (권장)
+#### 방법 A: 패키징 스크립트 사용 (권장)
 
 > **사전 확인 (필수)**
-> - Lambda 런타임 버전과 Docker 이미지 버전 일치 필요 (예: Python 3.12)
+> - Lambda 런타임 버전: Python 3.12
 > - Lambda 아키텍처 확인: 콘솔 → 함수 → **일반 구성** → **아키텍처**
 
 ```bash
 cd viewer
 
-# 1. 초기화
-rm -rf lambda-package.zip && docker rm -f lambda-build 2>/dev/null
+# x86_64 Lambda (기본)
+./deploy/package-lambda.sh
 
-# 2. Lambda 런타임 컨테이너 생성
-#    - x86_64 Lambda: --platform linux/amd64
-#    - arm64 Lambda:  --platform linux/arm64
-docker run -d --name lambda-build --platform linux/amd64 --entrypoint tail \
-    public.ecr.aws/lambda/python:3.12 -f /dev/null
+# arm64 Lambda
+./deploy/package-lambda.sh arm64
 
-# 3. 의존성 설치 + viewer 복사 + zip 생성
-docker exec lambda-build pip install \
-    fastapi jinja2 'pydantic>=2.0.0' pydantic-settings \
-    python-dotenv 'elasticsearch>=8.0.0,<9.0.0' requests 'mangum>=0.17.0' \
-    --target /tmp/package && \
-docker cp viewer lambda-build:/tmp/package/ && \
-docker exec lambda-build python -c "
-import zipfile, os
-with zipfile.ZipFile('/tmp/lambda-package.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-    for root, dirs, files in os.walk('/tmp/package'):
-        dirs[:] = [d for d in dirs if '__pycache__' not in d and 'streamlit' not in d and '.dist-info' not in d and '.egg-info' not in d]
-        for file in files:
-            filepath = os.path.join(root, file)
-            arcname = os.path.relpath(filepath, '/tmp/package')
-            zf.write(filepath, arcname)
-"
-
-# 4. zip 추출 및 정리
-docker cp lambda-build:/tmp/lambda-package.zip ./lambda-package.zip && \
-docker rm -f lambda-build
-
-# 5. 결과 확인 (fastapi/, viewer/main.py 포함되어야 함)
-unzip -l lambda-package.zip | grep -E "fastapi/|viewer/main" && ls -lh lambda-package.zip
+# 결과: lambda-package.zip 생성
 ```
+
+스크립트는 Docker를 사용하여 Lambda 런타임 환경에서 의존성을 설치하고 패키징합니다.
 
 #### 방법 B: pip --platform 옵션 (Docker 없이)
 
