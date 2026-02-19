@@ -51,7 +51,8 @@ async def health():
     return "OK"
 
 
-@router.get("/", response_class=HTMLResponse, name="viewer_list")
+@router.get("", response_class=HTMLResponse, name="viewer_list")
+@router.get("/", response_class=HTMLResponse, name="viewer_list_slash")
 async def viewer_list(request: Request, page: int = 1):
     """프로젝트 목록 페이지 (페이징 지원)"""
     service = get_service()

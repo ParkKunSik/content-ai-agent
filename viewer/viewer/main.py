@@ -19,19 +19,15 @@ if str(_viewer_root) not in sys.path:
     sys.path.insert(0, str(_viewer_root))
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from viewer.api.routes import router
 
 app = FastAPI(
     title="Content Analysis Viewer",
     description="ES 분석 결과 조회 서비스",
-    version="0.1.0"
+    version="0.1.0",
+    redirect_slashes=False  # Lambda 환경에서 trailing slash 리다이렉션 루프 방지
 )
 
-# 루트 경로에서 /viewer/로 리다이렉트
-@app.get("/", include_in_schema=False)
-async def root():
-    return RedirectResponse(url="/viewer/")
 
 # API Router 등록
 app.include_router(router)
