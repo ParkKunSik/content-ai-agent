@@ -82,3 +82,18 @@ class ESClient:
     def result_index_alias(self) -> str:
         """분석 결과 Alias 이름"""
         return settings.ES_ANALYSIS_RESULT_ALIAS
+
+    def get_alias_for_provider(self, provider: str) -> str:
+        """Provider 문자열에 따른 alias 반환
+
+        Args:
+            provider: "vertex-ai" 또는 "openai"
+
+        Returns:
+            해당 provider의 alias, 미지원 provider면 기존 alias 반환
+        """
+        if provider == "vertex-ai":
+            return settings.ES_VERTEX_AI_ALIAS
+        elif provider == "openai":
+            return settings.ES_OPENAI_ALIAS
+        return settings.ES_ANALYSIS_RESULT_ALIAS

@@ -25,10 +25,22 @@ class ViewerDataService:
     # Wadiz API 세션 (Queue-it 쿠키 유지)
     _wadiz_session: Optional[requests.Session] = None
 
-    def __init__(self):
-        es = ESClient()
-        self.client = es.client
-        self.result_index_alias = es.result_index_alias
+    def __init__(self, provider: Optional[str] = None):
+        """
+        Args:
+            provider: "vertex-ai" 또는 "openai", None이면 기존 alias 사용
+        """
+        self._es_client = ESClient()
+        self.client = self._es_client.client
+        self.provider = provider
+
+        # Provider별 alias 설정
+        if provider:
+            self.result_index_alias = self._es_client.get_alias_for_provider(provider)
+            logger.info(f"ViewerDataService initialized with provider={provider}, alias={self.result_index_alias}")
+        else:
+            self.result_index_alias = self._es_client.result_index_alias
+            logger.info(f"ViewerDataService initialized with default alias={self.result_index_alias}")
 
     def get_project_ids(self) -> List[str]:
         """고유 project_id 목록 조회"""

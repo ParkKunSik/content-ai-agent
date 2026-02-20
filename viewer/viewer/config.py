@@ -29,7 +29,13 @@ class Settings(BaseSettings):
     ES_USE_SSL: bool = False
     ES_VERIFY_CERTS: bool = False
     ES_TIMEOUT: int = 30
+
+    # ES Alias 설정 (기존 - 하위 호환)
     ES_ANALYSIS_RESULT_ALIAS: str = "core-content-analysis-result-alias"
+
+    # Provider별 ES Alias 설정
+    ES_VERTEX_AI_ALIAS: str = "core-content-analysis-result-vertex-ai-alias"
+    ES_OPENAI_ALIAS: str = "core-content-analysis-result-openai-alias"
 
     @field_validator('ES_PORT', mode='before')
     @classmethod

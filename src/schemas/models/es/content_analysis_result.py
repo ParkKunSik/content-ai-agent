@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_serializer
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
+from src.schemas.models.common.llm_usage_info import LLMUsageInfo
 from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
 from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 
@@ -44,11 +45,23 @@ class ContentAnalysisResultDocument(BaseModel):
     state: ContentAnalysisResultState = Field(description="분석 상태")
     reason: Optional[str] = Field(default=None, description="실패/사용불가 사유")
     result: Optional[Union[ContentAnalysisResultDataV1]] = Field(
-        default=None, 
+        default=None,
         description="분석 결과 데이터",
         discriminator='version'
     )
-    
+
+    # LLM 사용 정보
+    llm_usages: list[LLMUsageInfo] = Field(
+        default_factory=list,
+        description="LLM 호출별 사용 정보 목록"
+    )
+
+    # 증분 분석 기준점
+    baseline_content_id: Optional[int] = Field(
+        default=None,
+        description="증분 분석 기준 content_id (이 ID 이후의 콘텐츠만 분석)"
+    )
+
     # 메타데이터
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="생성 시간")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="수정 시간")
@@ -86,6 +99,17 @@ class ContentAnalysisResultDocument(BaseModel):
                             }
                         }
                     },
+                    "llm_usages": {
+                        "type": "nested",
+                        "properties": {
+                            "step": {"type": "keyword"},
+                            "model": {"type": "keyword"},
+                            "input_tokens": {"type": "integer"},
+                            "output_tokens": {"type": "integer"},
+                            "duration_ms": {"type": "integer"}
+                        }
+                    },
+                    "baseline_content_id": {"type": "integer"},
                     "created_at": {"type": "date"},
                     "updated_at": {"type": "date"}
                 }

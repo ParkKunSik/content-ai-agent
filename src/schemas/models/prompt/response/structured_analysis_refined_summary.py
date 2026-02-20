@@ -27,6 +27,15 @@ class RefinedCategorySummary(BaseModel):
         KoDoc("정제된 카테고리 요약 (완전한 문장으로 작성, 줄임말 스타일 금지, 글자수 제한 규칙 준수)")
     ]
 
+    keywords: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Key terms extracted verbatim from the refined summary (must match refined text exactly)"
+        ),
+        KoDoc("정제된 요약에서 추출한 핵심 키워드 (정제된 텍스트와 정확히 일치해야 함)")
+    ]
+
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
@@ -62,6 +71,33 @@ class StructuredAnalysisRefinedSummary(BaseModel):
         str,
         Field(description="Refined overall analysis summary (write as complete sentences, DO NOT use abbreviated style, adhere to character limit rules)"),
         KoDoc("정제된 전체 분석 요약 (완전한 문장으로 작성, 줄임말 스타일 금지, 글자수 제한 규칙 준수)")
+    ]
+
+    keywords: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Key terms extracted verbatim from the refined summary (must match refined text exactly)"
+        ),
+        KoDoc("정제된 요약에서 추출한 핵심 키워드 (정제된 텍스트와 정확히 일치해야 함)")
+    ]
+
+    good_points: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Refined positive highlights (max 3, complete sentences, follow length limit rules, concrete and evidence-based)"
+        ),
+        KoDoc("정제된 좋은 점 (최대 3개, 완성된 문장 형태, 글자수 제한 규칙 준수, 구체적이고 증거 기반)")
+    ]
+
+    caution_points: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Refined non-critical but noteworthy points (max 2, complete sentences, follow length limit rules, constructive framing)"
+        ),
+        KoDoc("정제된 참고 사항 (최대 2개, 완성된 문장 형태, 글자수 제한 규칙 준수, 건설적 표현)")
     ]
 
     categories: Annotated[

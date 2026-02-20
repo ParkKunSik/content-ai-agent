@@ -5,7 +5,7 @@ StructuredAnalysisRefineResult 기반 HTML 생성기
 """
 import html
 import re
-from typing import Optional
+from typing import List, Optional
 
 from viewer.schemas.models import AnalysisResult
 
@@ -23,6 +23,61 @@ class RefineResultRenderer:
 
         pattern = re.escape(keyword)
         return re.sub(f"({pattern})", r"<strong>\1</strong>", text, flags=re.IGNORECASE)
+
+    @staticmethod
+    def _highlight_keywords_in_summary(summary: str, keywords: List[str]) -> str:
+        """
+        summary에서 keywords에 해당하는 부분을 <strong> 태그로 감싸기
+        """
+        if not keywords:
+            return summary
+
+        result = summary
+        for keyword in keywords:
+            if keyword in result:
+                # 대소문자 구분하여 원본 유지
+                pattern = re.escape(keyword)
+                result = re.sub(
+                    f"({pattern})",
+                    r"<strong>\1</strong>",
+                    result,
+                    count=1  # 첫 번째 매칭만 처리 (중복 방지)
+                )
+        return result
+
+    @staticmethod
+    def _render_insights_section(
+        good_points: List[str],
+        caution_points: List[str]
+    ) -> str:
+        """
+        Good Points와 Caution Points를 HTML로 렌더링
+        """
+        if not good_points and not caution_points:
+            return ""
+
+        html_parts = ['<div class="insights-section">']
+
+        if good_points:
+            html_parts.append('<div class="good-points">')
+            html_parts.append('<h4 class="insights-title good">좋은 점</h4>')
+            html_parts.append('<ul>')
+            for point in good_points:
+                html_parts.append(f'<li>{point}</li>')
+            html_parts.append('</ul>')
+            html_parts.append('</div>')
+
+        if caution_points:
+            html_parts.append('<div class="caution-points">')
+            html_parts.append('<h4 class="insights-title caution">참고 사항</h4>')
+            html_parts.append('<ul>')
+            for point in caution_points:
+                html_parts.append(f'<li>{point}</li>')
+            html_parts.append('</ul>')
+            html_parts.append('</div>')
+
+        html_parts.append('</div>')
+        return '\n'.join(html_parts)
 
     @classmethod
     def generate_amazon_style_html(
@@ -134,6 +189,58 @@ class RefineResultRenderer:
         .summary-section {{
             margin-bottom: 30px;
             line-height: 1.6;
+        }}
+
+        .summary-section strong {{
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .insights-section {{
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+
+        .good-points, .caution-points {{
+            flex: 1;
+            padding: 16px;
+            border-radius: 8px;
+        }}
+
+        .good-points {{
+            background-color: #F0FFF4;
+            border: 1px solid #067D62;
+        }}
+
+        .caution-points {{
+            background-color: #FFFAF0;
+            border: 1px solid #C7511F;
+        }}
+
+        .insights-title {{
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }}
+
+        .insights-title.good {{
+            color: #067D62;
+        }}
+
+        .insights-title.caution {{
+            color: #C7511F;
+        }}
+
+        .insights-section ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+
+        .insights-section li {{
+            margin-bottom: 8px;
+            line-height: 1.5;
+            font-size: 14px;
         }}
 
         .ai-badge {{
@@ -420,13 +527,21 @@ class RefineResultRenderer:
     </div>
 """
 
+        # 요약에 키워드 하이라이트 적용
+        highlighted_summary = cls._highlight_keywords_in_summary(summary, result.keywords)
+
+        # 인사이트 섹션 생성
+        insights_html = cls._render_insights_section(result.good_points, result.caution_points)
+
         html_content += f"""
     <h1>고객 의견: {content_type_description}</h1>
 
     <div class="summary-section">
-        {summary}
+        {highlighted_summary}
         <span class="ai-badge">ai</span> AI 기반 고객 리뷰 텍스트에서 생성됨
     </div>
+
+    {insights_html}
 
     <div class="learn-more">자세히 알아보려면 선택하세요</div>
 
@@ -462,7 +577,8 @@ class RefineResultRenderer:
         for idx, category in enumerate(categories):
             category_name = category.name
             category_display = category.display_highlight
-            category_summary = category.summary
+            # 카테고리 요약에 키워드 하이라이트 적용
+            category_summary = cls._highlight_keywords_in_summary(category.summary, category.keywords)
             pos_count = category.positive_count
             neg_count = category.negative_count
             highlights = category.highlights

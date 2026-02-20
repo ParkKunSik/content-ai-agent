@@ -1,5 +1,6 @@
 import logging
-from typing import Any, List, Optional, Type
+import time
+from typing import Any, List, Optional, Tuple, Type
 
 from src.core.config import settings
 from src.core.llm.enums import FinishReason, ProviderType, ResponseFormat
@@ -11,11 +12,13 @@ from src.schemas.enums.mime_type import MimeType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
+from src.schemas.models.common.llm_usage_info import LLMUsageInfo
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
 from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
 from src.utils.prompt_manager import PromptManager
+from src.utils.token_cost_calculator import create_llm_usage_info
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +42,7 @@ class LLMService:
 
     def _get_provider_type(self) -> ProviderType:
         """현재 설정된 LLM Provider 타입을 반환한다."""
-        provider_str = settings.LLM_PROVIDER.upper()
-        if provider_str == "OPENAI":
-            return ProviderType.OPENAI
-        else:
-            return ProviderType.VERTEX_AI
+        return settings.LLM_PROVIDER
 
     async def count_total_tokens(self, contents: List[str]) -> int:
         total = 0
@@ -65,6 +64,17 @@ class LLMService:
         response_schema: Optional[Type[Any]] = None
     ) -> str:
         """Generic method to generate content using a specific persona."""
+        llm_response = self._generate_raw(prompt, persona_type, mime_type, response_schema)
+        return self._extract_text_safely(llm_response, persona_type)
+
+    def _generate_raw(
+        self,
+        prompt: str,
+        persona_type: PersonaType,
+        mime_type: MimeType = MimeType.TEXT_PLAIN,
+        response_schema: Optional[Type[Any]] = None
+    ) -> LLMResponse:
+        """LLM 호출 후 LLMResponse 전체를 반환하는 내부 메서드."""
         # PersonaConfig 생성
         response_format = ResponseFormat.JSON if mime_type == MimeType.APPLICATION_JSON else ResponseFormat.TEXT
         persona_config = PersonaConfig(
@@ -79,11 +89,46 @@ class LLMService:
         # ProviderRegistry를 통한 세션 생성
         session = ProviderRegistry.start_session(persona_config)
 
-        # LLM 콘텐츠 생성
-        llm_response = session.generate_content(prompt)
+        # LLM 콘텐츠 생성 및 반환
+        return session.generate_content(prompt)
 
-        # LLMResponse에서 텍스트 추출 (Provider 중립 예외처리)
-        return self._extract_text_safely(llm_response, persona_type)
+    def _generate_raw_with_text(
+        self,
+        prompt: str,
+        persona_type: PersonaType,
+        mime_type: MimeType = MimeType.TEXT_PLAIN,
+        response_schema: Optional[Type[Any]] = None
+    ) -> Tuple[str, LLMResponse]:
+        """LLM 호출 후 (텍스트, LLMResponse) 튜플을 반환하는 내부 메서드."""
+        llm_response = self._generate_raw(prompt, persona_type, mime_type, response_schema)
+        text = self._extract_text_safely(llm_response, persona_type)
+        return text, llm_response
+
+    async def generate_with_usage(
+        self,
+        prompt: str,
+        persona_type: PersonaType,
+        step: int,
+        mime_type: MimeType = MimeType.TEXT_PLAIN,
+        response_schema: Optional[Type[Any]] = None
+    ) -> Tuple[str, LLMUsageInfo]:
+        """LLM 생성 + 사용 정보(토큰, 소요시간) 반환."""
+        start_time = time.time()
+
+        llm_response = self._generate_raw(prompt, persona_type, mime_type, response_schema)
+        text = self._extract_text_safely(llm_response, persona_type)
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        usage_info = create_llm_usage_info(
+            step=step,
+            model=persona_type.get_model_name(),
+            input_tokens=llm_response.usage.prompt_tokens,
+            output_tokens=llm_response.usage.completion_tokens,
+            duration_ms=duration_ms
+        )
+
+        return text, usage_info
 
     def _extract_text_safely(self, response: LLMResponse, persona_type: PersonaType) -> str:
         """LLMResponse에서 안전하게 텍스트를 추출한다 (Provider 중립)."""
@@ -131,10 +176,13 @@ class LLMService:
         project_type: ProjectType,
         content_items: List[ContentItem],
         content_type: Optional[ExternalContentType] = None
-    ) -> StructuredAnalysisResult:
+    ) -> Tuple[StructuredAnalysisResult, LLMUsageInfo]:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
+
+        Returns:
+            Tuple[StructuredAnalysisResult, LLMUsageInfo]: 분석 결과와 LLM 사용 정보
         """
         analysis_items = self._convert_to_analysis_items(content_items)
 
@@ -145,15 +193,34 @@ class LLMService:
             analysis_content_items=analysis_items
         )
 
-        # ValidationErrorHandler를 사용한 재시도 로직 적용
-        async def response_generator() -> str:
-            return await self.generate(prompt, PersonaType.PRO_DATA_ANALYST, mime_type=MimeType.APPLICATION_JSON, response_schema=StructuredAnalysisResult)
-        
-        return await self.validation_handler.validate_with_retry(
+        persona_type = PersonaType.PRO_DATA_ANALYST
+        start_time = time.time()
+
+        # ValidationErrorHandler를 사용한 재시도 로직 적용 (토큰 정보 포함)
+        async def response_generator():
+            return self._generate_raw_with_text(
+                prompt, persona_type,
+                mime_type=MimeType.APPLICATION_JSON,
+                response_schema=StructuredAnalysisResult
+            )
+
+        result, llm_response = await self.validation_handler.validate_with_retry_and_usage(
             response_generator=response_generator,
             model_class=StructuredAnalysisResult,
             error_context="content_analysis_structuring"
         )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        usage_info = create_llm_usage_info(
+            step=1,
+            model=persona_type.get_model_name(),
+            input_tokens=llm_response.usage.prompt_tokens,
+            output_tokens=llm_response.usage.completion_tokens,
+            duration_ms=duration_ms
+        )
+
+        return result, usage_info
 
     async def refine_analysis_summary(
         self,
@@ -162,10 +229,13 @@ class LLMService:
         refine_content_items: StructuredAnalysisSummary,
         persona_type: PersonaType,
         content_type: Optional[ExternalContentType] = None
-    ) -> StructuredAnalysisRefinedSummary:
+    ) -> Tuple[StructuredAnalysisRefinedSummary, LLMUsageInfo]:
         """
         분석 요약 정제 (Refinement) - Phase 2 세션 기반 검증 적용
         분석된 데이터를 바탕으로 요약의 길이를 최적화하고 정제합니다.
+
+        Returns:
+            Tuple[StructuredAnalysisRefinedSummary, LLMUsageInfo]: 정제된 결과와 LLM 사용 정보
         """
         prompt = self.prompt_manager.get_content_analysis_summary_refine_prompt(
             project_id=project_id,
@@ -174,13 +244,31 @@ class LLMService:
             refine_content_items=refine_content_items
         )
 
-        # ValidationErrorHandler를 사용한 재시도 로직 적용
-        async def response_generator() -> str:
-            return await self.generate(prompt, persona_type, mime_type=MimeType.APPLICATION_JSON, response_schema=StructuredAnalysisRefinedSummary)
-        
-        return await self.validation_handler.validate_with_retry(
+        start_time = time.time()
+
+        # ValidationErrorHandler를 사용한 재시도 로직 적용 (토큰 정보 포함)
+        async def response_generator():
+            return self._generate_raw_with_text(
+                prompt, persona_type,
+                mime_type=MimeType.APPLICATION_JSON,
+                response_schema=StructuredAnalysisRefinedSummary
+            )
+
+        result, llm_response = await self.validation_handler.validate_with_retry_and_usage(
             response_generator=response_generator,
             model_class=StructuredAnalysisRefinedSummary,
             error_context="analysis_refinement"
         )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        usage_info = create_llm_usage_info(
+            step=2,
+            model=persona_type.get_model_name(),
+            input_tokens=llm_response.usage.prompt_tokens,
+            output_tokens=llm_response.usage.completion_tokens,
+            duration_ms=duration_ms
+        )
+
+        return result, usage_info
 

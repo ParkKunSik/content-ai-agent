@@ -90,12 +90,23 @@
 {% endblock %}
 
 {% block content %}
+{# Provider별 route 결정 #}
+{% if provider == 'vertex-ai' %}
+    {% set list_route = 'viewer_vertex_ai_list' %}
+    {% set detail_route = 'viewer_vertex_ai_detail' %}
+{% elif provider == 'openai' %}
+    {% set list_route = 'viewer_openai_list' %}
+    {% set detail_route = 'viewer_openai_detail' %}
+{% else %}
+    {% set list_route = 'viewer_list' %}
+    {% set detail_route = 'viewer_detail' %}
+{% endif %}
 <div class="nav-bar">
-    <a href="{{ url_for('viewer_list') }}" class="back-link">← 프로젝트 목록</a>
+    <a href="{{ url_for(list_route) }}" class="back-link">← 프로젝트 목록{% if provider %} ({{ provider|upper }}){% endif %}</a>
     {% if content_types %}
     <div class="content-type-selector">
         {% for ct in content_types %}
-        <a href="{{ url_for('viewer_detail', project_id=project_id) }}?content_type={{ ct }}"
+        <a href="{{ url_for(detail_route, project_id=project_id) }}?content_type={{ ct }}"
            class="content-type-btn {% if ct == content_type %}active{% endif %}">
             {{ ct }}
         </a>
@@ -164,7 +175,13 @@
     function onProjectChange(projectId) {
         // 현재 content_type 유지하며 새 프로젝트로 이동
         const currentContentType = '{{ content_type }}';
+        {% if provider == 'vertex-ai' %}
+        window.location.href = `/viewer/vertex-ai/${projectId}?content_type=${currentContentType}`;
+        {% elif provider == 'openai' %}
+        window.location.href = `/viewer/openai/${projectId}?content_type=${currentContentType}`;
+        {% else %}
         window.location.href = `/viewer/${projectId}?content_type=${currentContentType}`;
+        {% endif %}
     }
 </script>
 {% endblock %}

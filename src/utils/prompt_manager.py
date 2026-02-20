@@ -28,6 +28,14 @@ class PromptManager:
     def MAX_CATEGORY_SUMMARY_CHARS(self) -> int:
         return settings.MAX_CATEGORY_SUMMARY_CHARS
 
+    @property
+    def MAX_INSIGHT_ITEM_CHARS_ANALYSIS(self) -> int:
+        return settings.MAX_INSIGHT_ITEM_CHARS_ANALYSIS
+
+    @property
+    def MAX_INSIGHT_ITEM_CHARS_REFINE(self) -> int:
+        return settings.MAX_INSIGHT_ITEM_CHARS_REFINE
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(PromptManager, cls).__new__(cls)
@@ -72,6 +80,7 @@ class PromptManager:
             project_type=project_type,
             content_type=content_type,
             content_items=content_items_json,
+            max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_ANALYSIS,
             schema_description=schema_description
         )
 
@@ -105,5 +114,6 @@ class PromptManager:
             raw_analysis_data=raw_analysis_data,
             max_main_summary_chars=self.MAX_MAIN_SUMMARY_CHARS,
             max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS,
+            max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_REFINE,
             schema_description=schema_description
         )

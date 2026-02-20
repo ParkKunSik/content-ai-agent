@@ -92,7 +92,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
     print("\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
     
-    step1_response = await llm_service.structure_content_analysis(
+    step1_response, _ = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=content_items
@@ -121,7 +121,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
         ]
     )
     
-    step2_response = await llm_service.refine_analysis_summary(
+    step2_response, _ = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
         refine_content_items=refine_content_items,

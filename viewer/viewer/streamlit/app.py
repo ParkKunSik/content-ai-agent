@@ -46,32 +46,42 @@ def get_content_type_description(content_type_name: str) -> str:
         return content_type_name
 
 
-@st.cache_resource
-def get_service():
-    """ViewerDataService 싱글톤 (캐싱)"""
+def get_service(provider: str = None):
+    """ViewerDataService 인스턴스 생성
+
+    Args:
+        provider: "vertex-ai" 또는 "openai", None이면 기존 alias 사용
+
+    Note:
+        provider별로 다른 ES alias를 사용하므로 캐싱하지 않음
+    """
     try:
-        return ViewerDataService()
+        service = ViewerDataService(provider=provider)
+        logger.info(f"ViewerDataService created with provider={provider}, alias={service.result_index_alias}")
+        return service
     except Exception as e:
         logger.error(f"Failed to initialize ViewerDataService: {e}")
         return None
 
 
 @st.cache_data(ttl=3600)
-def get_project_info_map(_service: ViewerDataService, project_ids: tuple) -> Dict[str, Optional[ProjectInfo]]:
+def get_project_info_map(project_ids: tuple) -> Dict[str, Optional[ProjectInfo]]:
     """
     프로젝트 ID 목록에 대한 ProjectInfo 매핑을 캐싱하여 반환
 
     Args:
-        _service: ViewerDataService (언더스코어로 해싱 제외)
         project_ids: 프로젝트 ID 튜플 (캐싱 키로 사용)
 
     Returns:
         {project_id: ProjectInfo} 딕셔너리
+
+    Note:
+        ProjectInfo는 Wadiz API에서 조회하므로 provider와 무관합니다.
     """
     result = {}
     for pid in project_ids:
         try:
-            info = _service.get_project_info(int(pid))
+            info = ViewerDataService.get_project_info(int(pid))
             result[pid] = info
         except Exception as e:
             logger.warning(f"Failed to get project info for {pid}: {e}")
@@ -91,8 +101,27 @@ def main():
     st.title("📊 커뮤니티 요약 뷰어")
     st.caption("Elasticsearch에 저장된 콘텐츠 분석 결과를 조회합니다.")
 
-    # 서비스 초기화
-    service = get_service()
+    # Provider 선택 (사이드바)
+    with st.sidebar:
+        st.header("🔧 설정")
+        provider_options = {
+            "기본 (통합)": None,
+            "Vertex AI": "vertex-ai",
+            "OpenAI": "openai",
+        }
+        selected_provider_label = st.radio(
+            "LLM Provider",
+            list(provider_options.keys()),
+            index=0,
+            help="분석에 사용된 LLM Provider를 선택합니다.",
+        )
+        selected_provider = provider_options[selected_provider_label]
+
+        if selected_provider:
+            st.info(f"📡 {selected_provider_label} 분석 결과 조회 중")
+
+    # 서비스 초기화 (provider 파라미터 전달)
+    service = get_service(provider=selected_provider)
 
     if service is None:
         st.error(
@@ -111,8 +140,8 @@ def main():
         st.warning("저장된 분석 결과가 없습니다.")
         return
 
-    # 프로젝트 정보 매핑 조회 (캐싱)
-    project_info_map = get_project_info_map(service, tuple(project_ids))
+    # 프로젝트 정보 매핑 조회 (캐싱 - Wadiz API 기반이므로 provider와 무관)
+    project_info_map = get_project_info_map(tuple(project_ids))
 
     # 프로젝트 표시명 → ID 매핑 생성
     project_display_to_id = {

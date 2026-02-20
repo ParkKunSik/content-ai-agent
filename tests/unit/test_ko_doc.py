@@ -62,7 +62,7 @@ class TestKoDoc:
         """HighlightItem 필드의 한글 설명 추출 테스트"""
         ko_doc = get_field_ko_doc(HighlightItem, "keyword")
         assert ko_doc is not None
-        assert "원본 키워드" in ko_doc
+        assert "하이라이트" in ko_doc
 
     def test_get_field_ko_doc_etc_content(self):
         """EtcContent 필드의 한글 설명 추출 테스트"""

@@ -2,11 +2,12 @@ import asyncio
 import json
 import logging
 import random
-from typing import Any, Awaitable, Callable, Dict, Generic, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Generic, Optional, Tuple, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 from src.core.llm.exceptions import LLMError, RateLimitError
+from src.core.llm.models import LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +154,89 @@ class ValidationErrorHandler(Generic[T]):
         """Exponential backoff with jitter 계산 (베스트 프랙티스)."""
         # Exponential backoff: 2^attempt seconds
         base_delay = min(2 ** attempt, 60)  # 최대 60초 제한
-        
+
         # Jitter 추가 (±20% 랜덤 변동)
         jitter = base_delay * 0.2 * (2 * random.random() - 1)  # -20% ~ +20%
-        
+
         return max(base_delay + jitter, 1.0)  # 최소 1초 보장
+
+    async def validate_with_retry_and_usage(
+        self,
+        response_generator: Callable[[], Awaitable[Tuple[str, LLMResponse]]],
+        model_class: type[T],
+        error_context: str = "validation"
+    ) -> Tuple[T, LLMResponse]:
+        """
+        응답 생성 함수를 호출하고 지정된 모델로 검증을 시도한다.
+        실패 시 자동으로 재시도한다. LLMResponse도 함께 반환하여 토큰 정보 접근 가능.
+
+        Args:
+            response_generator: (text, LLMResponse) 튜플을 생성하는 함수
+            model_class: 검증할 Pydantic 모델 클래스
+            error_context: 에러 로깅용 컨텍스트
+
+        Returns:
+            Tuple[T, LLMResponse]: 검증된 모델 인스턴스와 LLM 응답
+
+        Raises:
+            ValidationError: 최대 재시도 횟수 초과 시
+        """
+        last_error = None
+        last_response = None
+        last_llm_response: Optional[LLMResponse] = None
+        total_input_tokens = 0
+        total_output_tokens = 0
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                # 응답 생성
+                response_str, llm_response = await response_generator()
+                last_response = response_str
+                last_llm_response = llm_response
+
+                # 토큰 누적 (재시도 시에도 합산)
+                total_input_tokens += llm_response.usage.prompt_tokens
+                total_output_tokens += llm_response.usage.completion_tokens
+
+                # JSON 파싱 및 검증
+                parsed_data = self._parse_json_response(response_str)
+                validated_model = model_class(**parsed_data)
+
+                if attempt > 0:
+                    logger.info(f"{error_context} succeeded on attempt {attempt + 1}")
+
+                # 마지막 성공한 응답에 누적 토큰 정보 반영
+                if last_llm_response:
+                    last_llm_response.usage.prompt_tokens = total_input_tokens
+                    last_llm_response.usage.completion_tokens = total_output_tokens
+
+                return validated_model, last_llm_response
+
+            except (json.JSONDecodeError, ValidationError, LLMError) as e:
+                last_error = e
+
+                if attempt < self.max_retries:
+                    # Rate Limit 에러는 Exponential backoff with jitter 적용
+                    if isinstance(e, RateLimitError) or self._is_rate_limit_error(e):
+                        delay = self._calculate_backoff_delay(attempt)
+                        logger.warning(
+                            f"{error_context} rate limit hit on attempt {attempt + 1}/{self.max_retries + 1}, waiting {delay:.2f}s: {e}"
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        # 일반적인 파싱/검증 오류는 기존 delay 사용
+                        logger.warning(
+                            f"{error_context} failed on attempt {attempt + 1}/{self.max_retries + 1}: {e}"
+                        )
+                        await asyncio.sleep(self.delay_between_retries)
+                else:
+                    logger.error(f"{error_context} failed after {self.max_retries + 1} attempts")
+                    break
+
+        # 최종 실패 시 상세 에러 정보 로깅
+        self._log_final_error(last_error, last_response, error_context)
+
+        if isinstance(last_error, json.JSONDecodeError):
+            raise ValueError(f"{error_context} failed: JSON parsing error after {self.max_retries + 1} attempts") from last_error
+        else:
+            raise ValueError(f"{error_context} failed: Validation error after {self.max_retries + 1} attempts") from last_error

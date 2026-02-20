@@ -9,6 +9,7 @@ from typing import List
 import pytest
 
 from src.core.config import settings
+from src.core.llm.enums import ProviderType
 from src.core.llm.registry import ProviderRegistry
 from src.core.session_factory import SessionFactory
 from src.schemas.enums.content_type import ExternalContentType
@@ -20,10 +21,16 @@ from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
 from src.utils.generation_viewer import PDF_AVAILABLE, GenerationViewer
 from src.utils.prompt_manager import PromptManager
+from src.utils.token_cost_calculator import (
+    TOKEN_COST_CURRENCY,
+    calculate_token_usage,
+    print_token_usage,
+    aggregate_token_usage,
+)
 
 
 @contextmanager
-def switch_llm_provider(provider: str):
+def switch_llm_provider(provider: ProviderType):
     """
     LLM Provider를 임시로 변경하는 Context Manager.
     테스트 종료 후 원래 Provider로 복원한다.
@@ -36,120 +43,13 @@ def switch_llm_provider(provider: str):
         # Provider 변경 시 Registry 초기화 상태 리셋
         ProviderRegistry._initialized = {k: False for k in ProviderRegistry._initialized}
         ProviderRegistry._current_provider = None
-        print(f"\n🔄 LLM Provider 변경: {original_provider} → {provider}")
+        print(f"\n🔄 LLM Provider 변경: {original_provider.value} → {provider.value}")
         yield
     finally:
         settings.LLM_PROVIDER = original_provider
         ProviderRegistry._initialized = original_initialized
         ProviderRegistry._current_provider = original_current
-        print(f"\n🔄 LLM Provider 복원: {provider} → {original_provider}")
-
-TOKEN_COST_CURRENCY = "USD"
-
-# Provider별 모델 가격 테이블
-MODEL_PRICING_TABLE = {
-    # Google Vertex AI / Gemini 모델
-    "gemini_2_5_pro": {
-        "input_cost_per_million": 1.25,
-        "output_cost_per_million": 5.00
-    },
-    "gemini_2_5_flash": {
-        "input_cost_per_million": 0.10,
-        "output_cost_per_million": 0.40
-    },
-    "gemini_3_pro_preview": {
-        "input_cost_per_million": 1.50,
-        "output_cost_per_million": 6.00
-    },
-    "gemini_3_flash_preview": {
-        "input_cost_per_million": 0.15,
-        "output_cost_per_million": 0.60
-    },
-    # OpenAI GPT-4o 시리즈
-    "gpt_4o": {
-        "input_cost_per_million": 2.50,
-        "output_cost_per_million": 10.00
-    },
-    "gpt_4o_mini": {
-        "input_cost_per_million": 0.15,
-        "output_cost_per_million": 0.60
-    },
-    # OpenAI GPT-4.1 시리즈 (2025년 4월)
-    "gpt_4_1": {
-        "input_cost_per_million": 2.00,
-        "output_cost_per_million": 8.00
-    },
-    "gpt_4_1_mini": {
-        "input_cost_per_million": 0.40,
-        "output_cost_per_million": 1.60
-    },
-    "gpt_4_1_nano": {
-        "input_cost_per_million": 0.10,
-        "output_cost_per_million": 0.40
-    },
-    # OpenAI GPT-5 시리즈 (2025년 8월, temperature 미지원)
-    "gpt_5": {
-        "input_cost_per_million": 1.25,
-        "output_cost_per_million": 10.00
-    },
-    "gpt_5_mini": {
-        "input_cost_per_million": 0.30,
-        "output_cost_per_million": 1.20
-    },
-    "gpt_5_nano": {
-        "input_cost_per_million": 0.08,
-        "output_cost_per_million": 0.30
-    },
-    # OpenAI O-시리즈 (Reasoning, temperature 미지원, reasoning tokens 별도 과금)
-    "o3": {
-        "input_cost_per_million": 2.00,
-        "output_cost_per_million": 8.00
-    },
-    "o3_mini": {
-        "input_cost_per_million": 1.10,
-        "output_cost_per_million": 4.40
-    },
-    "o4_mini": {
-        "input_cost_per_million": 1.10,
-        "output_cost_per_million": 4.40
-    },
-}
-
-MODEL_ALIASES = {
-    # Google Vertex AI / Gemini
-    "gemini_2_5_pro": ["gemini-2.5-pro", "gemini-2.5-pro-preview", "gemini 2.5 pro"],
-    "gemini_2_5_flash": ["gemini-2.5-flash", "gemini-2.5-flash-preview", "gemini 2.5 flash"],
-    "gemini_3_pro_preview": ["gemini-3.0-pro-preview", "gemini-3-pro-preview", "gemini 3 pro (preview)", "gemini 3 pro"],
-    "gemini_3_flash_preview": ["gemini-3.0-flash-preview", "gemini-3-flash-preview", "gemini 3 flash (preview)", "gemini 3 flash"],
-    # OpenAI GPT-4o 시리즈
-    "gpt_4o": ["gpt-4o", "gpt4o"],
-    "gpt_4o_mini": ["gpt-4o-mini", "gpt4o-mini"],
-    # OpenAI GPT-4.1 시리즈
-    "gpt_4_1": ["gpt-4.1", "gpt4.1"],
-    "gpt_4_1_mini": ["gpt-4.1-mini", "gpt4.1-mini"],
-    "gpt_4_1_nano": ["gpt-4.1-nano", "gpt4.1-nano"],
-    # OpenAI GPT-5 시리즈
-    "gpt_5": ["gpt-5", "gpt5", "gpt-5.2", "gpt5.2"],
-    "gpt_5_mini": ["gpt-5-mini", "gpt5-mini"],
-    "gpt_5_nano": ["gpt-5-nano", "gpt5-nano"],
-    # OpenAI O-시리즈 (Reasoning)
-    "o3": ["o3"],
-    "o3_mini": ["o3-mini"],
-    "o4_mini": ["o4-mini"],
-}
-
-
-def _normalize_model_name(model_name: str) -> str:
-    return model_name.lower().replace(".", "").replace("-", " ").strip()
-
-
-def _resolve_model_pricing(model_name: str) -> dict:
-    normalized = _normalize_model_name(model_name)
-    for key, aliases in MODEL_ALIASES.items():
-        if any(_normalize_model_name(alias) == normalized for alias in aliases):
-            return MODEL_PRICING_TABLE[key]
-    print(f"  - Token cost: model '{model_name}' not found in pricing table, costs set to 0")
-    return {"input_cost_per_million": 0.0, "output_cost_per_million": 0.0}
+        print(f"\n🔄 LLM Provider 복원: {provider.value} → {original_provider.value}")
 
 
 def _format_duration(seconds: float) -> str:
@@ -164,49 +64,6 @@ def _format_duration(seconds: float) -> str:
     milliseconds = int((seconds - int(seconds)) * 1000)
 
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
-
-
-async def _calculate_token_usage(
-    llm_service: LLMService,
-    prompt: str,
-    response_text: str,
-    model_name: str
-) -> dict:
-    """프롬프트/응답 토큰 및 비용 계산 (모델별 단가)."""
-    prompt_tokens = await llm_service.count_total_tokens([prompt])
-    output_tokens = await llm_service.count_total_tokens([response_text])
-    total_tokens = prompt_tokens + output_tokens
-
-    model_costs = _resolve_model_pricing(model_name)
-
-    input_cost_per_million = model_costs["input_cost_per_million"]
-    output_cost_per_million = model_costs["output_cost_per_million"]
-
-    input_cost = round((prompt_tokens / 1_000_000) * input_cost_per_million, 6)
-    output_cost = round((output_tokens / 1_000_000) * output_cost_per_million, 6)
-    total_cost = round(input_cost + output_cost, 6)
-
-    return {
-        "model_name": model_name,
-        "prompt_tokens": prompt_tokens,
-        "output_tokens": output_tokens,
-        "total_tokens": total_tokens,
-        "input_cost_per_million": input_cost_per_million,
-        "output_cost_per_million": output_cost_per_million,
-        "input_cost": input_cost,
-        "output_cost": output_cost,
-        "total_cost": total_cost,
-        "currency": TOKEN_COST_CURRENCY
-    }
-
-
-def _print_token_usage(step_label: str, usage: dict) -> None:
-    """토큰 사용량/비용 출력."""
-    print(f"  - Token usage ({step_label}): input {usage['prompt_tokens']}, output {usage['output_tokens']}, total {usage['total_tokens']}")
-    print(
-        f"  - Token cost ({usage['currency']}): "
-        f"input {usage['input_cost']}, output {usage['output_cost']}, total {usage['total_cost']}"
-    )
 
 
 async def _execute_content_analysis_with_html(
@@ -270,14 +127,14 @@ async def _execute_content_analysis_with_html(
         content_type=content_type.value if content_type else "ALL",
         analysis_content_items=analysis_items
     )
-    step1_response = await llm_service.structure_content_analysis(
+    step1_response, _ = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=sample_contents
     )
     step1_duration = time.time() - step1_start_time
-    step1_token_usage = await _calculate_token_usage(
-        llm_service,
+    step1_token_usage = await calculate_token_usage(
+        llm_service.count_total_tokens,
         step1_prompt,
         step1_response.model_dump_json(),
         PersonaType.PRO_DATA_ANALYST.get_model_name()
@@ -286,7 +143,7 @@ async def _execute_content_analysis_with_html(
     print(f"\n✅ [Step 1 Result] (Duration: {step1_duration:.2f}s)")
     print(f"  - Categories found: {len(step1_response.categories)}")
     print(f"  - Summary length: {len(step1_response.summary)} chars")
-    _print_token_usage("Step 1", step1_token_usage)
+    print_token_usage("Step 1", step1_token_usage)
 
     # 4. Step 2: Refinement
     print("\n\n>>> [Step 2] Executing Summary Refinement (CUSTOMER_FACING_SMART_BOT)...")
@@ -307,15 +164,15 @@ async def _execute_content_analysis_with_html(
         content_type=content_type.value if content_type else "ALL",
         refine_content_items=refine_content_items
     )
-    step2_response = await llm_service.refine_analysis_summary(
+    step2_response, _ = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
         refine_content_items=refine_content_items,
         persona_type=persona_type
     )
     step2_duration = time.time() - step2_start_time
-    step2_token_usage = await _calculate_token_usage(
-        llm_service,
+    step2_token_usage = await calculate_token_usage(
+        llm_service.count_total_tokens,
         step2_prompt,
         step2_response.model_dump_json(),
         PersonaType.CUSTOMER_FACING_SMART_BOT.get_model_name()
@@ -324,7 +181,7 @@ async def _execute_content_analysis_with_html(
     print(f"\n✅ [Step 2 Result] (Duration: {step2_duration:.2f}s)")
     print(f"  - Refined summary length: {len(step2_response.summary)} chars")
     print(f"  - Refined categories: {len(step2_response.categories)}")
-    _print_token_usage("Step 2", step2_token_usage)
+    print_token_usage("Step 2", step2_token_usage)
 
     # 5. Merge Results
     print("\n\n>>> [Final] Merging Step 1 & Step 2 Results...")
@@ -364,16 +221,7 @@ async def _execute_content_analysis_with_html(
             final_result["execution_time_seconds"] = round(total_duration, 2)
             final_result["execution_time_formatted"] = _format_duration(total_duration)
 
-            total_token_usage = {
-                "model_name": "combined",
-                "prompt_tokens": step1_token_usage["prompt_tokens"] + step2_token_usage["prompt_tokens"],
-                "output_tokens": step1_token_usage["output_tokens"] + step2_token_usage["output_tokens"],
-                "total_tokens": step1_token_usage["total_tokens"] + step2_token_usage["total_tokens"],
-                "input_cost": round(step1_token_usage["input_cost"] + step2_token_usage["input_cost"], 6),
-                "output_cost": round(step1_token_usage["output_cost"] + step2_token_usage["output_cost"], 6),
-                "total_cost": round(step1_token_usage["total_cost"] + step2_token_usage["total_cost"], 6),
-                "currency": TOKEN_COST_CURRENCY
-            }
+            total_token_usage = aggregate_token_usage(step1_token_usage, step2_token_usage)
 
             output_data = {
                 "execution_time": {
@@ -471,7 +319,7 @@ async def _execute_html_generation_test(
 
     # Provider 이름 결정 (지정되지 않으면 현재 설정 사용)
     if provider_name is None:
-        provider_name = settings.LLM_PROVIDER.lower()
+        provider_name = settings.LLM_PROVIDER.value.lower()
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     current_dir = os.path.dirname(__file__)
@@ -599,7 +447,7 @@ async def test_html_generation_from_project_file():
     - HTML 출력 경로: tests/data/html/{provider}/
     """
     await _test_html_generation_from_project_file(
-        provider_name=settings.LLM_PROVIDER.lower(),
+        provider_name=settings.LLM_PROVIDER.value.lower(),
         project_id=365330,
         content_type=ExternalContentType.REVIEW,
         is_all=False,
@@ -615,7 +463,7 @@ async def test_vertexai_html_generation_from_project_file():
     - 데이터 소스: tests/data/project_365330.json
     - HTML 출력 경로: tests/data/html/vertex_ai/
     """
-    with switch_llm_provider("VERTEX_AI"):
+    with switch_llm_provider(ProviderType.VERTEX_AI):
         await _test_html_generation_from_project_file(
             provider_name="vertex_ai",
             project_id=365330,
@@ -638,7 +486,7 @@ async def test_openai_html_generation_from_project_file():
     if not settings.OPENAI_API_KEY:
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
-    with switch_llm_provider("OPENAI"):
+    with switch_llm_provider(ProviderType.OPENAI):
         await _test_html_generation_from_project_file(
             provider_name="openai",
             project_id=365330,
@@ -709,7 +557,7 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
     """
     await _test_html_generation_from_project_ES(
         setup_elasticsearch,
-        provider_name=settings.LLM_PROVIDER.lower(),
+        provider_name=settings.LLM_PROVIDER.value.lower(),
         project_id=276504,
         content_type=ExternalContentType.SATISFACTION,
         is_all=False,
@@ -725,14 +573,14 @@ async def test_vertexai_html_generation_from_project_ES(setup_elasticsearch):
     - 데이터 소스: Elasticsearch
     - HTML 출력 경로: tests/data/html/vertex_ai/
     """
-    with switch_llm_provider("VERTEX_AI"):
+    with switch_llm_provider(ProviderType.VERTEX_AI):
         await _test_html_generation_from_project_ES(
             setup_elasticsearch,
             provider_name="vertex_ai",
             project_id=276504,
             content_type=ExternalContentType.SATISFACTION,
             is_all=False,
-            sample_size=200
+            sample_size=100
         )
 
 
@@ -749,12 +597,12 @@ async def test_openai_html_generation_from_project_ES(setup_elasticsearch):
     if not settings.OPENAI_API_KEY:
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
-    with switch_llm_provider("OPENAI"):
+    with switch_llm_provider(ProviderType.OPENAI):
         await _test_html_generation_from_project_ES(
             setup_elasticsearch,
             provider_name="openai",
             project_id=276504,
             content_type=ExternalContentType.SATISFACTION,
             is_all=False,
-            sample_size=200
+            sample_size=100
         )

@@ -38,6 +38,7 @@ class Category(BaseModel):
     name: str = Field(description="카테고리 이름")
     key: str = Field(description="카테고리 키")
     summary: str = Field(description="카테고리 요약")
+    keywords: List[str] = Field(default_factory=list, description="요약 키워드")
     display_highlight: str = Field(description="대표 하이라이트")
     sentiment_type: str = Field(description="감정 유형")  # 대소문자 호환을 위해 str로 변경
     positive_count: int = Field(default=0, description="긍정 하이라이트 수")
@@ -56,6 +57,9 @@ class Category(BaseModel):
 class AnalysisResult(BaseModel):
     """분석 결과 데이터"""
     summary: str = Field(description="전체 요약")
+    keywords: List[str] = Field(default_factory=list, description="요약 키워드")
+    good_points: List[str] = Field(default_factory=list, description="좋은 점")
+    caution_points: List[str] = Field(default_factory=list, description="참고 사항")
     categories: List[Category] = Field(default_factory=list, description="카테고리 목록")
 
 

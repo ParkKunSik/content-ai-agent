@@ -45,7 +45,7 @@ class GenerationViewer:
         from src.core.config import settings
 
         if provider_name is None:
-            provider_name = settings.LLM_PROVIDER
+            provider_name = settings.LLM_PROVIDER.value
 
         provider_display_map = {
             "VERTEX_AI": "Vertex AI",
