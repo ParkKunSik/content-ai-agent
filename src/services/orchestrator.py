@@ -21,7 +21,6 @@ from src.schemas.models.es.content_analysis_result import (
     ContentAnalysisResultDocument,
     ContentAnalysisResultState,
 )
-from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
 from src.services.es_content_retrieval_service import ESContentRetrievalService
