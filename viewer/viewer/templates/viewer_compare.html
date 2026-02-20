@@ -1,0 +1,855 @@
+{% extends "base.html" %}
+
+{% block title %}Provider 비교 - 프로젝트 {{ project_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 네비게이션 바 */
+    .nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #D5D9D9;
+    }
+
+    .back-link {
+        color: #007185;
+        text-decoration: none;
+        font-size: 14px;
+    }
+
+    .back-link:hover {
+        color: #C7511F;
+        text-decoration: underline;
+    }
+
+    .content-type-selector {
+        display: flex;
+        gap: 8px;
+    }
+
+    .content-type-btn {
+        padding: 6px 12px;
+        border: 1px solid #D5D9D9;
+        border-radius: 4px;
+        background-color: #fff;
+        color: #0F1111;
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+
+    .content-type-btn:hover {
+        border-color: #008296;
+        background-color: #F7FAFA;
+    }
+
+    .content-type-btn.active {
+        border-color: #007185;
+        background-color: #E7F4F5;
+        color: #007185;
+        font-weight: 600;
+    }
+
+    /* 프로젝트 선택 combobox */
+    .project-selector {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .project-selector label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #0F1111;
+    }
+
+    .project-select {
+        padding: 8px 12px;
+        border: 1px solid #D5D9D9;
+        border-radius: 4px;
+        background-color: #fff;
+        font-size: 14px;
+        color: #0F1111;
+        min-width: 300px;
+        cursor: pointer;
+    }
+
+    .project-select:hover {
+        border-color: #008296;
+    }
+
+    .project-select:focus {
+        outline: none;
+        border-color: #007185;
+        box-shadow: 0 0 0 2px rgba(0, 113, 133, 0.2);
+    }
+
+    /* 비교 컨테이너 */
+    .compare-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    @media (max-width: 1200px) {
+        .compare-container {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .compare-container.single-view {
+        grid-template-columns: 1fr;
+    }
+
+    /* Provider 패널 */
+    .provider-panel {
+        border: 2px solid var(--provider-border);
+        border-radius: 8px;
+        padding: 20px;
+        background-color: var(--provider-bg);
+    }
+
+    .provider-panel.vertex-ai {
+        --provider-border: #4CAF50;
+        --provider-bg: #FAFFF9;
+    }
+
+    .provider-panel.openai {
+        --provider-border: #2196F3;
+        --provider-bg: #F8FBFF;
+    }
+
+    .provider-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #D5D9D9;
+    }
+
+    .provider-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .provider-icon.vertex-ai {
+        background-color: #4CAF50;
+    }
+
+    .provider-icon.openai {
+        background-color: #2196F3;
+    }
+
+    .provider-name {
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .provider-meta {
+        font-size: 12px;
+        color: #565959;
+        margin-left: auto;
+    }
+
+    /* LLM 사용량 섹션 */
+    .llm-usage-section {
+        background-color: #fff;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .llm-usage-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #0F1111;
+    }
+
+    .llm-usage-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .llm-usage-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background-color: #F7FAFA;
+        border-radius: 4px;
+        font-size: 13px;
+    }
+
+    .usage-step {
+        font-weight: 500;
+    }
+
+    .usage-model {
+        color: #007185;
+    }
+
+    .usage-details {
+        display: flex;
+        gap: 12px;
+        color: #565959;
+    }
+
+    .usage-tokens {
+        color: #0F1111;
+    }
+
+    .usage-cost {
+        color: #067D62;
+        font-weight: 500;
+    }
+
+    .usage-duration {
+        color: #565959;
+    }
+
+    .llm-usage-total {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #D5D9D9;
+        font-size: 13px;
+    }
+
+    .usage-total-tokens {
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .usage-tokens-detail {
+        font-weight: 400;
+        color: #565959;
+    }
+
+    .usage-total-metrics {
+        display: flex;
+        gap: 12px;
+    }
+
+    /* 인사이트 섹션 */
+    .insights-section {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    @media (max-width: 600px) {
+        .insights-section {
+            flex-direction: column;
+        }
+    }
+
+    .insights-box {
+        flex: 1;
+        padding: 12px;
+        border-radius: 8px;
+    }
+
+    .insights-box.good-points {
+        background-color: #F0FFF4;
+        border: 1px solid #067D62;
+    }
+
+    .insights-box.caution-points {
+        background-color: #FFFAF0;
+        border: 1px solid #C7511F;
+    }
+
+    .insights-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .insights-title.good {
+        color: #067D62;
+    }
+
+    .insights-title.caution {
+        color: #C7511F;
+    }
+
+    .insights-list {
+        margin: 0;
+        padding-left: 16px;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .insights-list li {
+        margin-bottom: 4px;
+    }
+
+    /* 요약 섹션 */
+    .summary-section {
+        margin-bottom: 20px;
+        line-height: 1.6;
+        font-size: 14px;
+    }
+
+    .summary-section strong {
+        font-weight: 700;
+        color: #0F1111;
+    }
+
+    /* 카테고리 그리드 (비교 뷰용 - 작은 버전) */
+    .category-grid-compact {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .category-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        background-color: #fff;
+        border: 1px solid #D5D9D9;
+        border-radius: 16px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .category-chip:hover {
+        background-color: #F7FAFA;
+        border-color: #008296;
+    }
+
+    .category-chip.positive {
+        border-color: #067D62;
+    }
+
+    .category-chip.negative {
+        border-color: #CC0C39;
+    }
+
+    .category-chip-icon {
+        margin-right: 4px;
+        font-size: 10px;
+    }
+
+    .positive .category-chip-icon {
+        color: #067D62;
+    }
+
+    .negative .category-chip-icon {
+        color: #CC0C39;
+    }
+
+    .category-chip-name {
+        color: #007185;
+        margin-right: 4px;
+    }
+
+    .category-chip-count {
+        color: #565959;
+    }
+
+    /* 경고 메시지 */
+    .warning-message {
+        padding: 12px 16px;
+        background-color: #FFF8E1;
+        border: 1px solid #FFB300;
+        border-radius: 8px;
+        color: #F57C00;
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
+    /* 없음 메시지 */
+    .no-data-message {
+        padding: 40px 20px;
+        text-align: center;
+        color: #565959;
+        font-size: 14px;
+    }
+
+    /* 하이라이트 섹션 */
+    .highlights-section {
+        margin-top: 16px;
+    }
+
+    .highlight-item {
+        margin-bottom: 12px;
+        padding: 12px;
+        background-color: #fff;
+        border-radius: 4px;
+        border-left: 3px solid #067D62;
+    }
+
+    .highlight-keyword {
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .highlight-text {
+        color: #565959;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .highlight-text strong {
+        font-weight: 900;
+        color: #0F1111;
+    }
+
+    .read-more {
+        color: #007185;
+        text-decoration: none;
+        font-size: 13px;
+        margin-left: 4px;
+    }
+
+    .read-more:hover {
+        color: #C7511F;
+        text-decoration: underline;
+    }
+
+    /* 모달 스타일 */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background-color: #fff;
+        border-radius: 8px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid #D5D9D9;
+        background-color: #F7FAFA;
+        flex-shrink: 0;
+    }
+
+    .modal-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0F1111;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #565959;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-close:hover {
+        color: #0F1111;
+    }
+
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        line-height: 1.6;
+        color: #0F1111;
+        font-size: 14px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        flex-grow: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="nav-bar">
+    <a href="{{ url_for('viewer_compare_list') }}" class="back-link">← 비교 목록으로</a>
+    {% if content_types %}
+    <div class="content-type-selector">
+        {% for ct in content_types %}
+        <a href="{{ url_for('viewer_compare_detail', project_id=project_id) }}?content_type={{ ct }}"
+           class="content-type-btn {% if ct == content_type %}active{% endif %}">
+            {{ ct }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+{# 프로젝트 선택 Combobox #}
+{% if all_projects %}
+<div class="project-selector">
+    <label for="project-select">프로젝트:</label>
+    <select id="project-select" class="project-select" onchange="onProjectChange(this.value)">
+        {% for project in all_projects %}
+        {% set p_info = project.project_info %}
+        <option value="{{ project.project_id }}" {% if project.project_id|string == project_id|string %}selected{% endif %}>
+            {{ p_info.title if p_info else '제목 없음' }} ({{ project.project_id }})
+        </option>
+        {% endfor %}
+    </select>
+</div>
+{% endif %}
+
+{# 프로젝트 정보 #}
+{% if project_info %}
+<div class="project-info-section">
+    {% if project_info.thumbnail_url %}
+    <img src="{{ project_info.thumbnail_url }}" alt="썸네일" class="project-thumbnail">
+    {% endif %}
+    <div class="project-info-content">
+        <div class="project-title">
+            {% if project_info.link %}
+            <a href="{{ project_info.link }}" target="_blank" class="project-title-link">{{ project_info.title }}</a>
+            {% else %}
+            {{ project_info.title }}
+            {% endif %}
+        </div>
+        <div class="meta-info">
+            프로젝트 ID: {{ project_id }} | 콘텐츠 타입: {{ content_type_description }}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# 양쪽 모두 없으면 에러 #}
+{% if not compare_result.has_any %}
+<div class="warning-message">
+    분석 결과가 없습니다.
+</div>
+{% else %}
+
+{# 한쪽만 있으면 경고 #}
+{% if not compare_result.has_both %}
+<div class="warning-message">
+    {% if compare_result.vertex_ai %}
+    OpenAI 분석 결과가 없습니다. Vertex AI 결과만 표시합니다.
+    {% else %}
+    Vertex AI 분석 결과가 없습니다. OpenAI 결과만 표시합니다.
+    {% endif %}
+</div>
+{% endif %}
+
+{# 비교 컨테이너 #}
+<div class="compare-container {% if not compare_result.has_both %}single-view{% endif %}">
+
+    {# Vertex AI 패널 #}
+    {% if compare_result.vertex_ai %}
+    {% set vertex_doc = compare_result.vertex_ai %}
+    {% set vertex_result = vertex_doc.result.data if vertex_doc.result else none %}
+    <div class="provider-panel vertex-ai">
+        <div class="provider-header">
+            <div class="provider-icon vertex-ai">V</div>
+            <div class="provider-name">Vertex AI</div>
+            <div class="provider-meta">{{ vertex_doc.updated_at|string|truncate(19, True, '') if vertex_doc.updated_at else 'N/A' }}</div>
+        </div>
+
+        {# LLM 사용량 #}
+        {% if vertex_doc.llm_usages %}
+        {% set llm_usages = vertex_doc.llm_usages %}
+        {% include "components/llm_usage.html" %}
+        {% endif %}
+
+        {% if vertex_result %}
+        {# 요약 (키워드 볼드 - JavaScript로 처리) #}
+        <div class="summary-section" data-keywords="{{ vertex_result.keywords|join('|||') }}">
+            {{ vertex_result.summary }}
+        </div>
+
+        {# 인사이트 #}
+        {% set good_points = vertex_result.good_points %}
+        {% set caution_points = vertex_result.caution_points %}
+        {% include "components/insights.html" %}
+
+        {# 카테고리 칩 #}
+        <div class="category-grid-compact">
+            {% for cat in vertex_result.categories %}
+            {% set sentiment = cat.sentiment_type|lower if cat.sentiment_type else 'neutral' %}
+            {% set total_count = cat.positive_count + cat.negative_count %}
+            <div class="category-chip {{ sentiment }}" onclick="toggleCategory('vertex', {{ loop.index0 }})">
+                <span class="category-chip-icon">
+                    {% if sentiment == 'positive' %}✓{% elif sentiment == 'negative' %}✗{% else %}●{% endif %}
+                </span>
+                <span class="category-chip-name">{{ cat.display_highlight }}</span>
+                <span class="category-chip-count">({{ total_count }})</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# 카테고리 상세 (숨김) #}
+        {% for cat in vertex_result.categories %}
+        {% set cat_idx = loop.index0 %}
+        <div id="category-vertex-{{ cat_idx }}" class="category-detail">
+            <div class="detail-header">
+                <div class="detail-title">{{ cat.display_highlight }}</div>
+                <button class="close-btn" onclick="toggleCategory('vertex', {{ cat_idx }})">×</button>
+            </div>
+            <div class="sentiment-counts">
+                {{ cat.positive_count + cat.negative_count }}명의 고객이 "<strong>{{ cat.name }}</strong>"을(를) 언급
+                <span class="positive-text">{{ cat.positive_count }}개 긍정</span>
+                <span class="negative-text">{{ cat.negative_count }}개 부정</span>
+            </div>
+            <div class="category-summary" data-keywords="{{ cat.keywords|join('|||') }}">
+                {{ cat.summary }}
+            </div>
+            {% if cat.highlights %}
+            <div class="highlights-section">
+                {% for highlight in cat.highlights[:4] %}
+                {% set highlight_id = 'highlight-vertex-' ~ cat_idx ~ '-' ~ loop.index0 %}
+                {% set display_text = highlight.highlight[:150] ~ '...' if highlight.highlight|length > 150 else highlight.highlight %}
+                {% set content = highlight.content if highlight.content else highlight.highlight %}
+                <div class="highlight-item" id="{{ highlight_id }}"
+                     data-keyword="{{ highlight.keyword | e }}"
+                     data-content="{{ content | e }}">
+                    <div class="highlight-keyword">"{{ highlight.keyword }}"</div>
+                    <div class="highlight-text">
+                        {{ display_text | replace(highlight.keyword, '<strong>' ~ highlight.keyword ~ '</strong>') | safe }}
+                        <a href="#" class="read-more" onclick="openModalFromElement('{{ highlight_id }}'); return false;">자세히 보기 ›</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="no-data-message">결과 데이터가 없습니다.</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# OpenAI 패널 #}
+    {% if compare_result.openai %}
+    {% set openai_doc = compare_result.openai %}
+    {% set openai_result = openai_doc.result.data if openai_doc.result else none %}
+    <div class="provider-panel openai">
+        <div class="provider-header">
+            <div class="provider-icon openai">O</div>
+            <div class="provider-name">OpenAI</div>
+            <div class="provider-meta">{{ openai_doc.updated_at|string|truncate(19, True, '') if openai_doc.updated_at else 'N/A' }}</div>
+        </div>
+
+        {# LLM 사용량 #}
+        {% if openai_doc.llm_usages %}
+        {% set llm_usages = openai_doc.llm_usages %}
+        {% include "components/llm_usage.html" %}
+        {% endif %}
+
+        {% if openai_result %}
+        {# 요약 (키워드 볼드 - JavaScript로 처리) #}
+        <div class="summary-section" data-keywords="{{ openai_result.keywords|join('|||') }}">
+            {{ openai_result.summary }}
+        </div>
+
+        {# 인사이트 #}
+        {% set good_points = openai_result.good_points %}
+        {% set caution_points = openai_result.caution_points %}
+        {% include "components/insights.html" %}
+
+        {# 카테고리 칩 #}
+        <div class="category-grid-compact">
+            {% for cat in openai_result.categories %}
+            {% set sentiment = cat.sentiment_type|lower if cat.sentiment_type else 'neutral' %}
+            {% set total_count = cat.positive_count + cat.negative_count %}
+            <div class="category-chip {{ sentiment }}" onclick="toggleCategory('openai', {{ loop.index0 }})">
+                <span class="category-chip-icon">
+                    {% if sentiment == 'positive' %}✓{% elif sentiment == 'negative' %}✗{% else %}●{% endif %}
+                </span>
+                <span class="category-chip-name">{{ cat.display_highlight }}</span>
+                <span class="category-chip-count">({{ total_count }})</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# 카테고리 상세 (숨김) #}
+        {% for cat in openai_result.categories %}
+        {% set cat_idx = loop.index0 %}
+        <div id="category-openai-{{ cat_idx }}" class="category-detail">
+            <div class="detail-header">
+                <div class="detail-title">{{ cat.display_highlight }}</div>
+                <button class="close-btn" onclick="toggleCategory('openai', {{ cat_idx }})">×</button>
+            </div>
+            <div class="sentiment-counts">
+                {{ cat.positive_count + cat.negative_count }}명의 고객이 "<strong>{{ cat.name }}</strong>"을(를) 언급
+                <span class="positive-text">{{ cat.positive_count }}개 긍정</span>
+                <span class="negative-text">{{ cat.negative_count }}개 부정</span>
+            </div>
+            <div class="category-summary" data-keywords="{{ cat.keywords|join('|||') }}">
+                {{ cat.summary }}
+            </div>
+            {% if cat.highlights %}
+            <div class="highlights-section">
+                {% for highlight in cat.highlights[:4] %}
+                {% set highlight_id = 'highlight-openai-' ~ cat_idx ~ '-' ~ loop.index0 %}
+                {% set display_text = highlight.highlight[:150] ~ '...' if highlight.highlight|length > 150 else highlight.highlight %}
+                {% set content = highlight.content if highlight.content else highlight.highlight %}
+                <div class="highlight-item" id="{{ highlight_id }}"
+                     data-keyword="{{ highlight.keyword | e }}"
+                     data-content="{{ content | e }}">
+                    <div class="highlight-keyword">"{{ highlight.keyword }}"</div>
+                    <div class="highlight-text">
+                        {{ display_text | replace(highlight.keyword, '<strong>' ~ highlight.keyword ~ '</strong>') | safe }}
+                        <a href="#" class="read-more" onclick="openModalFromElement('{{ highlight_id }}'); return false;">자세히 보기 ›</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="no-data-message">결과 데이터가 없습니다.</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+{# 모달 #}
+<div id="content-modal" class="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div class="modal-title" id="modal-title">원본 콘텐츠</div>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+    </div>
+</div>
+
+{% endif %}
+
+<div class="footer">
+    Generated by Content AI Agent | Wadiz
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    /**
+     * 프로젝트 선택 변경 시 해당 프로젝트 상세 페이지로 이동
+     */
+    function onProjectChange(projectId) {
+        const currentContentType = '{{ content_type }}';
+        window.location.href = `/viewer/all/${projectId}?content_type=${currentContentType}`;
+    }
+
+    /**
+     * 비교 뷰용 카테고리 토글 (provider별 분리)
+     */
+    function toggleCategory(provider, index) {
+        const detailId = `category-${provider}-${index}`;
+        const detail = document.getElementById(detailId);
+
+        if (!detail) return;
+
+        const isActive = detail.classList.contains('active');
+
+        // 해당 Provider의 모든 카테고리 상세 정보 닫기
+        document.querySelectorAll(`[id^="category-${provider}-"]`).forEach(el => {
+            el.classList.remove('active');
+        });
+
+        // 클릭한 카테고리만 열기 (이미 열려있지 않은 경우)
+        if (!isActive) {
+            detail.classList.add('active');
+            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    /**
+     * 텍스트에서 키워드를 찾아 볼드 처리
+     */
+    function highlightKeywords() {
+        // data-keywords 속성이 있는 모든 요소 찾기
+        document.querySelectorAll('[data-keywords]').forEach(el => {
+            const keywordsStr = el.dataset.keywords;
+            if (!keywordsStr) return;
+
+            const keywords = keywordsStr.split('|||').filter(k => k.trim());
+            if (keywords.length === 0) return;
+
+            let html = el.textContent;
+            keywords.forEach(keyword => {
+                if (keyword && html.includes(keyword)) {
+                    // 첫 번째 매칭만 볼드 처리 (중복 방지)
+                    html = html.replace(keyword, `<strong>${keyword}</strong>`);
+                }
+            });
+            el.innerHTML = html;
+        });
+    }
+
+    /**
+     * 하이라이트 요소에서 모달 열기
+     */
+    function openModalFromElement(elementId) {
+        const element = document.getElementById(elementId);
+        const keyword = element.dataset.keyword;
+        const content = element.dataset.content;
+        document.getElementById('modal-title').innerText = '"' + keyword + '" 원본 콘텐츠';
+        document.getElementById('modal-body').textContent = content;
+        document.getElementById('content-modal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * 모달 닫기
+     */
+    function closeModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById('content-modal').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    // 페이지 로드 시 키워드 볼드 처리 실행
+    document.addEventListener('DOMContentLoaded', highlightKeywords);
+
+    // ESC 키로 모달 닫기
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+{# 좋은 점 / 참고 사항 컴포넌트 #}
+{# 사용: {% include "components/insights.html" with context %} #}
+{# 필요 변수: good_points (List[str]), caution_points (List[str]) #}
+
+{% if good_points or caution_points %}
+<div class="insights-section">
+    {% if good_points %}
+    <div class="insights-box good-points">
+        <h4 class="insights-title good">좋은 점</h4>
+        <ul class="insights-list">
+        {% for point in good_points %}
+            <li>{{ point }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if caution_points %}
+    <div class="insights-box caution-points">
+        <h4 class="insights-title caution">참고 사항</h4>
+        <ul class="insights-list">
+        {% for point in caution_points %}
+            <li>{{ point }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

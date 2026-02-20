@@ -95,6 +95,86 @@ async def viewer_openai_detail(
 
 
 # =============================================================================
+# 비교 뷰어 라우트 (Provider 비교)
+# =============================================================================
+
+@router.get("/all", response_class=HTMLResponse, name="viewer_compare_list")
+@router.get("/all/", response_class=HTMLResponse, name="viewer_compare_list_slash")
+async def viewer_compare_list(request: Request, page: int = 1):
+    """Provider 비교 - 프로젝트 목록"""
+    # 양쪽 Provider 통합 조회
+    all_projects = ViewerDataService.get_all_compare_projects()
+
+    if not all_projects:
+        return templates.TemplateResponse("viewer_compare_list.html", {
+            "request": request,
+            "projects": [],
+            "page": 1,
+            "total_pages": 0,
+            "total_count": 0
+        })
+
+    # 페이징 계산
+    total_count = len(all_projects)
+    total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE
+    page = max(1, min(page, total_pages))
+
+    start_idx = (page - 1) * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+    page_projects = all_projects[start_idx:end_idx]
+
+    return templates.TemplateResponse("viewer_compare_list.html", {
+        "request": request,
+        "projects": page_projects,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count
+    })
+
+
+@router.get("/all/{project_id}", response_class=HTMLResponse, name="viewer_compare_detail")
+async def viewer_compare_detail(
+    request: Request,
+    project_id: int,
+    content_type: str = "REVIEW"
+):
+    """Provider 비교 - 프로젝트 상세"""
+    # 양쪽 Provider 통합 content_types 조회
+    content_types = ViewerDataService.get_merged_content_types(str(project_id))
+
+    # content_type fallback
+    if content_type not in content_types and content_types:
+        content_type = content_types[0]
+        logger.info(f"Content type fallback to {content_type} for project {project_id}")
+
+    # 양쪽 결과 비교 조회
+    compare_result = ViewerDataService.get_compare_result(str(project_id), content_type)
+
+    # 전체 프로젝트 목록 (combobox용)
+    all_projects = ViewerDataService.get_all_compare_projects()
+
+    if not compare_result.has_any:
+        return templates.TemplateResponse("viewer_error.html", {
+            "request": request,
+            "error": "분석 결과가 없습니다."
+        })
+
+    # content_type description 조회
+    content_type_description = get_content_type_description(content_type)
+
+    return templates.TemplateResponse("viewer_compare.html", {
+        "request": request,
+        "project_id": project_id,
+        "project_info": compare_result.project_info,
+        "content_type": content_type,
+        "content_type_description": content_type_description,
+        "content_types": content_types,
+        "compare_result": compare_result,
+        "all_projects": all_projects
+    })
+
+
+# =============================================================================
 # 기본 라우트 (와일드카드 경로는 맨 마지막에 정의)
 # =============================================================================
 

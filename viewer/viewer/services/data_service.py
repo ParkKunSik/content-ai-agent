@@ -13,7 +13,7 @@ if str(_viewer_root) not in sys.path:
 import requests
 
 from viewer.config import settings
-from viewer.schemas.models import ProjectInfo, ResultDocument
+from viewer.schemas.models import CompareProjectItem, CompareResultItem, ProjectInfo, ResultDocument
 from viewer.services.es_client import ESClient
 
 logger = logging.getLogger(__name__)
@@ -204,4 +204,96 @@ class ViewerDataService:
                 "content_types": all_content_types.get(pid, [])
             })
 
+        return projects
+
+    # === 비교 뷰어용 메서드 ===
+
+    @staticmethod
+    def get_merged_project_ids() -> List[str]:
+        """양쪽 Provider에서 프로젝트 ID 통합 조회 (합집합)"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+
+        # 합집합 후 정렬 (내림차순)
+        all_ids = list(vertex_ids | openai_ids)
+        try:
+            all_ids.sort(key=lambda x: int(x), reverse=True)
+        except ValueError:
+            all_ids.sort(reverse=True)
+
+        logger.info(f"Merged project IDs: vertex={len(vertex_ids)}, openai={len(openai_ids)}, total={len(all_ids)}")
+        return all_ids
+
+    @staticmethod
+    def get_merged_content_types(project_id: str) -> List[str]:
+        """양쪽 Provider에서 content_type 통합 조회 (합집합)"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_types = set(vertex_service.get_content_types_by_project(project_id))
+        openai_types = set(openai_service.get_content_types_by_project(project_id))
+
+        return list(vertex_types | openai_types)
+
+    @staticmethod
+    def get_compare_result(project_id: str, content_type: str) -> CompareResultItem:
+        """양쪽 Provider의 결과 비교 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_result = vertex_service.get_result(project_id, content_type)
+        openai_result = openai_service.get_result(project_id, content_type)
+        project_info = ViewerDataService.get_project_info(int(project_id))
+
+        return CompareResultItem(
+            project_id=project_id,
+            content_type=content_type,
+            project_info=project_info,
+            vertex_ai=vertex_result,
+            openai=openai_result
+        )
+
+    @staticmethod
+    def get_all_compare_projects() -> List[CompareProjectItem]:
+        """비교 목록용 전체 프로젝트 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        # 각 Provider별 프로젝트 ID 집합
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+        all_ids = list(vertex_ids | openai_ids)
+
+        # 정렬 (내림차순)
+        try:
+            all_ids.sort(key=lambda x: int(x), reverse=True)
+        except ValueError:
+            all_ids.sort(reverse=True)
+
+        # 각 Provider별 content_types 배치 조회
+        vertex_content_types = vertex_service.get_all_content_types_batch()
+        openai_content_types = openai_service.get_all_content_types_batch()
+
+        projects = []
+        for pid in all_ids:
+            # content_types 합집합
+            vertex_cts = set(vertex_content_types.get(pid, []))
+            openai_cts = set(openai_content_types.get(pid, []))
+            merged_cts = list(vertex_cts | openai_cts)
+
+            # 프로젝트 정보 조회
+            project_info = ViewerDataService.get_project_info(int(pid))
+
+            projects.append(CompareProjectItem(
+                project_id=pid,
+                project_info=project_info,
+                content_types=merged_cts,
+                has_vertex_ai=pid in vertex_ids,
+                has_openai=pid in openai_ids
+            ))
+
+        logger.info(f"Loaded {len(projects)} compare projects")
         return projects

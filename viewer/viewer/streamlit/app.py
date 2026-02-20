@@ -11,7 +11,7 @@ ES에 저장된 콘텐츠 분석 결과를 시각화하는 로컬 뷰어입니�
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 # viewer 패키지 경로를 sys.path에 추가
 _viewer_root = Path(__file__).parent.parent.parent
@@ -21,7 +21,7 @@ if str(_viewer_root) not in sys.path:
 import streamlit as st
 
 from viewer.schemas.enums import ContentType
-from viewer.schemas.models import ProjectInfo
+from viewer.schemas.models import CompareProjectItem, ProjectInfo, ResultDocument
 from viewer.services.data_service import ViewerDataService
 from viewer.streamlit.renderer import RefineResultRenderer
 
@@ -96,81 +96,177 @@ def get_project_display_name(project_id: str, project_info: Optional[ProjectInfo
     return f"프로젝트 {project_id}"
 
 
+def render_llm_usage(result_doc: ResultDocument, provider_name: str):
+    """LLM 사용량 렌더링"""
+    if not result_doc.llm_usages:
+        return
+
+    with st.expander(f"📊 LLM 사용량 ({provider_name})", expanded=False):
+        total_input = 0
+        total_output = 0
+        total_cost = 0.0
+        total_duration = 0
+
+        for usage in result_doc.llm_usages:
+            col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+            with col1:
+                st.write(f"**Step {usage.step}**: {usage.model}")
+            with col2:
+                st.write(f"In: {usage.input_tokens:,} / Out: {usage.output_tokens:,}")
+            with col3:
+                if usage.total_cost:
+                    st.write(f"${usage.total_cost:.4f}")
+            with col4:
+                st.write(f"{usage.duration_ms:,}ms")
+
+            total_input += usage.input_tokens
+            total_output += usage.output_tokens
+            total_cost += usage.total_cost or 0
+            total_duration += usage.duration_ms
+
+        st.divider()
+        total_tokens = total_input + total_output
+        st.write(f"**합계**: {total_tokens:,} tokens (In: {total_input:,} / Out: {total_output:,})")
+        if total_cost > 0:
+            st.write(f"**비용**: ${total_cost:.4f} | **소요시간**: {total_duration:,}ms")
+        else:
+            st.write(f"**소요시간**: {total_duration:,}ms")
+
+
+def render_single_result(result_doc: ResultDocument, project_info: Optional[ProjectInfo],
+                         content_type: str, content_type_desc: str, provider_name: str = None):
+    """단일 Provider 결과 렌더링"""
+    if not result_doc or not result_doc.result or not result_doc.result.data:
+        st.warning("분석 결과 데이터가 없습니다.")
+        return
+
+    # LLM 사용량 표시
+    render_llm_usage(result_doc, provider_name or "LLM")
+
+    # HTML 생성 및 렌더링
+    html_content = RefineResultRenderer.generate_amazon_style_html(
+        result=result_doc.result.data,
+        project_id=int(result_doc.project_id),
+        content_type=content_type,
+        executed_at=str(result_doc.updated_at)[:19] if result_doc.updated_at else "N/A",
+        content_type_description=content_type_desc,
+        project_title=project_info.title if project_info else None,
+        project_thumbnail_url=project_info.thumbnail_url if project_info else None,
+        project_link=project_info.link if project_info else None,
+    )
+
+    # HTML 컴포넌트로 렌더링
+    st.components.v1.html(html_content, height=800, scrolling=True)
+
+
+def render_compare_view(vertex_doc: Optional[ResultDocument], openai_doc: Optional[ResultDocument],
+                        project_info: Optional[ProjectInfo], project_id: int, content_type_desc: str):
+    """비교 뷰 렌더링 (HTML 렌더러 사용 - viewer와 동일한 UI)"""
+
+    # 양쪽 모두 없으면 경고
+    if not vertex_doc and not openai_doc:
+        st.warning("양쪽 모두 분석 결과가 없습니다.")
+        return
+
+    # HTML 렌더러로 비교 뷰 생성
+    html_content = RefineResultRenderer.generate_compare_html(
+        vertex_doc=vertex_doc,
+        openai_doc=openai_doc,
+        project_id=project_id,
+        content_type_description=content_type_desc
+    )
+
+    # HTML 컴포넌트로 렌더링
+    st.components.v1.html(html_content, height=1200, scrolling=True)
+
+
 def main():
     # 헤더
     st.title("📊 커뮤니티 요약 뷰어")
     st.caption("Elasticsearch에 저장된 콘텐츠 분석 결과를 조회합니다.")
 
-    # Provider 선택 (사이드바)
+    # 사이드바 설정
     with st.sidebar:
         st.header("🔧 설정")
-        provider_options = {
-            "기본 (통합)": None,
-            "Vertex AI": "vertex-ai",
-            "OpenAI": "openai",
-        }
-        selected_provider_label = st.radio(
-            "LLM Provider",
-            list(provider_options.keys()),
-            index=0,
-            help="분석에 사용된 LLM Provider를 선택합니다.",
+
+        # 비교 모드 토글
+        compare_mode = st.toggle(
+            "🔀 비교 모드",
+            value=False,
+            help="Vertex AI와 OpenAI 결과를 나란히 비교합니다."
         )
-        selected_provider = provider_options[selected_provider_label]
 
-        if selected_provider:
-            st.info(f"📡 {selected_provider_label} 분석 결과 조회 중")
+        st.divider()
 
-    # 서비스 초기화 (provider 파라미터 전달)
-    service = get_service(provider=selected_provider)
+        if not compare_mode:
+            # 단일 Provider 선택
+            provider_options = {
+                "기본 (통합)": None,
+                "Vertex AI": "vertex-ai",
+                "OpenAI": "openai",
+            }
+            selected_provider_label = st.radio(
+                "LLM Provider",
+                list(provider_options.keys()),
+                index=0,
+                help="분석에 사용된 LLM Provider를 선택합니다.",
+            )
+            selected_provider = provider_options[selected_provider_label]
 
-    if service is None:
-        st.error(
-            "ES 연결에 실패했습니다. `.env` 파일의 ES 설정을 확인해주세요.\n\n"
-            "필요한 설정:\n"
-            "- `ES_HOST`\n"
-            "- `ES_PORT` (선택)\n"
-            "- `ES_USERNAME` (선택)\n"
-            "- `ES_PASSWORD` (선택)"
-        )
-        return
+            if selected_provider:
+                st.info(f"📡 {selected_provider_label} 분석 결과 조회 중")
+        else:
+            selected_provider = None
+            st.success("🔀 Vertex AI와 OpenAI 결과를 비교합니다.")
 
-    # 프로젝트 ID 목록 조회
-    project_ids = service.get_project_ids()
-    if not project_ids:
-        st.warning("저장된 분석 결과가 없습니다.")
-        return
+    # === 비교 모드 ===
+    if compare_mode:
+        # 비교용 프로젝트 목록 조회
+        with st.spinner("프로젝트 목록 조회 중..."):
+            compare_projects: List[CompareProjectItem] = ViewerDataService.get_all_compare_projects()
 
-    # 프로젝트 정보 매핑 조회 (캐싱 - Wadiz API 기반이므로 provider와 무관)
-    project_info_map = get_project_info_map(tuple(project_ids))
+        if not compare_projects:
+            st.warning("저장된 분석 결과가 없습니다.")
+            return
 
-    # 프로젝트 표시명 → ID 매핑 생성
-    project_display_to_id = {
-        get_project_display_name(pid, project_info_map.get(pid)): pid
-        for pid in project_ids
-    }
-    project_display_names = list(project_display_to_id.keys())
+        # 프로젝트 정보 매핑
+        project_ids = [p.project_id for p in compare_projects]
+        project_info_map = get_project_info_map(tuple(project_ids))
 
-    # 컨트롤 패널
-    col1, col2, col3 = st.columns([2, 2, 1])
+        # 프로젝트 표시명 → 아이템 매핑
+        project_display_to_item = {}
+        for p in compare_projects:
+            info = p.project_info
+            display_name = get_project_display_name(p.project_id, info)
+            # Provider 상태 표시 추가
+            status = ""
+            if p.has_vertex_ai and p.has_openai:
+                status = " [V+O]"
+            elif p.has_vertex_ai:
+                status = " [V]"
+            elif p.has_openai:
+                status = " [O]"
+            project_display_to_item[display_name + status] = p
 
-    with col1:
-        # 프로젝트 Dropdown (제목으로 표시)
-        selected_display_name = st.selectbox(
-            "프로젝트",
-            project_display_names,
-            index=0,
-            help="분석 결과가 있는 프로젝트 목록입니다.",
-        )
-        selected_project = project_display_to_id[selected_display_name]
+        project_display_names = list(project_display_to_item.keys())
 
-    with col2:
-        # 커뮤니티 댓글 종류 Dropdown (project_id에 따라 동적 변경)
-        selected_content_type = None
-        selected_content_type_desc = None
-        if selected_project:
-            content_types = service.get_content_types_by_project(selected_project)
+        # 컨트롤 패널
+        col1, col2, col3 = st.columns([2, 2, 1])
+
+        with col1:
+            selected_display_name = st.selectbox(
+                "프로젝트",
+                project_display_names,
+                index=0,
+                help="[V]=Vertex AI, [O]=OpenAI, [V+O]=둘 다",
+            )
+            selected_item = project_display_to_item[selected_display_name]
+            selected_project = selected_item.project_id
+
+        with col2:
+            # 통합 content_types 조회
+            content_types = ViewerDataService.get_merged_content_types(selected_project)
             if content_types:
-                # Content Type을 description으로 표시
                 content_type_options = {
                     get_content_type_description(ct): ct for ct in content_types
                 }
@@ -178,55 +274,127 @@ def main():
                     "커뮤니티 댓글 종류",
                     list(content_type_options.keys()),
                     index=0,
-                    help="선택한 프로젝트의 콘텐츠 타입입니다.",
                 )
                 selected_content_type = content_type_options[selected_desc]
                 selected_content_type_desc = selected_desc
             else:
                 st.warning(f"프로젝트 {selected_project}에 콘텐츠 타입이 없습니다.")
+                return
 
-    with col3:
-        st.write("")  # 간격 조정
-        st.write("")
-        # Refresh 버튼
-        if st.button("🔄 Refresh", use_container_width=True):
-            st.cache_resource.clear()
-            st.cache_data.clear()
-            st.rerun()
+        with col3:
+            st.write("")
+            st.write("")
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
 
-    # 구분선
-    st.divider()
+        st.divider()
 
-    # 결과 조회 및 렌더링
-    if selected_project and selected_content_type:
+        # 비교 결과 조회
         with st.spinner("분석 결과를 조회하는 중..."):
-            result_doc = service.get_result(selected_project, selected_content_type)
-            # 프로젝트 정보는 이미 캐싱된 매핑에서 조회
-            project_info = project_info_map.get(selected_project)
+            compare_result = ViewerDataService.get_compare_result(selected_project, selected_content_type)
+            project_info = compare_result.project_info
 
-        if result_doc:
-            # 결과 데이터 확인
-            if result_doc.result and result_doc.result.data:
-                # HTML 생성 및 렌더링 (content_type_description에 enum description 사용)
-                html_content = RefineResultRenderer.generate_amazon_style_html(
-                    result=result_doc.result.data,
-                    project_id=int(result_doc.project_id),
-                    content_type=selected_content_type,
-                    executed_at=str(result_doc.updated_at)[:19] if result_doc.updated_at else "N/A",
-                    content_type_description=selected_content_type_desc,
-                    project_title=project_info.title if project_info else None,
-                    project_thumbnail_url=project_info.thumbnail_url if project_info else None,
-                    project_link=project_info.link if project_info else None,
+        # 비교 뷰 렌더링
+        render_compare_view(
+            compare_result.vertex_ai,
+            compare_result.openai,
+            project_info,
+            int(selected_project),
+            selected_content_type_desc
+        )
+
+    # === 단일 Provider 모드 ===
+    else:
+        # 서비스 초기화
+        service = get_service(provider=selected_provider)
+
+        if service is None:
+            st.error(
+                "ES 연결에 실패했습니다. `.env` 파일의 ES 설정을 확인해주세요.\n\n"
+                "필요한 설정:\n"
+                "- `ES_HOST`\n"
+                "- `ES_PORT` (선택)\n"
+                "- `ES_USERNAME` (선택)\n"
+                "- `ES_PASSWORD` (선택)"
+            )
+            return
+
+        # 프로젝트 ID 목록 조회
+        project_ids = service.get_project_ids()
+        if not project_ids:
+            st.warning("저장된 분석 결과가 없습니다.")
+            return
+
+        # 프로젝트 정보 매핑 조회
+        project_info_map = get_project_info_map(tuple(project_ids))
+
+        # 프로젝트 표시명 → ID 매핑 생성
+        project_display_to_id = {
+            get_project_display_name(pid, project_info_map.get(pid)): pid
+            for pid in project_ids
+        }
+        project_display_names = list(project_display_to_id.keys())
+
+        # 컨트롤 패널
+        col1, col2, col3 = st.columns([2, 2, 1])
+
+        with col1:
+            selected_display_name = st.selectbox(
+                "프로젝트",
+                project_display_names,
+                index=0,
+                help="분석 결과가 있는 프로젝트 목록입니다.",
+            )
+            selected_project = project_display_to_id[selected_display_name]
+
+        with col2:
+            selected_content_type = None
+            selected_content_type_desc = None
+            if selected_project:
+                content_types = service.get_content_types_by_project(selected_project)
+                if content_types:
+                    content_type_options = {
+                        get_content_type_description(ct): ct for ct in content_types
+                    }
+                    selected_desc = st.selectbox(
+                        "커뮤니티 댓글 종류",
+                        list(content_type_options.keys()),
+                        index=0,
+                        help="선택한 프로젝트의 콘텐츠 타입입니다.",
+                    )
+                    selected_content_type = content_type_options[selected_desc]
+                    selected_content_type_desc = selected_desc
+                else:
+                    st.warning(f"프로젝트 {selected_project}에 콘텐츠 타입이 없습니다.")
+
+        with col3:
+            st.write("")
+            st.write("")
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+
+        st.divider()
+
+        # 결과 조회 및 렌더링
+        if selected_project and selected_content_type:
+            with st.spinner("분석 결과를 조회하는 중..."):
+                result_doc = service.get_result(selected_project, selected_content_type)
+                project_info = project_info_map.get(selected_project)
+
+            if result_doc:
+                render_single_result(
+                    result_doc,
+                    project_info,
+                    selected_content_type,
+                    selected_content_type_desc,
+                    selected_provider_label if selected_provider else None
                 )
-
-                # HTML 컴포넌트로 렌더링
-                st.components.v1.html(html_content, height=800, scrolling=True)
             else:
-                st.warning("분석 결과 데이터가 없습니다.")
-                if result_doc.reason:
-                    st.error(f"사유: {result_doc.reason}")
-        else:
-            st.warning("선택한 조건에 해당하는 분석 결과가 없습니다.")
+                st.warning("선택한 조건에 해당하는 분석 결과가 없습니다.")
 
 
 if __name__ == "__main__":
