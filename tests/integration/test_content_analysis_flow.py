@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
@@ -68,8 +67,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
             ))
         else:
             content_items.append(item)
-    # 1. Setup Service
-    SessionFactory.initialize()
+    # 1. Setup Service (LLMService 생성 시 ProviderRegistry 자동 초기화)
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 

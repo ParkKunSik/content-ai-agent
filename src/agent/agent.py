@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 
-from src.core.session_factory import SessionFactory
 from src.schemas.enums.analysis_mode import AnalysisMode
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.project_type import ProjectType
@@ -21,21 +20,18 @@ class ContentAnalysisAgent:
     def __init__(self):
         """
         Constructor for the agent.
-        Model configuration is handled via settings and SessionFactory during set_up.
+        Model configuration is handled via settings and ProviderRegistry during set_up.
         """
         self.orchestrator = None
 
     def set_up(self):
         """
         Initialization logic called by the Reasoning Engine or Local Wrapper.
-        Loads system instructions via SessionFactory.
+        LLM Provider is automatically initialized when AgentOrchestrator creates LLMService.
         """
         logger.info("Setting up ContentAnalysisAgent services...")
 
-        # Initialize all models with their versioned system instructions
-        SessionFactory.initialize()
-
-        # Initialize Orchestrator
+        # Initialize Orchestrator (LLMService 생성 시 ProviderRegistry 자동 초기화)
         self.orchestrator = AgentOrchestrator()
         logger.info("Agent setup complete.")
 

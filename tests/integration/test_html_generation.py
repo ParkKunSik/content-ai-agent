@@ -11,7 +11,6 @@ import pytest
 from src.core.config import settings
 from src.core.llm.enums import ProviderType
 from src.core.llm.registry import ProviderRegistry
-from src.core.session_factory import SessionFactory
 from src.schemas.enums.content_type import ExternalContentType
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
@@ -96,8 +95,7 @@ async def _execute_content_analysis_with_html(
     Returns:
         tuple: (step1_response, step2_response, final_response, total_duration, html_path, pdf_path)
     """
-    # 1. Setup Service
-    SessionFactory.initialize()
+    # 1. Setup Service (LLMService 생성 시 ProviderRegistry 자동 초기화)
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 
