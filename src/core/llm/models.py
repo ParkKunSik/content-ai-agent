@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional, Type
 
+from pydantic import BaseModel
+
 from src.core.llm.enums import FinishReason, ResponseFormat
 
 
@@ -32,4 +34,4 @@ class PersonaConfig:
     temperature: float
     system_instruction: Optional[str] = None
     response_format: ResponseFormat = ResponseFormat.TEXT
-    response_schema: Optional[Type[Any]] = None  # Pydantic 모델 클래스 (BaseModel 서브클래스)
+    response_schema: Optional[Type[BaseModel]] = None  # Pydantic 모델 클래스

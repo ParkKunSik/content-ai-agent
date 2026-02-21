@@ -89,6 +89,7 @@ class VertexAIProviderFactory(LLMProviderFactory):
         # 세션 설정 생성
         session_config = types.GenerateContentConfig(
             temperature=persona_config.temperature,
+            max_output_tokens=settings.MAX_OUTPUT_TOKENS,
             system_instruction=persona_config.system_instruction,
             response_mime_type=mime_type,
             response_schema=schema_dict,

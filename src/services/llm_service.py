@@ -1,6 +1,8 @@
 import logging
 import time
-from typing import Any, List, Optional, Tuple, Type
+from typing import List, Optional, Tuple, Type
+
+from pydantic import BaseModel
 
 from src.core.config import settings
 from src.core.llm.enums import FinishReason, ProviderType, ResponseFormat
@@ -61,7 +63,7 @@ class LLMService:
         prompt: str,
         persona_type: PersonaType,
         mime_type: MimeType = MimeType.TEXT_PLAIN,
-        response_schema: Optional[Type[Any]] = None
+        response_schema: Optional[Type[BaseModel]] = None
     ) -> str:
         """Generic method to generate content using a specific persona."""
         llm_response = self._generate_raw(prompt, persona_type, mime_type, response_schema)
@@ -72,7 +74,7 @@ class LLMService:
         prompt: str,
         persona_type: PersonaType,
         mime_type: MimeType = MimeType.TEXT_PLAIN,
-        response_schema: Optional[Type[Any]] = None
+        response_schema: Optional[Type[BaseModel]] = None
     ) -> LLMResponse:
         """LLM 호출 후 LLMResponse 전체를 반환하는 내부 메서드."""
         # PersonaConfig 생성
@@ -97,7 +99,7 @@ class LLMService:
         prompt: str,
         persona_type: PersonaType,
         mime_type: MimeType = MimeType.TEXT_PLAIN,
-        response_schema: Optional[Type[Any]] = None
+        response_schema: Optional[Type[BaseModel]] = None
     ) -> Tuple[str, LLMResponse]:
         """LLM 호출 후 (텍스트, LLMResponse) 튜플을 반환하는 내부 메서드."""
         llm_response = self._generate_raw(prompt, persona_type, mime_type, response_schema)
@@ -110,7 +112,7 @@ class LLMService:
         persona_type: PersonaType,
         step: int,
         mime_type: MimeType = MimeType.TEXT_PLAIN,
-        response_schema: Optional[Type[Any]] = None
+        response_schema: Optional[Type[BaseModel]] = None
     ) -> Tuple[str, LLMUsageInfo]:
         """LLM 생성 + 사용 정보(토큰, 소요시간) 반환."""
         start_time = time.time()
