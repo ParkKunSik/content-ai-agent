@@ -98,6 +98,17 @@ async def viewer_openai_detail(
 # 비교 뷰어 라우트 (Provider 비교)
 # =============================================================================
 
+@router.get("/all/stats", response_class=HTMLResponse, name="viewer_compare_stats")
+async def viewer_compare_stats(request: Request):
+    """Provider 비교 - 전체 통계"""
+    stats = ViewerDataService.get_compare_stats()
+
+    return templates.TemplateResponse("viewer_stats.html", {
+        "request": request,
+        "stats": stats
+    })
+
+
 @router.get("/all", response_class=HTMLResponse, name="viewer_compare_list")
 @router.get("/all/", response_class=HTMLResponse, name="viewer_compare_list_slash")
 async def viewer_compare_list(request: Request, page: int = 1):

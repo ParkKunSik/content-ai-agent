@@ -21,7 +21,7 @@ if str(_viewer_root) not in sys.path:
 import streamlit as st
 
 from viewer.schemas.enums import ContentType
-from viewer.schemas.models import CompareProjectItem, ProjectInfo, ResultDocument
+from viewer.schemas.models import CompareProjectItem, CompareStats, ProjectInfo, ResultDocument
 from viewer.services.data_service import ViewerDataService
 from viewer.streamlit.renderer import RefineResultRenderer
 
@@ -133,6 +133,15 @@ def render_llm_usage(result_doc: ResultDocument, provider_name: str):
             st.write(f"**소요시간**: {total_duration:,}ms")
 
 
+def render_stats_view(stats: CompareStats):
+    """전체 Provider 비교 통계 렌더링 (HTML 렌더러 사용)"""
+    # HTML 렌더러로 통계 뷰 생성
+    html_content = RefineResultRenderer.generate_stats_html(stats)
+
+    # HTML 컴포넌트로 렌더링
+    st.components.v1.html(html_content, height=900, scrolling=True)
+
+
 def render_single_result(result_doc: ResultDocument, project_info: Optional[ProjectInfo],
                          content_type: str, content_type_desc: str, provider_name: str = None):
     """단일 Provider 결과 렌더링"""
@@ -189,16 +198,20 @@ def main():
     with st.sidebar:
         st.header("🔧 설정")
 
-        # 비교 모드 토글
-        compare_mode = st.toggle(
-            "🔀 비교 모드",
-            value=False,
-            help="Vertex AI와 OpenAI 결과를 나란히 비교합니다."
+        # 뷰 모드 선택
+        view_mode = st.radio(
+            "📋 보기 모드",
+            ["단일 Provider", "비교 모드", "통계"],
+            index=0,
+            help="단일: Provider별 조회, 비교: Vertex AI vs OpenAI, 통계: 전체 LLM 사용량"
         )
 
         st.divider()
 
-        if not compare_mode:
+        compare_mode = view_mode == "비교 모드"
+        stats_mode = view_mode == "통계"
+
+        if view_mode == "단일 Provider":
             # 단일 Provider 선택
             provider_options = {
                 "기본 (통합)": None,
@@ -215,9 +228,21 @@ def main():
 
             if selected_provider:
                 st.info(f"📡 {selected_provider_label} 분석 결과 조회 중")
-        else:
+        elif compare_mode:
             selected_provider = None
             st.success("🔀 Vertex AI와 OpenAI 결과를 비교합니다.")
+        else:
+            # 통계 모드
+            selected_provider = None
+            st.info("📊 전체 LLM 사용량 통계를 조회합니다.")
+
+    # === 통계 모드 ===
+    if stats_mode:
+        with st.spinner("통계 데이터 조회 중..."):
+            stats = ViewerDataService.get_compare_stats()
+
+        render_stats_view(stats)
+        return
 
     # === 비교 모드 ===
     if compare_mode:

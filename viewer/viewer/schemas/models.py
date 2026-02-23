@@ -250,3 +250,79 @@ class CompareProjectItem:
     def has_both(self) -> bool:
         """양쪽 모두 데이터가 있는지"""
         return self.has_vertex_ai and self.has_openai
+
+
+# === 통계용 모델 ===
+
+@dataclass
+class ProviderStats:
+    """Provider별 전체 통계"""
+    provider: str
+    project_count: int = 0
+    total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cost: float = 0.0
+    total_duration_ms: int = 0
+    avg_tokens_per_project: float = 0.0
+    avg_cost_per_project: float = 0.0
+    avg_duration_per_project: float = 0.0
+
+
+@dataclass
+class CompareStats:
+    """Provider 비교 전체 통계"""
+    vertex_ai: Optional[ProviderStats] = None
+    openai: Optional[ProviderStats] = None
+    both_count: int = 0  # 양쪽 모두 있는 프로젝트 수
+    vertex_only_count: int = 0  # Vertex AI만 있는 프로젝트 수
+    openai_only_count: int = 0  # OpenAI만 있는 프로젝트 수
+
+    @property
+    def has_both(self) -> bool:
+        return self.vertex_ai is not None and self.openai is not None
+
+    @property
+    def token_diff(self) -> Optional[int]:
+        if not self.has_both:
+            return None
+        return self.vertex_ai.total_tokens - self.openai.total_tokens
+
+    @property
+    def token_diff_percent(self) -> Optional[float]:
+        if not self.has_both or self.token_diff == 0:
+            return None
+        base = min(self.vertex_ai.total_tokens, self.openai.total_tokens)
+        if base == 0:
+            return None
+        return (abs(self.token_diff) / base) * 100
+
+    @property
+    def cost_diff(self) -> Optional[float]:
+        if not self.has_both:
+            return None
+        return self.vertex_ai.total_cost - self.openai.total_cost
+
+    @property
+    def cost_diff_percent(self) -> Optional[float]:
+        if not self.has_both or self.cost_diff == 0:
+            return None
+        base = min(self.vertex_ai.total_cost, self.openai.total_cost)
+        if base == 0:
+            return None
+        return (abs(self.cost_diff) / base) * 100
+
+    @property
+    def duration_diff(self) -> Optional[int]:
+        if not self.has_both:
+            return None
+        return self.vertex_ai.total_duration_ms - self.openai.total_duration_ms
+
+    @property
+    def duration_diff_percent(self) -> Optional[float]:
+        if not self.has_both or self.duration_diff == 0:
+            return None
+        base = min(self.vertex_ai.total_duration_ms, self.openai.total_duration_ms)
+        if base == 0:
+            return None
+        return (abs(self.duration_diff) / base) * 100

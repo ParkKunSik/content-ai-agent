@@ -16,8 +16,10 @@ from viewer.config import settings
 from viewer.schemas.models import (
     CompareProjectItem,
     CompareResultItem,
+    CompareStats,
     LLMUsageSummary,
     ProjectInfo,
+    ProviderStats,
     ResultDocument,
     UsageComparison,
 )
@@ -369,3 +371,104 @@ class ViewerDataService:
 
         logger.info(f"Loaded {len(projects)} compare projects")
         return projects
+
+    # === 통계 조회 메서드 ===
+
+    def get_all_llm_usages_aggregated(self) -> ProviderStats:
+        """전체 프로젝트의 LLM 사용량 합계 조회 (전체 문서 스캔)"""
+        provider_name = "vertex-ai" if "vertex-ai" in self.result_index_alias else "openai"
+
+        try:
+            # 프로젝트 수 조회
+            project_ids = self.get_project_ids()
+            project_count = len(project_ids)
+
+            if project_count == 0:
+                return ProviderStats(provider=provider_name)
+
+            # 모든 문서의 llm_usages 조회 (scroll API 사용)
+            total_input = 0
+            total_output = 0
+            total_cost = 0.0
+            total_duration = 0
+            has_cost = False
+
+            # scroll로 모든 문서 조회
+            response = self.client.search(
+                index=self.result_index_alias,
+                _source=["llm_usages"],
+                size=1000,
+                scroll="2m"
+            )
+
+            scroll_id = response.get("_scroll_id")
+            hits = response["hits"]["hits"]
+
+            while hits:
+                for hit in hits:
+                    llm_usages = hit.get("_source", {}).get("llm_usages", [])
+                    if llm_usages:
+                        for usage in llm_usages:
+                            total_input += usage.get("input_tokens", 0) or 0
+                            total_output += usage.get("output_tokens", 0) or 0
+                            total_duration += usage.get("duration_ms", 0) or 0
+                            cost = usage.get("total_cost")
+                            if cost is not None:
+                                total_cost += cost
+                                has_cost = True
+
+                # 다음 scroll 페이지
+                response = self.client.scroll(scroll_id=scroll_id, scroll="2m")
+                hits = response["hits"]["hits"]
+
+            # scroll 정리
+            try:
+                self.client.clear_scroll(scroll_id=scroll_id)
+            except Exception:
+                pass
+
+            total_tokens = total_input + total_output
+
+            return ProviderStats(
+                provider=provider_name,
+                project_count=project_count,
+                total_tokens=total_tokens,
+                total_input_tokens=total_input,
+                total_output_tokens=total_output,
+                total_cost=total_cost if has_cost else 0.0,
+                total_duration_ms=total_duration,
+                avg_tokens_per_project=total_tokens / project_count if project_count > 0 else 0,
+                avg_cost_per_project=total_cost / project_count if project_count > 0 else 0,
+                avg_duration_per_project=total_duration / project_count if project_count > 0 else 0
+            )
+        except Exception as e:
+            logger.error(f"Failed to get aggregated LLM usages: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return ProviderStats(provider=provider_name)
+
+    @staticmethod
+    def get_compare_stats() -> CompareStats:
+        """전체 Provider 비교 통계 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        # 각 Provider 통계 조회
+        vertex_stats = vertex_service.get_all_llm_usages_aggregated()
+        openai_stats = openai_service.get_all_llm_usages_aggregated()
+
+        # 프로젝트 ID 집합으로 분류
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+
+        both_ids = vertex_ids & openai_ids
+        vertex_only_ids = vertex_ids - openai_ids
+        openai_only_ids = openai_ids - vertex_ids
+
+        return CompareStats(
+            vertex_ai=vertex_stats,
+            openai=openai_stats,
+            both_count=len(both_ids),
+            vertex_only_count=len(vertex_only_ids),
+            openai_only_count=len(openai_only_ids)
+        )
