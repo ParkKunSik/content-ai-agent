@@ -760,6 +760,14 @@ class RefineResultRenderer:
         result = result_doc.result.data
         updated_at = str(result_doc.updated_at)[:19] if result_doc.updated_at else "N/A"
 
+        # 분석 항목 수 계산 (카테고리 + meta_data의 harmful_contents + etc_contents)
+        total_items = sum(cat.positive_count + cat.negative_count for cat in result.categories)
+        meta_data = result_doc.result.meta_data if result_doc.result else None
+        if meta_data:
+            total_items += len(meta_data.get("harmful_contents", [])) if isinstance(meta_data, dict) else 0
+            total_items += len(meta_data.get("etc_contents", [])) if isinstance(meta_data, dict) else 0
+        total_items_text = f"분석 항목: {total_items}개 | " if total_items > 0 else ""
+
         # LLM 사용량
         llm_usage_html = cls._render_llm_usage_section(result_doc.llm_usages, provider_name)
 
@@ -846,7 +854,7 @@ class RefineResultRenderer:
             <div class="provider-header">
                 <div class="provider-icon {provider_class}">{provider_icon}</div>
                 <div class="provider-name">{provider_name}</div>
-                <div class="provider-meta">{updated_at}</div>
+                <div class="provider-meta">{total_items_text}{updated_at}</div>
             </div>
             {llm_usage_html}
             <div class="summary-section">{highlighted_summary}</div>

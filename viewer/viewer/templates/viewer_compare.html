@@ -670,11 +670,16 @@
     {% if compare_result.vertex_ai %}
     {% set vertex_doc = compare_result.vertex_ai %}
     {% set vertex_result = vertex_doc.result.data if vertex_doc.result else none %}
+    {% set vertex_total_items = 0 %}
+    {% set vertex_meta_data = vertex_doc.result.meta_data if vertex_doc.result and vertex_doc.result.meta_data else {} %}
+    {% if vertex_result %}
+    {% set vertex_total_items = vertex_result.categories|sum(attribute='positive_count') + vertex_result.categories|sum(attribute='negative_count') + (vertex_meta_data.harmful_contents|length if vertex_meta_data.harmful_contents else 0) + (vertex_meta_data.etc_contents|length if vertex_meta_data.etc_contents else 0) %}
+    {% endif %}
     <div class="provider-panel vertex-ai">
         <div class="provider-header">
             <div class="provider-icon vertex-ai">V</div>
             <div class="provider-name">Vertex AI</div>
-            <div class="provider-meta">{{ vertex_doc.updated_at|string|truncate(19, True, '') if vertex_doc.updated_at else 'N/A' }}</div>
+            <div class="provider-meta">{% if vertex_total_items > 0 %}분석 항목: {{ vertex_total_items }}개 | {% endif %}{{ vertex_doc.updated_at|string|truncate(19, True, '') if vertex_doc.updated_at else 'N/A' }}</div>
         </div>
 
         {# LLM 사용량 #}
@@ -755,11 +760,16 @@
     {% if compare_result.openai %}
     {% set openai_doc = compare_result.openai %}
     {% set openai_result = openai_doc.result.data if openai_doc.result else none %}
+    {% set openai_total_items = 0 %}
+    {% set openai_meta_data = openai_doc.result.meta_data if openai_doc.result and openai_doc.result.meta_data else {} %}
+    {% if openai_result %}
+    {% set openai_total_items = openai_result.categories|sum(attribute='positive_count') + openai_result.categories|sum(attribute='negative_count') + (openai_meta_data.harmful_contents|length if openai_meta_data.harmful_contents else 0) + (openai_meta_data.etc_contents|length if openai_meta_data.etc_contents else 0) %}
+    {% endif %}
     <div class="provider-panel openai">
         <div class="provider-header">
             <div class="provider-icon openai">O</div>
             <div class="provider-name">OpenAI</div>
-            <div class="provider-meta">{{ openai_doc.updated_at|string|truncate(19, True, '') if openai_doc.updated_at else 'N/A' }}</div>
+            <div class="provider-meta">{% if openai_total_items > 0 %}분석 항목: {{ openai_total_items }}개 | {% endif %}{{ openai_doc.updated_at|string|truncate(19, True, '') if openai_doc.updated_at else 'N/A' }}</div>
         </div>
 
         {# LLM 사용량 #}
