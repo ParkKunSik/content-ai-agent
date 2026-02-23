@@ -491,122 +491,6 @@
         background-color: #F5F5F5;
         color: #757575;
     }
-
-    /* 하이라이트 섹션 */
-    .highlights-section {
-        margin-top: 16px;
-    }
-
-    .highlight-item {
-        margin-bottom: 12px;
-        padding: 12px;
-        background-color: #fff;
-        border-radius: 4px;
-        border-left: 3px solid #067D62;
-    }
-
-    .highlight-keyword {
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
-
-    .highlight-text {
-        color: #565959;
-        font-size: 13px;
-        line-height: 1.5;
-    }
-
-    .highlight-text strong {
-        font-weight: 900;
-        color: #0F1111;
-    }
-
-    .read-more {
-        color: #007185;
-        text-decoration: none;
-        font-size: 13px;
-        margin-left: 4px;
-    }
-
-    .read-more:hover {
-        color: #C7511F;
-        text-decoration: underline;
-    }
-
-    /* 모달 스타일 */
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .modal-overlay.active {
-        display: flex;
-    }
-
-    .modal-content {
-        background-color: #fff;
-        border-radius: 8px;
-        max-width: 600px;
-        width: 90%;
-        max-height: 85vh;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        border-bottom: 1px solid #D5D9D9;
-        background-color: #F7FAFA;
-        flex-shrink: 0;
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #0F1111;
-    }
-
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #565959;
-        padding: 0;
-        width: 30px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .modal-close:hover {
-        color: #0F1111;
-    }
-
-    .modal-body {
-        padding: 20px;
-        overflow-y: auto;
-        line-height: 1.6;
-        color: #0F1111;
-        font-size: 14px;
-        white-space: pre-wrap;
-        word-break: break-word;
-        flex-grow: 1;
-    }
 </style>
 {% endblock %}
 
@@ -815,7 +699,7 @@
             {% for cat in vertex_result.categories %}
             {% set sentiment = cat.sentiment_type|lower if cat.sentiment_type else 'neutral' %}
             {% set total_count = cat.positive_count + cat.negative_count %}
-            <div class="category-chip {{ sentiment }}" onclick="toggleCategory('vertex', {{ loop.index0 }})">
+            <div class="category-chip {{ sentiment }}" onclick="toggleCompareCategory('vertex', {{ loop.index0 }})">
                 <span class="category-chip-icon">
                     {% if sentiment == 'positive' %}✓{% elif sentiment == 'negative' %}✗{% else %}●{% endif %}
                 </span>
@@ -831,7 +715,7 @@
         <div id="category-vertex-{{ cat_idx }}" class="category-detail">
             <div class="detail-header">
                 <div class="detail-title">{{ cat.display_highlight }}</div>
-                <button class="close-btn" onclick="toggleCategory('vertex', {{ cat_idx }})">×</button>
+                <button class="close-btn" onclick="toggleCompareCategory('vertex', {{ cat_idx }})">×</button>
             </div>
             <div class="sentiment-counts">
                 {{ cat.positive_count + cat.negative_count }}명의 고객이 "<strong>{{ cat.name }}</strong>"을(를) 언급
@@ -900,7 +784,7 @@
             {% for cat in openai_result.categories %}
             {% set sentiment = cat.sentiment_type|lower if cat.sentiment_type else 'neutral' %}
             {% set total_count = cat.positive_count + cat.negative_count %}
-            <div class="category-chip {{ sentiment }}" onclick="toggleCategory('openai', {{ loop.index0 }})">
+            <div class="category-chip {{ sentiment }}" onclick="toggleCompareCategory('openai', {{ loop.index0 }})">
                 <span class="category-chip-icon">
                     {% if sentiment == 'positive' %}✓{% elif sentiment == 'negative' %}✗{% else %}●{% endif %}
                 </span>
@@ -916,7 +800,7 @@
         <div id="category-openai-{{ cat_idx }}" class="category-detail">
             <div class="detail-header">
                 <div class="detail-title">{{ cat.display_highlight }}</div>
-                <button class="close-btn" onclick="toggleCategory('openai', {{ cat_idx }})">×</button>
+                <button class="close-btn" onclick="toggleCompareCategory('openai', {{ cat_idx }})">×</button>
             </div>
             <div class="sentiment-counts">
                 {{ cat.positive_count + cat.negative_count }}명의 고객이 "<strong>{{ cat.name }}</strong>"을(를) 언급
@@ -955,15 +839,7 @@
 </div>
 
 {# 모달 #}
-<div id="content-modal" class="modal-overlay" onclick="closeModal(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
-        <div class="modal-header">
-            <div class="modal-title" id="modal-title">원본 콘텐츠</div>
-            <button class="modal-close" onclick="closeModal()">&times;</button>
-        </div>
-        <div class="modal-body" id="modal-body"></div>
-    </div>
-</div>
+{% include "components/modal.html" %}
 
 {% endif %}
 
@@ -985,7 +861,7 @@
     /**
      * 비교 뷰용 카테고리 토글 (provider별 분리)
      */
-    function toggleCategory(provider, index) {
+    function toggleCompareCategory(provider, index) {
         const detailId = `category-${provider}-${index}`;
         const detail = document.getElementById(detailId);
 
@@ -1028,36 +904,7 @@
         });
     }
 
-    /**
-     * 하이라이트 요소에서 모달 열기
-     */
-    function openModalFromElement(elementId) {
-        const element = document.getElementById(elementId);
-        const keyword = element.dataset.keyword;
-        const content = element.dataset.content;
-        document.getElementById('modal-title').innerText = '"' + keyword + '" 원본 콘텐츠';
-        document.getElementById('modal-body').textContent = content;
-        document.getElementById('content-modal').classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    /**
-     * 모달 닫기
-     */
-    function closeModal(event) {
-        if (event && event.target !== event.currentTarget) return;
-        document.getElementById('content-modal').classList.remove('active');
-        document.body.style.overflow = '';
-    }
-
     // 페이지 로드 시 키워드 볼드 처리 실행
     document.addEventListener('DOMContentLoaded', highlightKeywords);
-
-    // ESC 키로 모달 닫기
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeModal();
-        }
-    });
 </script>
 {% endblock %}
