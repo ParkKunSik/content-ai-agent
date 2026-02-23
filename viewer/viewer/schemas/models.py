@@ -140,6 +140,103 @@ class CompareResultItem:
 
 
 @dataclass
+class LLMUsageSummary:
+    """LLM 사용량 합계 (비교용)"""
+    total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cost: Optional[float] = None
+    total_duration_ms: int = 0
+
+
+@dataclass
+class UsageComparison:
+    """LLM 사용량 비교 결과"""
+    vertex_ai: Optional[LLMUsageSummary] = None
+    openai: Optional[LLMUsageSummary] = None
+
+    @property
+    def has_both(self) -> bool:
+        """양쪽 데이터 모두 있는지"""
+        return self.vertex_ai is not None and self.openai is not None
+
+    @property
+    def token_diff(self) -> Optional[int]:
+        """토큰 차이 (vertex - openai, 음수면 openai가 더 많음)"""
+        if not self.has_both:
+            return None
+        return self.vertex_ai.total_tokens - self.openai.total_tokens
+
+    @property
+    def token_diff_percent(self) -> Optional[float]:
+        """토큰 차이 비율 (%)"""
+        if not self.has_both or self.token_diff == 0:
+            return None
+        # 더 작은 쪽 대비 차이 비율
+        base = min(self.vertex_ai.total_tokens, self.openai.total_tokens)
+        if base == 0:
+            return None
+        return (abs(self.token_diff) / base) * 100
+
+    @property
+    def token_winner(self) -> Optional[str]:
+        """토큰을 적게 사용한 쪽 (None이면 동일)"""
+        if not self.has_both or self.token_diff == 0:
+            return None
+        return "vertex_ai" if self.token_diff < 0 else "openai"
+
+    @property
+    def cost_diff(self) -> Optional[float]:
+        """비용 차이 (vertex - openai)"""
+        if not self.has_both:
+            return None
+        if self.vertex_ai.total_cost is None or self.openai.total_cost is None:
+            return None
+        return self.vertex_ai.total_cost - self.openai.total_cost
+
+    @property
+    def cost_diff_percent(self) -> Optional[float]:
+        """비용 차이 비율 (%)"""
+        if self.cost_diff is None or self.cost_diff == 0:
+            return None
+        base = min(self.vertex_ai.total_cost, self.openai.total_cost)
+        if base == 0:
+            return None
+        return (abs(self.cost_diff) / base) * 100
+
+    @property
+    def cost_winner(self) -> Optional[str]:
+        """비용이 적은 쪽 (None이면 동일 또는 비용 정보 없음)"""
+        if self.cost_diff is None or self.cost_diff == 0:
+            return None
+        return "vertex_ai" if self.cost_diff < 0 else "openai"
+
+    @property
+    def duration_diff(self) -> Optional[int]:
+        """소요시간 차이 (vertex - openai, ms)"""
+        if not self.has_both:
+            return None
+        return self.vertex_ai.total_duration_ms - self.openai.total_duration_ms
+
+    @property
+    def duration_diff_percent(self) -> Optional[float]:
+        """소요시간 차이 비율 (%)"""
+        if not self.has_both or self.duration_diff == 0:
+            return None
+        base = min(self.vertex_ai.total_duration_ms, self.openai.total_duration_ms)
+        if base == 0:
+            return None
+        return (abs(self.duration_diff) / base) * 100
+
+    @property
+    def duration_winner(self) -> Optional[str]:
+        """속도가 빠른 쪽 (None이면 동일)"""
+        if not self.has_both or self.duration_diff == 0:
+            return None
+        return "vertex_ai" if self.duration_diff < 0 else "openai"
+
+
+@dataclass
 class CompareProjectItem:
     """비교 목록용 프로젝트 아이템"""
     project_id: str
@@ -147,6 +244,7 @@ class CompareProjectItem:
     content_types: List[str] = field(default_factory=list)
     has_vertex_ai: bool = False
     has_openai: bool = False
+    usage_comparison: Optional[UsageComparison] = None
 
     @property
     def has_both(self) -> bool:

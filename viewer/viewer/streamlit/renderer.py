@@ -856,6 +856,132 @@ class RefineResultRenderer:
         </div>"""
 
     @classmethod
+    def _render_usage_comparison_section(
+        cls,
+        vertex_doc: Optional[ResultDocument],
+        openai_doc: Optional[ResultDocument]
+    ) -> str:
+        """LLM 사용량 비교 섹션 HTML 생성"""
+        if not vertex_doc or not openai_doc:
+            return ""
+
+        v_usages = vertex_doc.llm_usages
+        o_usages = openai_doc.llm_usages
+
+        if not v_usages or not o_usages:
+            return ""
+
+        # 합계 계산
+        v_total_input = sum(u.input_tokens for u in v_usages)
+        v_total_output = sum(u.output_tokens for u in v_usages)
+        v_total_tokens = v_total_input + v_total_output
+        v_total_duration = sum(u.duration_ms for u in v_usages)
+        v_total_cost = sum(u.total_cost or 0 for u in v_usages)
+        v_has_cost = any(u.total_cost for u in v_usages)
+
+        o_total_input = sum(u.input_tokens for u in o_usages)
+        o_total_output = sum(u.output_tokens for u in o_usages)
+        o_total_tokens = o_total_input + o_total_output
+        o_total_duration = sum(u.duration_ms for u in o_usages)
+        o_total_cost = sum(u.total_cost or 0 for u in o_usages)
+        o_has_cost = any(u.total_cost for u in o_usages)
+
+        # 차이 계산
+        token_diff = v_total_tokens - o_total_tokens
+        duration_diff = v_total_duration - o_total_duration
+        cost_diff = v_total_cost - o_total_cost if v_has_cost and o_has_cost else None
+
+        # % 계산 헬퍼
+        def calc_pct(diff: float, val1: float, val2: float) -> str:
+            if diff == 0:
+                return ""
+            base = min(val1, val2)
+            if base == 0:
+                return ""
+            pct = (abs(diff) / base) * 100
+            return f" ({pct:.1f}%)"
+
+        # 토큰 카드
+        token_pct = calc_pct(token_diff, v_total_tokens, o_total_tokens)
+        token_diff_html = f'<span class="diff-value">{"V" if token_diff > 0 else "O"}+{abs(token_diff):,}{token_pct}</span>' if token_diff != 0 else '<span class="diff-value tie">동일</span>'
+        token_card = f"""
+            <div class="usage-comparison-card">
+                <div class="usage-comparison-card-title">토큰</div>
+                <div class="usage-comparison-values">
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label vertex-ai">Vertex AI</span>
+                        <span class="usage-provider-value">{v_total_tokens:,}</span>
+                    </div>
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label openai">OpenAI</span>
+                        <span class="usage-provider-value">{o_total_tokens:,}</span>
+                    </div>
+                </div>
+                <div class="usage-comparison-diff">
+                    <span class="diff-label">차이</span>
+                    {token_diff_html}
+                </div>
+            </div>"""
+
+        # 비용 카드
+        cost_card = ""
+        if cost_diff is not None:
+            cost_pct = calc_pct(cost_diff, v_total_cost, o_total_cost)
+            cost_diff_html = f'<span class="diff-value">{"V" if cost_diff > 0 else "O"}+${abs(cost_diff):.4f}{cost_pct}</span>' if cost_diff != 0 else '<span class="diff-value tie">동일</span>'
+            cost_card = f"""
+            <div class="usage-comparison-card">
+                <div class="usage-comparison-card-title">비용</div>
+                <div class="usage-comparison-values">
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label vertex-ai">Vertex AI</span>
+                        <span class="usage-provider-value">${v_total_cost:.4f}</span>
+                    </div>
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label openai">OpenAI</span>
+                        <span class="usage-provider-value">${o_total_cost:.4f}</span>
+                    </div>
+                </div>
+                <div class="usage-comparison-diff">
+                    <span class="diff-label">차이</span>
+                    {cost_diff_html}
+                </div>
+            </div>"""
+
+        # 시간 카드
+        duration_pct = calc_pct(duration_diff, v_total_duration, o_total_duration)
+        duration_diff_html = f'<span class="diff-value">{"V" if duration_diff > 0 else "O"}+{abs(duration_diff):,}ms{duration_pct}</span>' if duration_diff != 0 else '<span class="diff-value tie">동일</span>'
+        duration_card = f"""
+            <div class="usage-comparison-card">
+                <div class="usage-comparison-card-title">소요 시간</div>
+                <div class="usage-comparison-values">
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label vertex-ai">Vertex AI</span>
+                        <span class="usage-provider-value">{v_total_duration:,}ms</span>
+                    </div>
+                    <div class="usage-comparison-value">
+                        <span class="usage-provider-label openai">OpenAI</span>
+                        <span class="usage-provider-value">{o_total_duration:,}ms</span>
+                    </div>
+                </div>
+                <div class="usage-comparison-diff">
+                    <span class="diff-label">차이</span>
+                    {duration_diff_html}
+                </div>
+            </div>"""
+
+        return f"""
+        <div class="usage-comparison-section">
+            <div class="usage-comparison-header">
+                <h4>📊 LLM 사용량 비교</h4>
+            </div>
+            <div class="usage-comparison-grid">
+                {token_card}
+                {cost_card}
+                {duration_card}
+            </div>
+        </div>"""
+
+    @classmethod
     def generate_compare_html(
         cls,
         vertex_doc: Optional[ResultDocument],
@@ -888,6 +1014,9 @@ class RefineResultRenderer:
                 warning_html = "<div class='warning-message'>OpenAI 분석 결과가 없습니다. Vertex AI 결과만 표시합니다.</div>"
             else:
                 warning_html = "<div class='warning-message'>Vertex AI 분석 결과가 없습니다. OpenAI 결과만 표시합니다.</div>"
+
+        # 사용량 비교 섹션
+        usage_comparison_html = cls._render_usage_comparison_section(vertex_doc, openai_doc)
 
         # 패널 생성
         vertex_panel = cls._render_single_panel(vertex_doc, "Vertex AI", "vertex-ai", "V") if vertex_doc else ""
@@ -1194,10 +1323,106 @@ class RefineResultRenderer:
         }}
 
         .no-data-message {{ padding: 40px 20px; text-align: center; color: #565959; }}
+
+        /* LLM 사용량 비교 섹션 */
+        .usage-comparison-section {{
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: #F7FAFA;
+            border: 1px solid #D5D9D9;
+            border-radius: 8px;
+        }}
+
+        .usage-comparison-header {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #D5D9D9;
+        }}
+
+        .usage-comparison-header h4 {{
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .usage-comparison-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }}
+
+        .usage-comparison-card {{
+            padding: 12px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #E3E6E6;
+        }}
+
+        .usage-comparison-card-title {{
+            font-size: 12px;
+            color: #565959;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }}
+
+        .usage-comparison-values {{
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }}
+
+        .usage-comparison-value {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }}
+
+        .usage-provider-label {{
+            font-weight: 500;
+        }}
+
+        .usage-provider-label.vertex-ai {{ color: #2E7D32; }}
+        .usage-provider-label.openai {{ color: #1565C0; }}
+
+        .usage-provider-value {{
+            font-family: monospace;
+            font-weight: 600;
+        }}
+
+        .usage-comparison-diff {{
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #E3E6E6;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .diff-label {{ color: #565959; }}
+
+        .diff-value {{
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background-color: #FFEBEE;
+            color: #C62828;
+        }}
+
+        .diff-value.tie {{
+            background-color: #F5F5F5;
+            color: #757575;
+        }}
     </style>
 </head>
 <body>
     {warning_html}
+    {usage_comparison_html}
     <div class="compare-container {single_view_class}">
         {vertex_panel}
         {openai_panel}

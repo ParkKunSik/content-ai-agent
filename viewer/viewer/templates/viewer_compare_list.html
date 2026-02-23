@@ -29,6 +29,7 @@
 
     .project-card {
         display: flex;
+        flex-direction: column;
         padding: 16px;
         background-color: #fff;
         border: 1px solid #D5D9D9;
@@ -39,6 +40,10 @@
     .project-card:hover {
         border-color: #008296;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .project-card-main {
+        display: flex;
     }
 
     .project-card-thumbnail {
@@ -152,6 +157,77 @@
         border-color: #007185;
     }
 
+    /* LLM 사용량 비교 */
+    .usage-comparison {
+        margin-top: 12px;
+        padding: 10px 12px;
+        background-color: #F7FAFA;
+        border: 1px solid #E3E6E6;
+        border-radius: 6px;
+    }
+
+    .usage-comparison-title {
+        font-weight: 600;
+        color: #0F1111;
+        margin-bottom: 8px;
+        font-size: 12px;
+    }
+
+    .usage-comparison-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .usage-comparison-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+    }
+
+    .usage-label {
+        color: #565959;
+        font-weight: 500;
+        min-width: 28px;
+    }
+
+    .usage-value {
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .usage-value.vertex-ai {
+        background-color: #E8F5E9;
+        color: #2E7D32;
+    }
+
+    .usage-value.openai {
+        background-color: #E3F2FD;
+        color: #1565C0;
+    }
+
+    .usage-diff {
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: 600;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .usage-diff.more {
+        background-color: #FFEBEE;
+        color: #C62828;
+    }
+
+    .usage-diff.tie {
+        background-color: #F5F5F5;
+        color: #757575;
+    }
+
     .empty-state {
         text-align: center;
         padding: 60px 20px;
@@ -230,41 +306,99 @@
 <div class="project-list">
     {% for project in projects %}
     <div class="project-card">
-        {% set project_info = project.project_info %}
-        {% if project_info and project_info.link %}
-        <a href="{{ project_info.link }}" target="_blank" class="project-card-thumbnail-link">
-            {% if project_info.thumbnail_url %}
-            <img src="{{ project_info.thumbnail_url }}" alt="썸네일" class="project-card-thumbnail">
+        <div class="project-card-main">
+            {% set project_info = project.project_info %}
+            {% if project_info and project_info.link %}
+            <a href="{{ project_info.link }}" target="_blank" class="project-card-thumbnail-link">
+                {% if project_info.thumbnail_url %}
+                <img src="{{ project_info.thumbnail_url }}" alt="썸네일" class="project-card-thumbnail">
+                {% else %}
+                <div class="project-card-thumbnail"></div>
+                {% endif %}
+            </a>
             {% else %}
             <div class="project-card-thumbnail"></div>
             {% endif %}
-        </a>
-        {% else %}
-        <div class="project-card-thumbnail"></div>
-        {% endif %}
-        <div class="project-card-content">
-            <div class="project-card-title">
-                <a href="{{ url_for('viewer_compare_detail', project_id=project.project_id) }}">
-                    {{ project_info.title if project_info else '제목 없음' }}
-                </a>
-            </div>
-            <div class="project-card-id">프로젝트 ID: {{ project.project_id }}</div>
-            <div class="provider-status">
-                <span class="provider-badge vertex-ai {% if not project.has_vertex_ai %}inactive{% endif %}">
-                    <span class="provider-icon">{% if project.has_vertex_ai %}✓{% else %}✗{% endif %}</span>
-                    Vertex AI
-                </span>
-                <span class="provider-badge openai {% if not project.has_openai %}inactive{% endif %}">
-                    <span class="provider-icon">{% if project.has_openai %}✓{% else %}✗{% endif %}</span>
-                    OpenAI
-                </span>
-            </div>
-            <div class="content-type-tags">
-                {% for ct in project.content_types %}
-                <a href="{{ url_for('viewer_compare_detail', project_id=project.project_id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
-                {% endfor %}
+            <div class="project-card-content">
+                <div class="project-card-title">
+                    <a href="{{ url_for('viewer_compare_detail', project_id=project.project_id) }}">
+                        {{ project_info.title if project_info else '제목 없음' }}
+                    </a>
+                </div>
+                <div class="project-card-id">프로젝트 ID: {{ project.project_id }}</div>
+                <div class="provider-status">
+                    <span class="provider-badge vertex-ai {% if not project.has_vertex_ai %}inactive{% endif %}">
+                        <span class="provider-icon">{% if project.has_vertex_ai %}✓{% else %}✗{% endif %}</span>
+                        Vertex AI
+                    </span>
+                    <span class="provider-badge openai {% if not project.has_openai %}inactive{% endif %}">
+                        <span class="provider-icon">{% if project.has_openai %}✓{% else %}✗{% endif %}</span>
+                        OpenAI
+                    </span>
+                </div>
+                <div class="content-type-tags">
+                    {% for ct in project.content_types %}
+                    <a href="{{ url_for('viewer_compare_detail', project_id=project.project_id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
+                    {% endfor %}
+                </div>
             </div>
         </div>
+
+        {# LLM 사용량 비교 (양쪽 모두 있을 때만) - 카드 하단에 전체 너비로 표시 #}
+        {% if project.has_both and project.usage_comparison and project.usage_comparison.has_both %}
+        {% set cmp = project.usage_comparison %}
+        <div class="usage-comparison">
+            <div class="usage-comparison-title">📊 LLM 비교</div>
+            <div class="usage-comparison-grid">
+                {# 토큰 비교 #}
+                <div class="usage-comparison-item">
+                    <span class="usage-label">토큰</span>
+                    <span class="usage-value vertex-ai">V:{{ "{:,}".format(cmp.vertex_ai.total_tokens) }}</span>
+                    <span class="usage-value openai">O:{{ "{:,}".format(cmp.openai.total_tokens) }}</span>
+                    {% if cmp.token_diff != 0 %}
+                    <span class="usage-diff more">
+                        {% if cmp.token_diff > 0 %}V{% else %}O{% endif %}+{{ "{:,}".format(cmp.token_diff|abs) }}
+                        {% if cmp.token_diff_percent %}({{ "%.1f"|format(cmp.token_diff_percent) }}%){% endif %}
+                    </span>
+                    {% else %}
+                    <span class="usage-diff tie">=</span>
+                    {% endif %}
+                </div>
+
+                {# 비용 비교 #}
+                {% if cmp.cost_diff is not none %}
+                <div class="usage-comparison-item">
+                    <span class="usage-label">비용</span>
+                    <span class="usage-value vertex-ai">V:${{ "%.4f"|format(cmp.vertex_ai.total_cost) }}</span>
+                    <span class="usage-value openai">O:${{ "%.4f"|format(cmp.openai.total_cost) }}</span>
+                    {% if cmp.cost_diff != 0 %}
+                    <span class="usage-diff more">
+                        {% if cmp.cost_diff > 0 %}V{% else %}O{% endif %}+${{ "%.4f"|format(cmp.cost_diff|abs) }}
+                        {% if cmp.cost_diff_percent %}({{ "%.1f"|format(cmp.cost_diff_percent) }}%){% endif %}
+                    </span>
+                    {% else %}
+                    <span class="usage-diff tie">=</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {# 시간 비교 #}
+                <div class="usage-comparison-item">
+                    <span class="usage-label">시간</span>
+                    <span class="usage-value vertex-ai">V:{{ "{:,}".format(cmp.vertex_ai.total_duration_ms) }}ms</span>
+                    <span class="usage-value openai">O:{{ "{:,}".format(cmp.openai.total_duration_ms) }}ms</span>
+                    {% if cmp.duration_diff != 0 %}
+                    <span class="usage-diff more">
+                        {% if cmp.duration_diff > 0 %}V{% else %}O{% endif %}+{{ "{:,}".format(cmp.duration_diff|abs) }}ms
+                        {% if cmp.duration_diff_percent %}({{ "%.1f"|format(cmp.duration_diff_percent) }}%){% endif %}
+                    </span>
+                    {% else %}
+                    <span class="usage-diff tie">=</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 </div>

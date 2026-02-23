@@ -13,7 +13,14 @@ if str(_viewer_root) not in sys.path:
 import requests
 
 from viewer.config import settings
-from viewer.schemas.models import CompareProjectItem, CompareResultItem, ProjectInfo, ResultDocument
+from viewer.schemas.models import (
+    CompareProjectItem,
+    CompareResultItem,
+    LLMUsageSummary,
+    ProjectInfo,
+    ResultDocument,
+    UsageComparison,
+)
 from viewer.services.es_client import ESClient
 
 logger = logging.getLogger(__name__)
@@ -256,6 +263,53 @@ class ViewerDataService:
             openai=openai_result
         )
 
+    def get_llm_usage_summary(self, project_id: str, content_type: str) -> Optional[LLMUsageSummary]:
+        """특정 project/content_type의 LLM 사용량 합계 조회 (최적화된 쿼리)"""
+        try:
+            response = self.client.search(
+                index=self.result_index_alias,
+                query={
+                    "bool": {
+                        "must": [
+                            {"term": {"project_id": project_id}},
+                            {"term": {"content_type": content_type}},
+                        ]
+                    }
+                },
+                _source=["llm_usages"],
+                sort=[{"version": {"order": "desc"}}],
+                size=1,
+            )
+
+            if not response["hits"]["hits"]:
+                return None
+
+            source = response["hits"]["hits"][0]["_source"]
+            llm_usages = source.get("llm_usages", [])
+
+            if not llm_usages:
+                return None
+
+            # 합계 계산
+            total_input = sum(u.get("input_tokens", 0) for u in llm_usages)
+            total_output = sum(u.get("output_tokens", 0) for u in llm_usages)
+            total_duration = sum(u.get("duration_ms", 0) for u in llm_usages)
+
+            # 비용 합계 (None이 아닌 값만)
+            costs = [u.get("total_cost") for u in llm_usages if u.get("total_cost") is not None]
+            total_cost = sum(costs) if costs else None
+
+            return LLMUsageSummary(
+                total_tokens=total_input + total_output,
+                total_input_tokens=total_input,
+                total_output_tokens=total_output,
+                total_cost=total_cost,
+                total_duration_ms=total_duration
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get LLM usage summary for {project_id}/{content_type}: {e}")
+            return None
+
     @staticmethod
     def get_all_compare_projects() -> List[CompareProjectItem]:
         """비교 목록용 전체 프로젝트 조회"""
@@ -284,6 +338,23 @@ class ViewerDataService:
             openai_cts = set(openai_content_types.get(pid, []))
             merged_cts = list(vertex_cts | openai_cts)
 
+            has_vertex = pid in vertex_ids
+            has_openai = pid in openai_ids
+
+            # 양쪽 모두 있을 때만 usage 비교 정보 조회
+            usage_comparison = None
+            if has_vertex and has_openai:
+                # 첫 번째 content_type으로 비교 (보통 REVIEW)
+                compare_ct = merged_cts[0] if merged_cts else "REVIEW"
+                vertex_usage = vertex_service.get_llm_usage_summary(pid, compare_ct)
+                openai_usage = openai_service.get_llm_usage_summary(pid, compare_ct)
+
+                if vertex_usage or openai_usage:
+                    usage_comparison = UsageComparison(
+                        vertex_ai=vertex_usage,
+                        openai=openai_usage
+                    )
+
             # 프로젝트 정보 조회
             project_info = ViewerDataService.get_project_info(int(pid))
 
@@ -291,8 +362,9 @@ class ViewerDataService:
                 project_id=pid,
                 project_info=project_info,
                 content_types=merged_cts,
-                has_vertex_ai=pid in vertex_ids,
-                has_openai=pid in openai_ids
+                has_vertex_ai=has_vertex,
+                has_openai=has_openai,
+                usage_comparison=usage_comparison
             ))
 
         logger.info(f"Loaded {len(projects)} compare projects")
