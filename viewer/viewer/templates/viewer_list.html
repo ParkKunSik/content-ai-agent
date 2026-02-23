@@ -202,10 +202,13 @@
         {% endif %}
         <div class="project-card-content">
             <div class="project-card-title">
-                {% if project.link %}
-                <a href="{{ project.link }}" target="_blank">{{ project.title or '제목 없음' }}</a>
+                {% set first_content_type = project.content_types[0] if project.content_types else '' %}
+                {% if provider == 'vertex-ai' %}
+                <a href="{{ url_for('viewer_vertex_ai_detail', project_id=project.id) }}{% if first_content_type %}?content_type={{ first_content_type }}{% endif %}">{{ project.title or '제목 없음' }}</a>
+                {% elif provider == 'openai' %}
+                <a href="{{ url_for('viewer_openai_detail', project_id=project.id) }}{% if first_content_type %}?content_type={{ first_content_type }}{% endif %}">{{ project.title or '제목 없음' }}</a>
                 {% else %}
-                {{ project.title or '제목 없음' }}
+                <a href="{{ url_for('viewer_detail', project_id=project.id) }}{% if first_content_type %}?content_type={{ first_content_type }}{% endif %}">{{ project.title or '제목 없음' }}</a>
                 {% endif %}
             </div>
             <div class="project-card-id">프로젝트 ID: {{ project.id }}</div>
