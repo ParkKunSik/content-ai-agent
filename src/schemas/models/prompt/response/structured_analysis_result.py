@@ -30,6 +30,33 @@ class StructuredAnalysisResult(BaseModel):
         KoDoc("발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)")
     ]
 
+    keywords: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Key terms extracted verbatim from the summary (no modification, original text only)"
+        ),
+        KoDoc("요약에서 추출한 핵심 키워드 (원문 그대로, 변형 없음)")
+    ]
+
+    good_points: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Positive highlights from analysis (max 3, complete sentences, follow length limit rules, concrete and evidence-based)"
+        ),
+        KoDoc("분석 결과에서 도출된 좋은 점 (최대 3개, 완성된 문장 형태, 글자수 제한 규칙 준수, 구체적이고 증거 기반)")
+    ]
+
+    caution_points: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Non-critical but noteworthy points (max 2, complete sentences, follow length limit rules, constructive framing)"
+        ),
+        KoDoc("참고할 만한 사항 (최대 2개, 완성된 문장 형태, 글자수 제한 규칙 준수, 건설적 표현)")
+    ]
+
     categories: Annotated[
         list[CategoryItem],
         Field(description="Array of detailed analysis results per category (max 20)"),

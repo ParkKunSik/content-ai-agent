@@ -4,18 +4,16 @@ KoDoc 메타데이터 기능 테스트
 JSON Schema에 KoDoc이 포함되지 않으면서 한글 설명을 추출할 수 있는지 검증합니다.
 """
 import json
-import pytest
 
-from src.schemas.models.common.ko_doc import KoDoc, get_field_ko_doc
 from src.schemas.models.common.category_item import CategoryItem
-from src.schemas.models.common.sentiment_content import SentimentContent
-from src.schemas.models.common.highlight_item import HighlightItem
 from src.schemas.models.common.etc_content import EtcContent
-from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
+from src.schemas.models.common.highlight_item import HighlightItem
+from src.schemas.models.common.ko_doc import get_field_ko_doc
+from src.schemas.models.common.sentiment_content import SentimentContent
 from src.schemas.models.prompt.response.structured_analysis_refined_summary import (
     StructuredAnalysisRefinedSummary,
-    RefinedCategorySummary,
 )
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 
 
 class TestKoDoc:
@@ -62,7 +60,7 @@ class TestKoDoc:
         """HighlightItem 필드의 한글 설명 추출 테스트"""
         ko_doc = get_field_ko_doc(HighlightItem, "keyword")
         assert ko_doc is not None
-        assert "원본 키워드" in ko_doc
+        assert "하이라이트" in ko_doc
 
     def test_get_field_ko_doc_etc_content(self):
         """EtcContent 필드의 한글 설명 추출 테스트"""

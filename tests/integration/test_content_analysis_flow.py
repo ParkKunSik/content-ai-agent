@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.core.session_factory import SessionFactory
 from src.schemas.enums.persona_type import PersonaType
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
@@ -68,8 +67,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
             ))
         else:
             content_items.append(item)
-    # 1. Setup Service
-    SessionFactory.initialize()
+    # 1. Setup Service (LLMService 생성 시 ProviderRegistry 자동 초기화)
     prompt_manager = PromptManager()
     llm_service = LLMService(prompt_manager)
 
@@ -92,7 +90,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
     print("\n\n>>> [Step 1] Executing Main Analysis (PRO_DATA_ANALYST)...")
     step1_start_time = time.time()
     
-    step1_response = await llm_service.structure_content_analysis(
+    step1_response, _ = await llm_service.structure_content_analysis(
         project_id=project_id,
         project_type=project_type,
         content_items=content_items
@@ -121,7 +119,7 @@ async def _execute_content_analysis_flow(project_id: int, sample_contents: list,
         ]
     )
     
-    step2_response = await llm_service.refine_analysis_summary(
+    step2_response, _ = await llm_service.refine_analysis_summary(
         project_id=project_id,
         project_type=project_type,
         refine_content_items=refine_content_items,

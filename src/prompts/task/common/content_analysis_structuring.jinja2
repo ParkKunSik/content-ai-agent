@@ -87,6 +87,31 @@
     - **전문적 어조**: 객관적이고 분석적인 언어 유지
     - **길이 제약 없음**: 정확성과 완전성에 집중 (정제는 2단계에서 진행)
 
+    ### 8. 키워드 추출
+    - **핵심 용어 추출**: 각 요약(메인 및 카테고리)에서 가장 중요한 키워드 추출
+    - **원문 그대로**: 키워드는 요약에 작성된 그대로 추출 (변형 없음)
+    - **핵심 의미**: 요약의 핵심 의미나 주요 주제를 담은 용어 선택
+    - **개수 제한 없음**: 요약 길이에 적절한 만큼의 의미있는 키워드 추출
+
+    ### 9. 인사이트 추출
+    분석 결과에서 실행 가능한 인사이트를 추출합니다.
+
+    #### 9.1 좋은 점 (good_points)
+    - **최대 3개**: 최대 3개의 긍정적 하이라이트 추출
+    - **길이 제한**: 각 항목 최대 {{ max_insight_item_chars }}자
+    - **완성된 문장**: "~입니다", "~합니다" 등으로 끝나는 완결된 문장 형태로 작성
+    - **구체적이고 명확한**: 실체적인 이점이나 강점에 집중
+    - **증거 기반**: 추측이 아닌 실제 콘텐츠 분석에서 도출
+    - **실행 가능한**: 의사결정에 도움이 되는 실질적 정보
+
+    #### 9.2 참고 사항 (caution_points)
+    - **최대 2개**: 최대 2개의 주목할 만한 포인트 추출
+    - **길이 제한**: 각 항목 최대 {{ max_insight_item_chars }}자
+    - **완성된 문장**: "~입니다", "~합니다" 등으로 끝나는 완결된 문장 형태로 작성
+    - **치명적이지 않은**: 프로젝트에 치명적이지 않지만 인지할 가치가 있는 이슈
+    - **건설적인**: 비판이 아닌 개선 가능 영역으로 프레이밍
+    - **신뢰할 수 있는**: 개별 불만이 아닌 반복되는 피드백 패턴에 기반
+
     ## 출력 형식
     제공된 JSON 스키마 형식을 엄격히 준수하는 유효한 JSON 객체여야 합니다.
 
@@ -187,6 +212,31 @@ You will receive a JSON array of content items:
 - **Data-driven insights**: Base conclusions on actual content patterns
 - **Professional tone**: Maintain objective, analytical language
 - **No length constraints**: Focus on accuracy and completeness (refinement happens in Step 2)
+
+### 8. Keywords Extraction
+- **Extract key terms**: For each summary (main and category), extract the most important keywords
+- **Original text only**: Keywords must appear exactly as written in the summary (no modification)
+- **Significance**: Select terms that capture the core meaning or main topics
+- **No count limit**: Extract as many meaningful keywords as appropriate for the summary length
+
+### 9. Insights Extraction
+Extract actionable insights from the analysis results.
+
+#### 9.1 Good Points (good_points)
+- **Maximum 3 items**: Extract up to 3 positive highlights
+- **Length limit**: Maximum {{ max_insight_item_chars }} characters per item
+- **Complete sentences**: Write as complete sentences ending with proper verb forms (e.g., "~입니다", "~합니다" in Korean)
+- **Concrete and specific**: Focus on tangible benefits or strengths
+- **Evidence-based**: Derive from actual content analysis, not assumptions
+- **Actionable**: Should be useful for decision-making
+
+#### 9.2 Caution Points (caution_points)
+- **Maximum 2 items**: Extract up to 2 points worth noting
+- **Length limit**: Maximum {{ max_insight_item_chars }} characters per item
+- **Complete sentences**: Write as complete sentences ending with proper verb forms (e.g., "~입니다", "~합니다" in Korean)
+- **Non-critical**: Issues that are not project-threatening but worth awareness
+- **Constructive**: Frame as areas for potential improvement, not criticisms
+- **Trustworthy**: Based on recurring feedback patterns, not isolated complaints
 
 ## Output Format
 

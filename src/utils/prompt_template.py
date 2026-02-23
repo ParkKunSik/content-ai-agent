@@ -28,11 +28,11 @@ class PromptTemplate(Enum):
         Args:
             renderer: PromptRenderer 인스턴스
         """
-        provider = settings.LLM_PROVIDER.upper()
+        provider = settings.LLM_PROVIDER  # ProviderType enum
 
         # Provider별 캐시 확인
         if provider not in self._cached_templates:
-            provider_path = provider.lower()  # OPENAI → openai, VERTEX_AI → vertex_ai
+            provider_path = provider.value.lower()  # VERTEX_AI → vertex_ai, OPENAI → openai
             template_path = f"task/{provider_path}/{self.template_name}"
             self._cached_templates[provider] = renderer.get_template(template_path)
 

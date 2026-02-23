@@ -1,0 +1,44 @@
+{# LLM 사용량 표시 컴포넌트 #}
+{# 사용: {% include "components/llm_usage.html" with context %} #}
+{# 필요 변수: llm_usages (List[LLMUsageInfo]) #}
+
+{% if llm_usages %}
+<div class="llm-usage-section">
+    <h4 class="llm-usage-title">LLM 사용량</h4>
+    <div class="llm-usage-items">
+        {% for usage in llm_usages %}
+        <div class="llm-usage-item">
+            <div class="usage-step">Step {{ usage.step }}: <span class="usage-model">{{ usage.model }}</span></div>
+            <div class="usage-details">
+                <span class="usage-tokens">
+                    In: {{ "{:,}".format(usage.input_tokens) }} / Out: {{ "{:,}".format(usage.output_tokens) }}
+                </span>
+                {% if usage.total_cost is not none %}
+                <span class="usage-cost">${{ "%.4f"|format(usage.total_cost) }}</span>
+                {% endif %}
+                <span class="usage-duration">{{ "{:,}".format(usage.duration_ms) }}ms</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# 합계 #}
+    {% set total_input = llm_usages|sum(attribute='input_tokens') %}
+    {% set total_output = llm_usages|sum(attribute='output_tokens') %}
+    {% set total_tokens = total_input + total_output %}
+    {% set total_duration = llm_usages|sum(attribute='duration_ms') %}
+    {% set costs = llm_usages|selectattr('total_cost')|list %}
+    <div class="llm-usage-total">
+        <div class="usage-total-tokens">
+            <strong>합계:</strong> {{ "{:,}".format(total_tokens) }} tokens
+            <span class="usage-tokens-detail">(In: {{ "{:,}".format(total_input) }} / Out: {{ "{:,}".format(total_output) }})</span>
+        </div>
+        <div class="usage-total-metrics">
+            {% if costs %}
+            <span class="usage-cost">${{ "%.4f"|format(llm_usages|sum(attribute='total_cost')) }}</span>
+            {% endif %}
+            <span class="usage-duration">{{ "{:,}".format(total_duration) }}ms</span>
+        </div>
+    </div>
+</div>
+{% endif %}

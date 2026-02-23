@@ -1,0 +1,533 @@
+{% extends "base.html" %}
+
+{% block title %}Provider 비교 통계{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #D5D9D9;
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+        font-size: 14px;
+        color: #565959;
+    }
+
+    /* 사이드바 */
+    .page-layout {
+        display: flex;
+        gap: 24px;
+    }
+
+    .sidebar {
+        width: 180px;
+        flex-shrink: 0;
+    }
+
+    .sidebar-nav {
+        background-color: #F7FAFA;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+        padding: 12px;
+    }
+
+    .sidebar-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #565959;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #D5D9D9;
+    }
+
+    .sidebar-link {
+        display: block;
+        padding: 8px 12px;
+        color: #007185;
+        text-decoration: none;
+        font-size: 14px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }
+
+    .sidebar-link:hover {
+        background-color: #E7F4F5;
+        color: #007185;
+    }
+
+    .sidebar-link.active {
+        background-color: #007185;
+        color: #fff;
+    }
+
+    .main-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* 통계 카드 */
+    .stats-section {
+        margin-bottom: 30px;
+    }
+
+    .stats-section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: #0F1111;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    .stats-card {
+        padding: 20px;
+        background-color: #fff;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+    }
+
+    .stats-card.vertex-ai {
+        border-left: 4px solid #4CAF50;
+    }
+
+    .stats-card.openai {
+        border-left: 4px solid #2196F3;
+    }
+
+    .stats-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .stats-card-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .stats-card-icon.vertex-ai {
+        background-color: #4CAF50;
+    }
+
+    .stats-card-icon.openai {
+        background-color: #2196F3;
+    }
+
+    .stats-card-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0F1111;
+    }
+
+    .stats-items {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .stats-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px dotted #E3E6E6;
+    }
+
+    .stats-item:last-child {
+        border-bottom: none;
+    }
+
+    .stats-label {
+        font-size: 13px;
+        color: #565959;
+    }
+
+    .stats-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: #0F1111;
+        font-family: monospace;
+    }
+
+    /* 비교 섹션 */
+    .compare-section {
+        margin-top: 30px;
+        padding: 20px;
+        background-color: #F7FAFA;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+    }
+
+    .compare-section-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: #0F1111;
+    }
+
+    .compare-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+
+    .compare-card {
+        padding: 16px;
+        background-color: #fff;
+        border-radius: 6px;
+        border: 1px solid #E3E6E6;
+    }
+
+    .compare-card-title {
+        font-size: 12px;
+        color: #565959;
+        margin-bottom: 12px;
+        font-weight: 600;
+    }
+
+    .compare-values {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .compare-value {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+    }
+
+    .compare-provider-label {
+        font-weight: 500;
+    }
+
+    .compare-provider-label.vertex-ai {
+        color: #2E7D32;
+    }
+
+    .compare-provider-label.openai {
+        color: #1565C0;
+    }
+
+    .compare-provider-value {
+        font-family: monospace;
+        font-weight: 600;
+    }
+
+    .compare-diff {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px dashed #E3E6E6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+    }
+
+    .diff-label {
+        color: #565959;
+    }
+
+    .diff-value {
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background-color: #FFEBEE;
+        color: #C62828;
+    }
+
+    .diff-value.tie {
+        background-color: #F5F5F5;
+        color: #757575;
+    }
+
+    /* 프로젝트 분포 */
+    .distribution-section {
+        margin-top: 30px;
+    }
+
+    .distribution-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+        .distribution-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .distribution-card {
+        padding: 20px;
+        background-color: #fff;
+        border: 1px solid #D5D9D9;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .distribution-count {
+        font-size: 32px;
+        font-weight: 700;
+        color: #0F1111;
+        margin-bottom: 8px;
+    }
+
+    .distribution-label {
+        font-size: 14px;
+        color: #565959;
+    }
+
+    .distribution-card.both {
+        border-top: 4px solid #9C27B0;
+    }
+
+    .distribution-card.vertex-only {
+        border-top: 4px solid #4CAF50;
+    }
+
+    .distribution-card.openai-only {
+        border-top: 4px solid #2196F3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📊 Provider 비교 통계</h1>
+    <p class="page-subtitle">Vertex AI와 OpenAI 전체 분석 결과의 LLM 사용량을 비교합니다.</p>
+</div>
+
+<div class="page-layout">
+    <!-- 사이드바 -->
+    <div class="sidebar">
+        <nav class="sidebar-nav">
+            <div class="sidebar-title">바로가기</div>
+            <a href="{{ url_for('viewer_compare_list') }}" class="sidebar-link">프로젝트 목록</a>
+            <a href="{{ url_for('viewer_compare_stats') }}" class="sidebar-link active">통계</a>
+        </nav>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div class="main-content">
+        <!-- Provider별 통계 -->
+        <div class="stats-section">
+            <h2 class="stats-section-title">Provider별 통계</h2>
+            <div class="stats-grid">
+                {% if stats.vertex_ai %}
+                <div class="stats-card vertex-ai">
+                    <div class="stats-card-header">
+                        <div class="stats-card-icon vertex-ai">V</div>
+                        <div class="stats-card-title">Vertex AI</div>
+                    </div>
+                    <div class="stats-items">
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트 수</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.project_count) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">입력 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_input_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">출력 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_output_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 비용</span>
+                            <span class="stats-value">${{ "%.4f"|format(stats.vertex_ai.total_cost) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 소요시간</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_duration_ms) }}ms</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트당 평균 토큰</span>
+                            <span class="stats-value">{{ "{:,.0f}".format(stats.vertex_ai.avg_tokens_per_project) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트당 평균 비용</span>
+                            <span class="stats-value">${{ "%.4f"|format(stats.vertex_ai.avg_cost_per_project) }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if stats.openai %}
+                <div class="stats-card openai">
+                    <div class="stats-card-header">
+                        <div class="stats-card-icon openai">O</div>
+                        <div class="stats-card-title">OpenAI</div>
+                    </div>
+                    <div class="stats-items">
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트 수</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.openai.project_count) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.openai.total_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">입력 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.openai.total_input_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">출력 토큰</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.openai.total_output_tokens) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 비용</span>
+                            <span class="stats-value">${{ "%.4f"|format(stats.openai.total_cost) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">총 소요시간</span>
+                            <span class="stats-value">{{ "{:,}".format(stats.openai.total_duration_ms) }}ms</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트당 평균 토큰</span>
+                            <span class="stats-value">{{ "{:,.0f}".format(stats.openai.avg_tokens_per_project) }}</span>
+                        </div>
+                        <div class="stats-item">
+                            <span class="stats-label">프로젝트당 평균 비용</span>
+                            <span class="stats-value">${{ "%.4f"|format(stats.openai.avg_cost_per_project) }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 비교 섹션 -->
+        {% if stats.has_both %}
+        <div class="compare-section">
+            <h3 class="compare-section-title">📊 전체 비교</h3>
+            <div class="compare-grid">
+                <!-- 토큰 비교 -->
+                {% set token_diff = stats.token_diff %}
+                {% set token_pct = stats.token_diff_percent %}
+                <div class="compare-card">
+                    <div class="compare-card-title">총 토큰</div>
+                    <div class="compare-values">
+                        <div class="compare-value">
+                            <span class="compare-provider-label vertex-ai">Vertex AI</span>
+                            <span class="compare-provider-value">{{ "{:,}".format(stats.vertex_ai.total_tokens) }}</span>
+                        </div>
+                        <div class="compare-value">
+                            <span class="compare-provider-label openai">OpenAI</span>
+                            <span class="compare-provider-value">{{ "{:,}".format(stats.openai.total_tokens) }}</span>
+                        </div>
+                    </div>
+                    <div class="compare-diff">
+                        <span class="diff-label">차이</span>
+                        {% if token_diff and token_diff != 0 %}
+                        <span class="diff-value">{% if token_diff > 0 %}V{% else %}O{% endif %}+{{ "{:,}".format(token_diff|abs) }}{% if token_pct %} ({{ "%.1f"|format(token_pct) }}%){% endif %}</span>
+                        {% else %}
+                        <span class="diff-value tie">동일</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 비용 비교 -->
+                {% set cost_diff = stats.cost_diff %}
+                {% set cost_pct = stats.cost_diff_percent %}
+                <div class="compare-card">
+                    <div class="compare-card-title">총 비용</div>
+                    <div class="compare-values">
+                        <div class="compare-value">
+                            <span class="compare-provider-label vertex-ai">Vertex AI</span>
+                            <span class="compare-provider-value">${{ "%.4f"|format(stats.vertex_ai.total_cost) }}</span>
+                        </div>
+                        <div class="compare-value">
+                            <span class="compare-provider-label openai">OpenAI</span>
+                            <span class="compare-provider-value">${{ "%.4f"|format(stats.openai.total_cost) }}</span>
+                        </div>
+                    </div>
+                    <div class="compare-diff">
+                        <span class="diff-label">차이</span>
+                        {% if cost_diff and cost_diff != 0 %}
+                        <span class="diff-value">{% if cost_diff > 0 %}V{% else %}O{% endif %}+${{ "%.4f"|format(cost_diff|abs) }}{% if cost_pct %} ({{ "%.1f"|format(cost_pct) }}%){% endif %}</span>
+                        {% else %}
+                        <span class="diff-value tie">동일</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 시간 비교 -->
+                {% set duration_diff = stats.duration_diff %}
+                {% set duration_pct = stats.duration_diff_percent %}
+                <div class="compare-card">
+                    <div class="compare-card-title">총 소요시간</div>
+                    <div class="compare-values">
+                        <div class="compare-value">
+                            <span class="compare-provider-label vertex-ai">Vertex AI</span>
+                            <span class="compare-provider-value">{{ "{:,}".format(stats.vertex_ai.total_duration_ms) }}ms</span>
+                        </div>
+                        <div class="compare-value">
+                            <span class="compare-provider-label openai">OpenAI</span>
+                            <span class="compare-provider-value">{{ "{:,}".format(stats.openai.total_duration_ms) }}ms</span>
+                        </div>
+                    </div>
+                    <div class="compare-diff">
+                        <span class="diff-label">차이</span>
+                        {% if duration_diff and duration_diff != 0 %}
+                        <span class="diff-value">{% if duration_diff > 0 %}V{% else %}O{% endif %}+{{ "{:,}".format(duration_diff|abs) }}ms{% if duration_pct %} ({{ "%.1f"|format(duration_pct) }}%){% endif %}</span>
+                        {% else %}
+                        <span class="diff-value tie">동일</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 프로젝트 분포 -->
+        <div class="distribution-section">
+            <h2 class="stats-section-title">프로젝트 분포</h2>
+            <div class="distribution-grid">
+                <div class="distribution-card both">
+                    <div class="distribution-count">{{ stats.both_count }}</div>
+                    <div class="distribution-label">양쪽 모두</div>
+                </div>
+                <div class="distribution-card vertex-only">
+                    <div class="distribution-count">{{ stats.vertex_only_count }}</div>
+                    <div class="distribution-label">Vertex AI만</div>
+                </div>
+                <div class="distribution-card openai-only">
+                    <div class="distribution-count">{{ stats.openai_only_count }}</div>
+                    <div class="distribution-label">OpenAI만</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    Generated by Content AI Agent | Wadiz
+</div>
+{% endblock %}

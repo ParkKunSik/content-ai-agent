@@ -3,6 +3,8 @@
 import logging
 from typing import Any, Dict, List, Optional, Type
 
+from pydantic import BaseModel
+
 from src.core.llm.base.session import LLMProviderSession
 from src.core.llm.models import LLMResponse
 from src.core.llm.providers.openai.response_mapper import OpenAIResponseMapper
@@ -23,7 +25,7 @@ class OpenAISession(LLMProviderSession):
         model_name: str,
         temperature: float,
         system_instruction: Optional[str] = None,
-        response_schema: Optional[Type[Any]] = None,  # Pydantic 클래스
+        response_schema: Optional[Type[BaseModel]] = None,  # Pydantic 클래스
     ):
         self._client = client
         self._model_name = model_name

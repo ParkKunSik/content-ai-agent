@@ -59,6 +59,15 @@ class CategoryItem(BaseModel):
         KoDoc("상세한 카테고리 분석 및 인사이트")
     ]
 
+    keywords: Annotated[
+        list[str],
+        Field(
+            default_factory=list,
+            description="Key terms extracted verbatim from the summary (no modification, original text only)"
+        ),
+        KoDoc("요약에서 추출한 핵심 키워드 (원문 그대로, 변형 없음)")
+    ]
+
     positive_contents: Annotated[
         list[SentimentContent],
         Field(default_factory=list, description="List of positive contents with sentiment score >= 0.5 for evaluation target"),

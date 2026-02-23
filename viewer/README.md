@@ -184,8 +184,31 @@ viewer/
 
 ## API 엔드포인트
 
+### 기본 뷰어
+
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/viewer/` | 프로젝트 목록 (페이징) |
 | GET | `/viewer/{project_id}` | 프로젝트 상세 |
 | GET | `/viewer/health` | 헬스체크 |
+
+### Provider별 뷰어
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/viewer/vertex-ai` | Vertex AI 분석 결과 목록 |
+| GET | `/viewer/vertex-ai/{project_id}` | Vertex AI 프로젝트 상세 |
+| GET | `/viewer/openai` | OpenAI 분석 결과 목록 |
+| GET | `/viewer/openai/{project_id}` | OpenAI 프로젝트 상세 |
+
+### 비교 뷰어 (Provider 비교)
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/viewer/all` | 비교 뷰어 프로젝트 목록 (양쪽 Provider 통합) |
+| GET | `/viewer/all/{project_id}` | 비교 상세 (Split-view로 Vertex AI/OpenAI 나란히 표시) |
+
+> **비교 뷰어**: Vertex AI와 OpenAI 분석 결과를 나란히 비교할 수 있습니다.
+> - LLM 사용량(토큰, 비용, 시간) 비교
+> - 요약/카테고리/인사이트 비교
+> - 하이라이트 "자세히 보기" 모달 지원

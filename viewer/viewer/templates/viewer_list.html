@@ -173,7 +173,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h1 class="page-title">📊 커뮤니티 요약 뷰어</h1>
+    <h1 class="page-title">📊 커뮤니티 요약 뷰어{% if provider %} ({{ provider|upper }}){% endif %}</h1>
     <p class="page-subtitle">Elasticsearch에 저장된 콘텐츠 분석 결과를 조회합니다.</p>
 </div>
 
@@ -211,7 +211,13 @@
             <div class="project-card-id">프로젝트 ID: {{ project.id }}</div>
             <div class="content-type-tags">
                 {% for ct in project.content_types %}
+                {% if provider == 'vertex-ai' %}
+                <a href="{{ url_for('viewer_vertex_ai_detail', project_id=project.id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
+                {% elif provider == 'openai' %}
+                <a href="{{ url_for('viewer_openai_detail', project_id=project.id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
+                {% else %}
                 <a href="{{ url_for('viewer_detail', project_id=project.id) }}?content_type={{ ct }}" class="content-type-tag">{{ ct }}</a>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -221,10 +227,18 @@
 
 {# 페이징 UI #}
 {% if total_pages > 1 %}
+{# Provider별 list route 결정 #}
+{% if provider == 'vertex-ai' %}
+    {% set list_route = 'viewer_vertex_ai_list' %}
+{% elif provider == 'openai' %}
+    {% set list_route = 'viewer_openai_list' %}
+{% else %}
+    {% set list_route = 'viewer_list' %}
+{% endif %}
 <div class="pagination">
     {# 이전 버튼 #}
     {% if page > 1 %}
-    <a href="{{ url_for('viewer_list') }}?page={{ page - 1 }}" class="pagination-btn">← 이전</a>
+    <a href="{{ url_for(list_route) }}?page={{ page - 1 }}" class="pagination-btn">← 이전</a>
     {% else %}
     <span class="pagination-btn disabled">← 이전</span>
     {% endif %}
@@ -234,23 +248,23 @@
     {% set end_page = [total_pages, page + 2]|min %}
 
     {% if start_page > 1 %}
-    <a href="{{ url_for('viewer_list') }}?page=1" class="pagination-btn">1</a>
+    <a href="{{ url_for(list_route) }}?page=1" class="pagination-btn">1</a>
     {% if start_page > 2 %}<span class="pagination-info">...</span>{% endif %}
     {% endif %}
 
     {% for p in range(start_page, end_page + 1) %}
-    <a href="{{ url_for('viewer_list') }}?page={{ p }}"
+    <a href="{{ url_for(list_route) }}?page={{ p }}"
        class="pagination-btn {% if p == page %}active{% endif %}">{{ p }}</a>
     {% endfor %}
 
     {% if end_page < total_pages %}
     {% if end_page < total_pages - 1 %}<span class="pagination-info">...</span>{% endif %}
-    <a href="{{ url_for('viewer_list') }}?page={{ total_pages }}" class="pagination-btn">{{ total_pages }}</a>
+    <a href="{{ url_for(list_route) }}?page={{ total_pages }}" class="pagination-btn">{{ total_pages }}</a>
     {% endif %}
 
     {# 다음 버튼 #}
     {% if page < total_pages %}
-    <a href="{{ url_for('viewer_list') }}?page={{ page + 1 }}" class="pagination-btn">다음 →</a>
+    <a href="{{ url_for(list_route) }}?page={{ page + 1 }}" class="pagination-btn">다음 →</a>
     {% else %}
     <span class="pagination-btn disabled">다음 →</span>
     {% endif %}

@@ -15,7 +15,6 @@ if os.path.exists(env_path):
 
 from src.core.config import settings
 from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
-from src.core.session_factory import SessionFactory
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
 from tests.data.test_contents import MILD_NEGATIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, POSITIVE_CONTENT, TOXIC_CONTENT
@@ -32,11 +31,6 @@ logging.getLogger("").addFilter(VertexLogFilter())
 def get_sample_contents():
     return [POSITIVE_CONTENT, NEGATIVE_CONTENT_QUALITY, MILD_NEGATIVE_CONTENT, TOXIC_CONTENT]
 
-@pytest.fixture(scope="function", autouse=True)
-def setup_session_factory():
-    print("\n🔧 SessionFactory 초기화 중 (Function Scope)...")
-    SessionFactory.initialize()
-    print("✅ SessionFactory 초기화 완료")
 
 @pytest.fixture(scope="session")
 def setup_elasticsearch():

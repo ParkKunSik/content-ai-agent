@@ -20,6 +20,10 @@ class RefineCategoryItem(BaseModel):
     name: str = Field(..., description="카테고리 이름")
     key: str = Field(..., description="카테고리 고유 키")
     summary: str = Field(..., description="카테고리 요약")
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="카테고리 요약의 핵심 키워드"
+    )
     display_highlight: str = Field(..., description="highlights 배열 중 카테고리를 가장 잘 대표하는 highlight")
     sentiment_type: SentimentType = Field(..., description="카테고리별 감정 유형")
     positive_count: int = Field(..., description="카테고리 내 positive highlights 개수")
@@ -32,5 +36,17 @@ class StructuredAnalysisRefineResult(BaseModel):
 
     summary: str = Field(
         ..., description="발견된 모든 주요 주제와 인사이트를 다루는 포괄적인 분석 요약 (특수문자 Escape 필수)"
+    )
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="전체 요약의 핵심 키워드"
+    )
+    good_points: list[str] = Field(
+        default_factory=list,
+        description="좋은 점 (최대 3개)"
+    )
+    caution_points: list[str] = Field(
+        default_factory=list,
+        description="참고 사항 (최대 2개)"
     )
     categories: list[RefineCategoryItem] = Field(..., description="카테고리별 상세 분석 결과 배열 (최대 20개)")

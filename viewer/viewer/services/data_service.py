@@ -13,7 +13,16 @@ if str(_viewer_root) not in sys.path:
 import requests
 
 from viewer.config import settings
-from viewer.schemas.models import ProjectInfo, ResultDocument
+from viewer.schemas.models import (
+    CompareProjectItem,
+    CompareResultItem,
+    CompareStats,
+    LLMUsageSummary,
+    ProjectInfo,
+    ProviderStats,
+    ResultDocument,
+    UsageComparison,
+)
 from viewer.services.es_client import ESClient
 
 logger = logging.getLogger(__name__)
@@ -25,10 +34,22 @@ class ViewerDataService:
     # Wadiz API 세션 (Queue-it 쿠키 유지)
     _wadiz_session: Optional[requests.Session] = None
 
-    def __init__(self):
-        es = ESClient()
-        self.client = es.client
-        self.result_index_alias = es.result_index_alias
+    def __init__(self, provider: Optional[str] = None):
+        """
+        Args:
+            provider: "vertex-ai" 또는 "openai", None이면 기존 alias 사용
+        """
+        self._es_client = ESClient()
+        self.client = self._es_client.client
+        self.provider = provider
+
+        # Provider별 alias 설정
+        if provider:
+            self.result_index_alias = self._es_client.get_alias_for_provider(provider)
+            logger.info(f"ViewerDataService initialized with provider={provider}, alias={self.result_index_alias}")
+        else:
+            self.result_index_alias = self._es_client.result_index_alias
+            logger.info(f"ViewerDataService initialized with default alias={self.result_index_alias}")
 
     def get_project_ids(self) -> List[str]:
         """고유 project_id 목록 조회"""
@@ -193,3 +214,261 @@ class ViewerDataService:
             })
 
         return projects
+
+    # === 비교 뷰어용 메서드 ===
+
+    @staticmethod
+    def get_merged_project_ids() -> List[str]:
+        """양쪽 Provider에서 프로젝트 ID 통합 조회 (합집합)"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+
+        # 합집합 후 정렬 (내림차순)
+        all_ids = list(vertex_ids | openai_ids)
+        try:
+            all_ids.sort(key=lambda x: int(x), reverse=True)
+        except ValueError:
+            all_ids.sort(reverse=True)
+
+        logger.info(f"Merged project IDs: vertex={len(vertex_ids)}, openai={len(openai_ids)}, total={len(all_ids)}")
+        return all_ids
+
+    @staticmethod
+    def get_merged_content_types(project_id: str) -> List[str]:
+        """양쪽 Provider에서 content_type 통합 조회 (합집합)"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_types = set(vertex_service.get_content_types_by_project(project_id))
+        openai_types = set(openai_service.get_content_types_by_project(project_id))
+
+        return list(vertex_types | openai_types)
+
+    @staticmethod
+    def get_compare_result(project_id: str, content_type: str) -> CompareResultItem:
+        """양쪽 Provider의 결과 비교 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        vertex_result = vertex_service.get_result(project_id, content_type)
+        openai_result = openai_service.get_result(project_id, content_type)
+        project_info = ViewerDataService.get_project_info(int(project_id))
+
+        return CompareResultItem(
+            project_id=project_id,
+            content_type=content_type,
+            project_info=project_info,
+            vertex_ai=vertex_result,
+            openai=openai_result
+        )
+
+    def get_llm_usage_summary(self, project_id: str, content_type: str) -> Optional[LLMUsageSummary]:
+        """특정 project/content_type의 LLM 사용량 합계 조회 (최적화된 쿼리)"""
+        try:
+            response = self.client.search(
+                index=self.result_index_alias,
+                query={
+                    "bool": {
+                        "must": [
+                            {"term": {"project_id": project_id}},
+                            {"term": {"content_type": content_type}},
+                        ]
+                    }
+                },
+                _source=["llm_usages"],
+                sort=[{"version": {"order": "desc"}}],
+                size=1,
+            )
+
+            if not response["hits"]["hits"]:
+                return None
+
+            source = response["hits"]["hits"][0]["_source"]
+            llm_usages = source.get("llm_usages", [])
+
+            if not llm_usages:
+                return None
+
+            # 합계 계산
+            total_input = sum(u.get("input_tokens", 0) for u in llm_usages)
+            total_output = sum(u.get("output_tokens", 0) for u in llm_usages)
+            total_duration = sum(u.get("duration_ms", 0) for u in llm_usages)
+
+            # 비용 합계 (None이 아닌 값만)
+            costs = [u.get("total_cost") for u in llm_usages if u.get("total_cost") is not None]
+            total_cost = sum(costs) if costs else None
+
+            return LLMUsageSummary(
+                total_tokens=total_input + total_output,
+                total_input_tokens=total_input,
+                total_output_tokens=total_output,
+                total_cost=total_cost,
+                total_duration_ms=total_duration
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get LLM usage summary for {project_id}/{content_type}: {e}")
+            return None
+
+    @staticmethod
+    def get_all_compare_projects() -> List[CompareProjectItem]:
+        """비교 목록용 전체 프로젝트 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        # 각 Provider별 프로젝트 ID 집합
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+        all_ids = list(vertex_ids | openai_ids)
+
+        # 정렬 (내림차순)
+        try:
+            all_ids.sort(key=lambda x: int(x), reverse=True)
+        except ValueError:
+            all_ids.sort(reverse=True)
+
+        # 각 Provider별 content_types 배치 조회
+        vertex_content_types = vertex_service.get_all_content_types_batch()
+        openai_content_types = openai_service.get_all_content_types_batch()
+
+        projects = []
+        for pid in all_ids:
+            # content_types 합집합
+            vertex_cts = set(vertex_content_types.get(pid, []))
+            openai_cts = set(openai_content_types.get(pid, []))
+            merged_cts = list(vertex_cts | openai_cts)
+
+            has_vertex = pid in vertex_ids
+            has_openai = pid in openai_ids
+
+            # 양쪽 모두 있을 때만 usage 비교 정보 조회
+            usage_comparison = None
+            if has_vertex and has_openai:
+                # 첫 번째 content_type으로 비교 (보통 REVIEW)
+                compare_ct = merged_cts[0] if merged_cts else "REVIEW"
+                vertex_usage = vertex_service.get_llm_usage_summary(pid, compare_ct)
+                openai_usage = openai_service.get_llm_usage_summary(pid, compare_ct)
+
+                if vertex_usage or openai_usage:
+                    usage_comparison = UsageComparison(
+                        vertex_ai=vertex_usage,
+                        openai=openai_usage
+                    )
+
+            # 프로젝트 정보 조회
+            project_info = ViewerDataService.get_project_info(int(pid))
+
+            projects.append(CompareProjectItem(
+                project_id=pid,
+                project_info=project_info,
+                content_types=merged_cts,
+                has_vertex_ai=has_vertex,
+                has_openai=has_openai,
+                usage_comparison=usage_comparison
+            ))
+
+        logger.info(f"Loaded {len(projects)} compare projects")
+        return projects
+
+    # === 통계 조회 메서드 ===
+
+    def get_all_llm_usages_aggregated(self) -> ProviderStats:
+        """전체 프로젝트의 LLM 사용량 합계 조회 (전체 문서 스캔)"""
+        provider_name = "vertex-ai" if "vertex-ai" in self.result_index_alias else "openai"
+
+        try:
+            # 프로젝트 수 조회
+            project_ids = self.get_project_ids()
+            project_count = len(project_ids)
+
+            if project_count == 0:
+                return ProviderStats(provider=provider_name)
+
+            # 모든 문서의 llm_usages 조회 (scroll API 사용)
+            total_input = 0
+            total_output = 0
+            total_cost = 0.0
+            total_duration = 0
+            has_cost = False
+
+            # scroll로 모든 문서 조회
+            response = self.client.search(
+                index=self.result_index_alias,
+                _source=["llm_usages"],
+                size=1000,
+                scroll="2m"
+            )
+
+            scroll_id = response.get("_scroll_id")
+            hits = response["hits"]["hits"]
+
+            while hits:
+                for hit in hits:
+                    llm_usages = hit.get("_source", {}).get("llm_usages", [])
+                    if llm_usages:
+                        for usage in llm_usages:
+                            total_input += usage.get("input_tokens", 0) or 0
+                            total_output += usage.get("output_tokens", 0) or 0
+                            total_duration += usage.get("duration_ms", 0) or 0
+                            cost = usage.get("total_cost")
+                            if cost is not None:
+                                total_cost += cost
+                                has_cost = True
+
+                # 다음 scroll 페이지
+                response = self.client.scroll(scroll_id=scroll_id, scroll="2m")
+                hits = response["hits"]["hits"]
+
+            # scroll 정리
+            try:
+                self.client.clear_scroll(scroll_id=scroll_id)
+            except Exception:
+                pass
+
+            total_tokens = total_input + total_output
+
+            return ProviderStats(
+                provider=provider_name,
+                project_count=project_count,
+                total_tokens=total_tokens,
+                total_input_tokens=total_input,
+                total_output_tokens=total_output,
+                total_cost=total_cost if has_cost else 0.0,
+                total_duration_ms=total_duration,
+                avg_tokens_per_project=total_tokens / project_count if project_count > 0 else 0,
+                avg_cost_per_project=total_cost / project_count if project_count > 0 else 0,
+                avg_duration_per_project=total_duration / project_count if project_count > 0 else 0
+            )
+        except Exception as e:
+            logger.error(f"Failed to get aggregated LLM usages: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return ProviderStats(provider=provider_name)
+
+    @staticmethod
+    def get_compare_stats() -> CompareStats:
+        """전체 Provider 비교 통계 조회"""
+        vertex_service = ViewerDataService(provider="vertex-ai")
+        openai_service = ViewerDataService(provider="openai")
+
+        # 각 Provider 통계 조회
+        vertex_stats = vertex_service.get_all_llm_usages_aggregated()
+        openai_stats = openai_service.get_all_llm_usages_aggregated()
+
+        # 프로젝트 ID 집합으로 분류
+        vertex_ids = set(vertex_service.get_project_ids())
+        openai_ids = set(openai_service.get_project_ids())
+
+        both_ids = vertex_ids & openai_ids
+        vertex_only_ids = vertex_ids - openai_ids
+        openai_only_ids = openai_ids - vertex_ids
+
+        return CompareStats(
+            vertex_ai=vertex_stats,
+            openai=openai_stats,
+            both_count=len(both_ids),
+            vertex_only_count=len(vertex_only_ids),
+            openai_only_count=len(openai_only_ids)
+        )

@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.core.llm.enums import ProviderType
+
 # GCP SDK는 필요할 때만 import (Lambda viewer 모드에서는 불필요)
 try:
     from google.cloud import secretmanager
@@ -64,7 +66,7 @@ class Settings(BaseSettings):
     INTERNAL_AGENT_ID: str = "local-content-ai-agent-v1"
 
     # [LLM Provider Configuration]
-    LLM_PROVIDER: str = "VERTEX_AI"  # VERTEX_AI | OPENAI
+    LLM_PROVIDER: ProviderType = ProviderType.VERTEX_AI
 
     # [Google Vertex AI Model Configuration]
     VERTEX_AI_MODEL_PRO: str = "gemini-2.5-pro"
@@ -88,7 +90,9 @@ class Settings(BaseSettings):
     # [Analysis Configuration]
     MAX_MAIN_SUMMARY_CHARS: int = 300
     MAX_CATEGORY_SUMMARY_CHARS: int = 50
-    
+    MAX_INSIGHT_ITEM_CHARS_ANALYSIS: int = 50  # good_points, caution_points 분석용 최대 길이
+    MAX_INSIGHT_ITEM_CHARS_REFINE: int = 30  # good_points, caution_points 정제용 최대 길이
+
     # [Validation Configuration]
     # 스키마 검증 엄격도 제어 (True: 에러 발생, False: 경고만)
     STRICT_VALIDATION: bool = False
@@ -112,9 +116,20 @@ class Settings(BaseSettings):
     ES_MAIN_VERIFY_CERTS: bool = False
     ES_MAIN_TIMEOUT: int = 30
     
-    # ES 인덱스/Alias 설정
+    # ES 인덱스/Alias 설정 (기존 - 하위 호환)
     ANALYSIS_RESULT_INDEX: str = "core-content-analysis-result"  # 인덱스 생성용
     ANALYSIS_RESULT_ALIAS: str = "core-content-analysis-result-alias"  # 조회/저장용
+
+    # ES 인덱스/Alias 설정 (Provider별)
+    ANALYSIS_RESULT_VERTEX_AI_INDEX: str = "core-content-analysis-result-vertex-ai"
+    ANALYSIS_RESULT_VERTEX_AI_ALIAS: str = "core-content-analysis-result-vertex-ai-alias"
+    ANALYSIS_RESULT_OPENAI_INDEX: str = "core-content-analysis-result-openai"
+    ANALYSIS_RESULT_OPENAI_ALIAS: str = "core-content-analysis-result-openai-alias"
+
+    # Provider 무관하게 기본 인덱스/Alias 사용 여부
+    # True: Provider 타입과 상관없이 ANALYSIS_RESULT_INDEX/ALIAS 사용 (기본값)
+    # False: Provider별 인덱스/Alias 사용
+    USE_DEFAULT_ES_INDEX: bool = True
 
     @field_validator('ES_REFERENCE_PORT', 'ES_MAIN_PORT', mode='before')
     @classmethod

@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 from src.core.config import settings
+from src.core.llm.enums import ProviderType
 from src.utils.prompt_renderer import PromptRenderer
 
 
@@ -57,8 +58,7 @@ class PersonaType(Enum):
 
     def get_model_name_getter(self) -> Callable[[Any], str]:
         """현재 LLM_PROVIDER 설정에 따라 적절한 model_name_getter를 반환한다."""
-        provider = settings.LLM_PROVIDER.upper()
-        if provider == "OPENAI":
+        if settings.LLM_PROVIDER == ProviderType.OPENAI:
             return self.openai_model_name_getter
         else:
             # VERTEX_AI 또는 기타 → Vertex AI 사용
@@ -75,20 +75,19 @@ class PersonaType(Enum):
 
     def get_temperature(self) -> float:
         """현재 LLM_PROVIDER 설정에 따라 적절한 temperature를 반환한다."""
-        provider = settings.LLM_PROVIDER.upper()
-        if provider == "OPENAI":
+        if settings.LLM_PROVIDER == ProviderType.OPENAI:
             return self.openai_temperature
         else:
             # VERTEX_AI 또는 기타 → Vertex AI 사용
             return self.vertexai_temperature
 
-    def get_instruction(self, pm: PromptRenderer, provider: str = None) -> Optional[str]:
+    def get_instruction(self, pm: PromptRenderer, provider: ProviderType = None) -> Optional[str]:
         """
         Provider에 따라 최적화된 System Instruction을 반환한다.
 
         Args:
             pm: PromptRenderer 인스턴스
-            provider: LLM Provider (OPENAI, VERTEX_AI). None이면 settings에서 가져옴.
+            provider: LLM Provider. None이면 settings에서 가져옴.
 
         Returns:
             렌더링된 System Instruction 문자열. role_description이 없으면 None.
@@ -98,16 +97,31 @@ class PersonaType(Enum):
 
         # Provider 결정 (파라미터 없으면 settings에서)
         if provider is None:
-            provider = settings.LLM_PROVIDER.upper()
+            provider = settings.LLM_PROVIDER
 
         # 소문자 변환: PRO_DATA_ANALYST → pro_data_analyst
         template_name = self.name.lower()
 
         # Provider별 경로: system/openai/pro_data_analyst.j2
-        provider_path = provider.lower()  # OPENAI → openai, VERTEX_AI → vertex_ai
+        provider_path = provider.value.lower()  # VERTEX_AI → vertex_ai, OPENAI → openai
 
         return pm.render(
             f"system/{provider_path}/{template_name}.j2",
             agent_id=settings.INTERNAL_AGENT_ID,
             role=self.role_description
         )
+
+    @classmethod
+    def _missing_(cls, value):
+        """
+        문자열 이름으로 PersonaType enum 멤버를 찾을 수 있게 지원.
+        ES에서 조회한 데이터 역직렬화 시 사용됨.
+
+        예: PersonaType('PRO_DATA_ANALYST') → PersonaType.PRO_DATA_ANALYST
+        """
+        if isinstance(value, str):
+            # 이름으로 찾기
+            for member in cls:
+                if member.name == value:
+                    return member
+        return None
