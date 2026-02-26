@@ -5,7 +5,7 @@ from typing import Optional
 
 from elasticsearch import Elasticsearch
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.elasticsearch_config import es_manager
 from src.core.llm.enums import ProviderType
 from src.schemas.enums.content_type import ExternalContentType
@@ -25,18 +25,18 @@ class ESContentAnalysisResultService:
         self.client: Elasticsearch = es_manager.main_client
 
         # 기존 설정 (하위 호환)
-        self.result_index_name = settings.ANALYSIS_RESULT_INDEX
-        self.result_index_alias = settings.ANALYSIS_RESULT_ALIAS
+        self.result_index_name = settings.elasticsearch.INDEX.DEFAULT_INDEX
+        self.result_index_alias = settings.elasticsearch.INDEX.DEFAULT_ALIAS
 
         # Provider별 설정
         self._provider_config = {
             ProviderType.VERTEX_AI: {
-                "index": settings.ANALYSIS_RESULT_VERTEX_AI_INDEX,
-                "alias": settings.ANALYSIS_RESULT_VERTEX_AI_ALIAS,
+                "index": settings.elasticsearch.INDEX.VERTEX_AI_INDEX,
+                "alias": settings.elasticsearch.INDEX.VERTEX_AI_ALIAS,
             },
             ProviderType.OPENAI: {
-                "index": settings.ANALYSIS_RESULT_OPENAI_INDEX,
-                "alias": settings.ANALYSIS_RESULT_OPENAI_ALIAS,
+                "index": settings.elasticsearch.INDEX.OPENAI_INDEX,
+                "alias": settings.elasticsearch.INDEX.OPENAI_ALIAS,
             },
         }
 
@@ -73,7 +73,7 @@ class ESContentAnalysisResultService:
 
     def _get_alias_for_provider(self, provider_type: ProviderType) -> str:
         """Provider 타입에 따른 alias 반환"""
-        if not settings.USE_DEFAULT_ES_INDEX:
+        if not settings.elasticsearch.INDEX.USE_DEFAULT:
             config = self._provider_config.get(provider_type)
             if config:
                 return config["alias"]
@@ -81,7 +81,7 @@ class ESContentAnalysisResultService:
 
     def _get_index_for_provider(self, provider_type: ProviderType) -> str:
         """Provider 타입에 따른 index 반환"""
-        if not settings.USE_DEFAULT_ES_INDEX:
+        if not settings.elasticsearch.INDEX.USE_DEFAULT:
             config = self._provider_config.get(provider_type)
             if config:
                 return config["index"]

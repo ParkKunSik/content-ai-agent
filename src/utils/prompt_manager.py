@@ -1,7 +1,7 @@
 import json
 from typing import List
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
 from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
@@ -22,19 +22,19 @@ class PromptManager:
     # Summary character limits for detailed analysis refinement
     @property
     def MAX_MAIN_SUMMARY_CHARS(self) -> int:
-        return settings.MAX_MAIN_SUMMARY_CHARS
+        return settings.analysis.MAX_MAIN_SUMMARY_CHARS
 
     @property
     def MAX_CATEGORY_SUMMARY_CHARS(self) -> int:
-        return settings.MAX_CATEGORY_SUMMARY_CHARS
+        return settings.analysis.MAX_CATEGORY_SUMMARY_CHARS
 
     @property
     def MAX_INSIGHT_ITEM_CHARS_ANALYSIS(self) -> int:
-        return settings.MAX_INSIGHT_ITEM_CHARS_ANALYSIS
+        return settings.analysis.MAX_INSIGHT_ITEM_CHARS_ANALYSIS
 
     @property
     def MAX_INSIGHT_ITEM_CHARS_REFINE(self) -> int:
-        return settings.MAX_INSIGHT_ITEM_CHARS_REFINE
+        return settings.analysis.MAX_INSIGHT_ITEM_CHARS_REFINE
 
     def __new__(cls):
         if cls._instance is None:

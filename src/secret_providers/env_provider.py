@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Dict
 
-from src.secrets.base import BaseSecretProvider
+from src.secret_providers.base import BaseSecretProvider
 
 logger = logging.getLogger(__name__)
 

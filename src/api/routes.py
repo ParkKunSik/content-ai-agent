@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from src.agent.agent import ContentAnalysisAgent
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.schemas.models.api.analyze_request import AnalyzeRequest
 from src.schemas.models.api.project_analysis_request import ProjectAnalysisRequest
 from src.schemas.models.common.structured_analysis_refine_result import StructuredAnalysisRefineResult
@@ -27,7 +27,7 @@ orchestrator = AgentOrchestrator()
 
 @router.get("/health")
 def health_check():
-    return {"status": "healthy", "env": settings.ENV}
+    return {"status": "healthy", "env": settings.profile.ENV}
 
 @router.post("/analysis", response_model=StructuredAnalysisRefineResult)
 async def analysis(request: AnalyzeRequest):

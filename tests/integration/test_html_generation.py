@@ -8,7 +8,7 @@ from typing import List
 
 import pytest
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.llm.enums import ProviderType
 from src.core.llm.registry import ProviderRegistry
 from src.schemas.enums.content_type import ExternalContentType
@@ -34,18 +34,18 @@ def switch_llm_provider(provider: ProviderType):
     LLM Provider를 임시로 변경하는 Context Manager.
     테스트 종료 후 원래 Provider로 복원한다.
     """
-    original_provider = settings.LLM_PROVIDER
+    original_provider = settings.llm_provider
     original_initialized = ProviderRegistry._initialized.copy()
     original_current = ProviderRegistry._current_provider
     try:
-        settings.LLM_PROVIDER = provider
+        settings.llm_provider = provider
         # Provider 변경 시 Registry 초기화 상태 리셋
         ProviderRegistry._initialized = {k: False for k in ProviderRegistry._initialized}
         ProviderRegistry._current_provider = None
         print(f"\n🔄 LLM Provider 변경: {original_provider.value} → {provider.value}")
         yield
     finally:
-        settings.LLM_PROVIDER = original_provider
+        settings.llm_provider = original_provider
         ProviderRegistry._initialized = original_initialized
         ProviderRegistry._current_provider = original_current
         print(f"\n🔄 LLM Provider 복원: {provider.value} → {original_provider.value}")
@@ -317,7 +317,7 @@ async def _execute_html_generation_test(
 
     # Provider 이름 결정 (지정되지 않으면 현재 설정 사용)
     if provider_name is None:
-        provider_name = settings.LLM_PROVIDER.value.lower()
+        provider_name = settings.llm_provider.value.lower()
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     current_dir = os.path.dirname(__file__)
@@ -445,7 +445,7 @@ async def test_html_generation_from_project_file():
     - HTML 출력 경로: tests/data/html/{provider}/
     """
     await _test_html_generation_from_project_file(
-        provider_name=settings.LLM_PROVIDER.value.lower(),
+        provider_name=settings.llm_provider.value.lower(),
         project_id=365330,
         content_type=ExternalContentType.REVIEW,
         is_all=False,
@@ -481,7 +481,7 @@ async def test_openai_html_generation_from_project_file():
 
     Note: OPENAI_API_KEY 환경변수가 설정되어 있어야 합니다.
     """
-    if not settings.OPENAI_API_KEY:
+    if not settings.openai.API_KEY:
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
     with switch_llm_provider(ProviderType.OPENAI):
@@ -555,7 +555,7 @@ async def test_html_generation_from_project_ES(setup_elasticsearch):
     """
     await _test_html_generation_from_project_ES(
         setup_elasticsearch,
-        provider_name=settings.LLM_PROVIDER.value.lower(),
+        provider_name=settings.llm_provider.value.lower(),
         project_id=276504,
         content_type=ExternalContentType.SATISFACTION,
         is_all=False,
@@ -575,7 +575,7 @@ async def test_vertexai_html_generation_from_project_ES(setup_elasticsearch):
         await _test_html_generation_from_project_ES(
             setup_elasticsearch,
             provider_name="vertex_ai",
-            project_id=276504,
+            project_id=335362,
             content_type=ExternalContentType.SATISFACTION,
             is_all=False,
             sample_size=100
@@ -592,14 +592,14 @@ async def test_openai_html_generation_from_project_ES(setup_elasticsearch):
 
     Note: OPENAI_API_KEY 환경변수가 설정되어 있어야 합니다.
     """
-    if not settings.OPENAI_API_KEY:
+    if not settings.openai.API_KEY:
         pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
 
     with switch_llm_provider(ProviderType.OPENAI):
         await _test_html_generation_from_project_ES(
             setup_elasticsearch,
             provider_name="openai",
-            project_id=276504,
+            project_id=335362,
             content_type=ExternalContentType.SATISFACTION,
             is_all=False,
             sample_size=100

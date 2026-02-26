@@ -2,7 +2,7 @@ from typing import Annotated, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.core.config import settings
+from src.core.config.settings import settings
 
 from .ko_doc import KoDoc
 
@@ -33,7 +33,7 @@ class SentimentContent(BaseModel):
     @field_validator('score')
     @classmethod
     def validate_sentiment_score(cls, v: Union[float, int]) -> float:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return float(v)
 
         """평가 대상에 대한 감정 점수 유효성 검증"""

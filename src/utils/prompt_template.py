@@ -3,7 +3,7 @@ from typing import Dict
 
 from jinja2 import Template
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.utils.prompt_renderer import PromptRenderer
 
 
@@ -28,7 +28,7 @@ class PromptTemplate(Enum):
         Args:
             renderer: PromptRenderer 인스턴스
         """
-        provider = settings.LLM_PROVIDER  # ProviderType enum
+        provider = settings.llm_provider  # ProviderType enum
 
         # Provider별 캐시 확인
         if provider not in self._cached_templates:

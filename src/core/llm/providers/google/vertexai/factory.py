@@ -6,7 +6,7 @@ from typing import Optional
 import google.genai as genai
 from google.genai import types
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.llm.base.factory import LLMProviderFactory
 from src.core.llm.enums import ResponseFormat
 from src.core.llm.models import PersonaConfig
@@ -29,33 +29,33 @@ class VertexAIProviderFactory(LLMProviderFactory):
         """
         google-genai 클라이언트 초기화.
         """
-        logger.info(f"Initializing VertexAIProviderFactory in region: {settings.GCP_REGION}...")
+        logger.info(f"Initializing VertexAIProviderFactory in region: {settings.gcp.REGION}...")
 
         # Resolve credentials with proper scope for google-genai
         credentials = None
-        if settings.GOOGLE_APPLICATION_CREDENTIALS:
+        if settings.gcp.CREDENTIALS_PATH:
             import os
 
-            if not os.path.exists(settings.GOOGLE_APPLICATION_CREDENTIALS):
-                logger.error(f"Credentials file NOT FOUND at: {settings.GOOGLE_APPLICATION_CREDENTIALS}")
+            if not os.path.exists(settings.gcp.CREDENTIALS_PATH):
+                logger.error(f"Credentials file NOT FOUND at: {settings.gcp.CREDENTIALS_PATH}")
             else:
                 from google.oauth2 import service_account
 
                 try:
                     base_credentials = service_account.Credentials.from_service_account_file(
-                        settings.GOOGLE_APPLICATION_CREDENTIALS
+                        settings.gcp.CREDENTIALS_PATH
                     )
                     # Add required scope for Vertex AI
                     credentials = base_credentials.with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
-                    logger.info(f"Successfully loaded credentials from: {settings.GOOGLE_APPLICATION_CREDENTIALS}")
+                    logger.info(f"Successfully loaded credentials from: {settings.gcp.CREDENTIALS_PATH}")
                 except Exception as e:
                     logger.warning(f"Failed to load credentials file: {e}")
 
         # Initialize google-genai client with Vertex AI mode
         cls._client = genai.Client(
             vertexai=True,
-            project=settings.GCP_PROJECT_ID,
-            location=settings.GCP_REGION,
+            project=settings.gcp.PROJECT_ID,
+            location=settings.gcp.REGION,
             credentials=credentials,
         )
 
@@ -89,7 +89,7 @@ class VertexAIProviderFactory(LLMProviderFactory):
         # 세션 설정 생성
         session_config = types.GenerateContentConfig(
             temperature=persona_config.temperature,
-            max_output_tokens=settings.MAX_OUTPUT_TOKENS,
+            max_output_tokens=settings.llm.MAX_OUTPUT_TOKENS,
             system_instruction=persona_config.system_instruction,
             response_mime_type=mime_type,
             response_schema=schema_dict,

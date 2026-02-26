@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
 from src.core.llm.enums import ProviderType
 from src.schemas.enums.analysis_mode import AnalysisMode
@@ -56,23 +56,23 @@ class AgentOrchestrator:
             # 초기화되지 않은 경우 초기화 수행
             logger.info("Initializing ES manager...")
             reference_config = ElasticsearchConfig(
-                host=settings.ES_REFERENCE_HOST,
-                port=settings.ES_REFERENCE_PORT,
-                username=settings.ES_REFERENCE_USERNAME,
-                password=settings.ES_REFERENCE_PASSWORD,
-                use_ssl=settings.ES_REFERENCE_USE_SSL,
-                verify_certs=settings.ES_REFERENCE_VERIFY_CERTS,
-                timeout=settings.ES_REFERENCE_TIMEOUT
+                host=settings.elasticsearch.REFERENCE.HOST,
+                port=settings.elasticsearch.REFERENCE.PORT,
+                username=settings.elasticsearch.REFERENCE.USERNAME,
+                password=settings.elasticsearch.REFERENCE.PASSWORD,
+                use_ssl=settings.elasticsearch.REFERENCE.USE_SSL,
+                verify_certs=settings.elasticsearch.REFERENCE.VERIFY_CERTS,
+                timeout=settings.elasticsearch.REFERENCE.TIMEOUT
             )
 
             main_config = ElasticsearchConfig(
-                host=settings.ES_MAIN_HOST,
-                port=settings.ES_MAIN_PORT,
-                username=settings.ES_MAIN_USERNAME,
-                password=settings.ES_MAIN_PASSWORD,
-                use_ssl=settings.ES_MAIN_USE_SSL,
-                verify_certs=settings.ES_MAIN_VERIFY_CERTS,
-                timeout=settings.ES_MAIN_TIMEOUT
+                host=settings.elasticsearch.MAIN.HOST,
+                port=settings.elasticsearch.MAIN.PORT,
+                username=settings.elasticsearch.MAIN.USERNAME,
+                password=settings.elasticsearch.MAIN.PASSWORD,
+                use_ssl=settings.elasticsearch.MAIN.USE_SSL,
+                verify_certs=settings.elasticsearch.MAIN.VERIFY_CERTS,
+                timeout=settings.elasticsearch.MAIN.TIMEOUT
             )
 
             es_manager.initialize(reference_config, main_config)
@@ -80,7 +80,7 @@ class AgentOrchestrator:
 
     def _get_current_provider_type(self) -> ProviderType:
         """현재 설정된 LLM Provider 타입 반환"""
-        return settings.LLM_PROVIDER
+        return settings.llm_provider
 
     async def analysis(
         self,

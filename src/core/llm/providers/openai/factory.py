@@ -26,7 +26,7 @@ class OpenAIProviderFactory(LLMProviderFactory):
         """
         OpenAI 클라이언트 초기화.
         """
-        from src.core.config import settings
+        from src.core.config.settings import settings
 
         logger.info("Initializing OpenAIProviderFactory...")
 
@@ -39,11 +39,11 @@ class OpenAIProviderFactory(LLMProviderFactory):
             ) from e
 
         # 설정에서 API 키 가져오기
-        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        api_key = settings.openai.API_KEY
         if not api_key:
-            raise ValueError("OPENAI_API_KEY is not set in settings")
+            raise ValueError("OpenAI API_KEY is not set in settings")
 
-        org_id = getattr(settings, "OPENAI_ORG_ID", None)
+        org_id = settings.openai.ORG_ID
 
         # OpenAI 클라이언트 초기화
         client_kwargs = {"api_key": api_key}
