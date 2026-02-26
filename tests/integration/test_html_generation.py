@@ -494,6 +494,29 @@ async def test_openai_html_generation_from_project_file():
         )
 
 
+@pytest.mark.asyncio
+async def test_gemini_api_html_generation_from_project_file():
+    """
+    Gemini API Provider를 사용한 프로젝트 파일 기반 HTML 생성 테스트
+    - LLM Provider: GEMINI_API
+    - 데이터 소스: tests/data/project_365330.json
+    - HTML 출력 경로: tests/data/html/gemini_api/
+
+    Note: GEMINI_API_API_KEY 환경변수가 설정되어 있어야 합니다.
+    """
+    if not settings.gemini_api.API_KEY:
+        pytest.skip("GEMINI_API__API_KEY가 설정되지 않았습니다.")
+
+    with switch_llm_provider(ProviderType.GEMINI_API):
+        await _test_html_generation_from_project_file(
+            provider_name="gemini_api",
+            project_id=365330,
+            content_type=ExternalContentType.REVIEW,
+            is_all=False,
+            sample_size=200
+        )
+
+
 async def _test_html_generation_from_project_ES(
     setup_elasticsearch,
     provider_name: str,
@@ -599,6 +622,30 @@ async def test_openai_html_generation_from_project_ES(setup_elasticsearch):
         await _test_html_generation_from_project_ES(
             setup_elasticsearch,
             provider_name="openai",
+            project_id=335362,
+            content_type=ExternalContentType.SATISFACTION,
+            is_all=False,
+            sample_size=100
+        )
+
+
+@pytest.mark.asyncio
+async def test_gemini_api_html_generation_from_project_ES(setup_elasticsearch):
+    """
+    Gemini API Provider를 사용한 ES 조회 후 HTML 생성 테스트
+    - LLM Provider: GEMINI_API
+    - 데이터 소스: Elasticsearch
+    - HTML 출력 경로: tests/data/html/gemini_api/
+
+    Note: GEMINI_API__API_KEY 환경변수가 설정되어 있어야 합니다.
+    """
+    if not settings.gemini_api.API_KEY:
+        pytest.skip("GEMINI_API__API_KEY가 설정되지 않았습니다.")
+
+    with switch_llm_provider(ProviderType.GEMINI_API):
+        await _test_html_generation_from_project_ES(
+            setup_elasticsearch,
+            provider_name="gemini_api",
             project_id=335362,
             content_type=ExternalContentType.SATISFACTION,
             is_all=False,

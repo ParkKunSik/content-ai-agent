@@ -127,30 +127,16 @@ class ProviderRegistry:
         return cls._initialized.get(provider_type, False)
 
 
-# Vertex AI Provider 자동 등록
-def _register_vertexai_provider() -> None:
-    """Vertex AI Provider를 Registry에 등록한다."""
-    try:
-        from src.core.llm.providers.google.vertexai.factory import VertexAIProviderFactory
-
-        ProviderRegistry.register(ProviderType.VERTEX_AI, VertexAIProviderFactory)
-        logger.debug("Vertex AI provider registered")
-    except ImportError as e:
-        logger.warning(f"Failed to register Vertex AI provider: {e}")
-
-
-# OpenAI Provider 자동 등록
-def _register_openai_provider() -> None:
-    """OpenAI Provider를 Registry에 등록한다."""
-    try:
-        from src.core.llm.providers.openai.factory import OpenAIProviderFactory
-
-        ProviderRegistry.register(ProviderType.OPENAI, OpenAIProviderFactory)
-        logger.debug("OpenAI provider registered")
-    except ImportError as e:
-        logger.debug(f"OpenAI provider not available: {e}")
+# 모듈 로드 시 모든 Provider 등록
+def _register_providers() -> None:
+    """ProviderType enum을 순회하며 모든 Provider를 Registry에 등록한다."""
+    for provider_type in ProviderType:
+        factory = provider_type.get_factory()
+        if factory:
+            ProviderRegistry.register(provider_type, factory)
+            logger.debug(f"{provider_type.value} provider registered")
+        else:
+            logger.debug(f"{provider_type.value} provider not available")
 
 
-# 모듈 로드 시 Provider 등록
-_register_vertexai_provider()
-_register_openai_provider()
+_register_providers()

@@ -29,6 +29,7 @@ graph TD
 
     subgraph "LLM Providers"
         Registry -->|VERTEX_AI| Vertex[Vertex AI Gemini]
+        Registry -->|GEMINI_API| GeminiAPI[Gemini API]
         Registry -->|OPENAI| OpenAI[OpenAI GPT-4o]
     end
 
@@ -103,9 +104,10 @@ graph TD
 *   **역할:** `Orchestrator`와 LLM Provider 사이의 통신을 전담하며, Provider 중립적인 세션 관리.
 *   **멀티 Provider 지원:**
     *   **ProviderRegistry:** Provider Factory를 등록하고 관리하는 중앙 레지스트리.
+    *   **ProviderType Enum:** 각 Provider는 Factory 로더 lambda를 포함하며, 자동 등록.
     *   **LLMProviderFactory (ABC):** Provider별 세션 생성 팩토리 인터페이스.
     *   **LLMProviderSession (ABC):** Provider 중립적 세션 인터페이스.
-    *   **지원 Provider:** Vertex AI (Google), OpenAI (환경변수 `LLM_PROVIDER`로 선택).
+    *   **지원 Provider:** Vertex AI, Gemini API, OpenAI (환경변수 `LLM_PROVIDER`로 선택).
 *   **재시도 전략 (Retry Policy):**
     *   **Quota Error (429):** Exponential Backoff with Jitter 적용.
     *   **Validation Error:** `ValidationErrorHandler`를 통한 자동 재시도 및 자가 교정 수행.
@@ -131,13 +133,16 @@ graph TD
 *   **IDE:** IntelliJ IDEA (Ultimate/Community with Python Plugin)
 *   **Core Framework:** Pure Python (No Web Framework Dependency in Core)
 *   **AI Model (Multi-Provider):**
-    *   **Vertex AI (기본):**
+    *   **Vertex AI (GCP 서비스 계정 인증):**
         *   Gemini 2.5 Pro (Structuring) / Gemini 2.5 Flash (Refinement)
         *   Gemini 3.0 Pro/Flash Preview (실험용)
+    *   **Gemini API (API Key 인증):**
+        *   Vertex AI와 동일한 Gemini 모델 사용
+        *   google-genai SDK 공유, 인증 방식만 다름
     *   **OpenAI:**
         *   GPT-4o (Structuring) / GPT-4o-mini (Refinement)
         *   GPT-4.1 (대용량 컨텍스트), o1/o3/o4-mini (고급 추론)
-    *   **Provider 선택:** 환경변수 `LLM_PROVIDER` (VERTEX_AI | OPENAI)
+    *   **Provider 선택:** 환경변수 `LLM_PROVIDER` (VERTEX_AI | GEMINI_API | OPENAI)
 *   **Deployment:**
     *   **Prod (GCP):** Vertex AI Agent Engine (Managed Runtime).
     *   **Prod (AWS):** Lambda + API Gateway (SAM 배포).

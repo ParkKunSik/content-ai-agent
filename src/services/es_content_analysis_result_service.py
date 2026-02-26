@@ -34,6 +34,10 @@ class ESContentAnalysisResultService:
                 "index": settings.elasticsearch.INDEX.VERTEX_AI_INDEX,
                 "alias": settings.elasticsearch.INDEX.VERTEX_AI_ALIAS,
             },
+            ProviderType.GEMINI_API: {
+                "index": settings.elasticsearch.INDEX.GEMINI_API_INDEX,
+                "alias": settings.elasticsearch.INDEX.GEMINI_API_ALIAS,
+            },
             ProviderType.OPENAI: {
                 "index": settings.elasticsearch.INDEX.OPENAI_INDEX,
                 "alias": settings.elasticsearch.INDEX.OPENAI_ALIAS,
