@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from src.core.config import settings
+from src.core.config.settings import settings
 
 from ...enums.sentiment_type import SentimentType
 from .highlight_item import HighlightItem
@@ -89,7 +89,7 @@ class CategoryItem(BaseModel):
     @field_validator('key')
     @classmethod
     def validate_key(cls, v: str, info: ValidationInfo) -> str:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """카테고리명을 기반으로 공백만 '_'로 대체한 키 생성 및 검증"""
@@ -104,7 +104,7 @@ class CategoryItem(BaseModel):
     @field_validator('positive_contents')
     @classmethod
     def validate_positive_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """긍정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 이상 필수)"""
@@ -122,7 +122,7 @@ class CategoryItem(BaseModel):
     @field_validator('negative_contents')
     @classmethod
     def validate_negative_contents(cls, v: list[SentimentContent]) -> list[SentimentContent]:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """부정 콘텐츠의 평가 대상에 대한 감정 점수 검증 (0.5 미만 필수)"""
@@ -140,7 +140,7 @@ class CategoryItem(BaseModel):
     @field_validator('sentiment_type')
     @classmethod
     def validate_sentiment_type(cls, v: SentimentType, info: ValidationInfo) -> SentimentType:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """감정 타입과 평가 대상에 대한 콘텐츠 감정 점수 일관성 검증"""

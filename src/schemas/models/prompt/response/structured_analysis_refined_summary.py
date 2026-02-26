@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.schemas.models.common.ko_doc import KoDoc
 
 
@@ -39,11 +39,11 @@ class RefinedCategorySummary(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """요약 길이 제한 검증 (설정값 기반)"""
-        max_chars = settings.MAX_CATEGORY_SUMMARY_CHARS
+        max_chars = settings.analysis.MAX_CATEGORY_SUMMARY_CHARS
         if len(v) > max_chars:
             raise ValueError(f"카테고리 요약은 최대 {max_chars}자까지 허용됩니다. 현재: {len(v)}자")
         return v
@@ -109,11 +109,11 @@ class StructuredAnalysisRefinedSummary(BaseModel):
     @field_validator('summary')
     @classmethod
     def validate_summary_length(cls, v: str) -> str:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """전체 요약 길이 제한 검증 (설정값 기반)"""
-        max_chars = settings.MAX_MAIN_SUMMARY_CHARS
+        max_chars = settings.analysis.MAX_MAIN_SUMMARY_CHARS
         if len(v) > max_chars:
             raise ValueError(f"전체 요약은 최대 {max_chars}자까지 허용됩니다. 현재: {len(v)}자")
         return v

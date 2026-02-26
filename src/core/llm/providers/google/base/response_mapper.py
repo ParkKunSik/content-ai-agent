@@ -1,4 +1,4 @@
-"""Vertex AI 응답을 Provider 중립 형식으로 변환"""
+"""Google GenAI 응답을 Provider 중립 형식으로 변환"""
 
 import logging
 from typing import TYPE_CHECKING
@@ -12,8 +12,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class VertexAIResponseMapper:
-    """Vertex AI 응답을 LLMResponse로 변환"""
+class GoogleGenAIResponseMapper:
+    """
+    Google GenAI (google-genai SDK) 응답을 LLMResponse로 변환.
+    Vertex AI와 Gemini API 모두에서 공유된다.
+    """
 
     # Google FinishReason → Provider 중립 FinishReason 매핑
     FINISH_REASON_MAP = {

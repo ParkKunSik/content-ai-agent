@@ -35,5 +35,5 @@ except ImportError:
 
 if __name__ == "__main__":
     import uvicorn
-    from src.core.config import settings
-    uvicorn.run(app, host=settings.SERVER_HOST, port=settings.SERVER_PORT)
+    from src.core.config.settings import settings
+    uvicorn.run(app, host=settings.server.HOST, port=settings.server.PORT)

@@ -1,80 +1,58 @@
-"""Vertex AI Provider Factory 구현"""
+"""Gemini API Provider Factory 구현"""
 
 import logging
-from typing import Optional
-
-import google.genai as genai
-from google.genai import types
+from typing import Optional, TYPE_CHECKING
 
 from src.core.config.settings import settings
 from src.core.llm.base.factory import LLMProviderFactory
 from src.core.llm.enums import ResponseFormat
 from src.core.llm.models import PersonaConfig
-from src.core.llm.providers.google.vertexai.session import VertexAISession
+from src.core.llm.providers.google.gemini.session import GeminiAPISession
+
+if TYPE_CHECKING:
+    import google.genai as genai
 
 logger = logging.getLogger(__name__)
 
 
-class VertexAIProviderFactory(LLMProviderFactory):
+class GeminiAPIProviderFactory(LLMProviderFactory):
     """
-    Vertex AI Provider Factory.
-    LLMProviderFactory ABC를 구현하며,
-    google-genai SDK (vertexai=True) 기반의 세션을 생성한다.
+    Gemini API Provider Factory.
+    google-genai SDK를 API Key 방식으로 초기화하여 세션을 생성한다.
     """
 
     _client: Optional["genai.Client"] = None
 
     @classmethod
     def initialize(cls) -> None:
-        """
-        google-genai 클라이언트 초기화.
-        """
-        logger.info(f"Initializing VertexAIProviderFactory in region: {settings.gcp.REGION}...")
+        """google-genai 클라이언트 초기화 (API Key 방식)."""
+        import google.genai as genai
 
-        # Resolve credentials with proper scope for google-genai
-        credentials = None
-        if settings.gcp.CREDENTIALS_PATH:
-            import os
+        logger.info("Initializing GeminiAPIProviderFactory...")
 
-            if not os.path.exists(settings.gcp.CREDENTIALS_PATH):
-                logger.error(f"Credentials file NOT FOUND at: {settings.gcp.CREDENTIALS_PATH}")
-            else:
-                from google.oauth2 import service_account
+        api_key = settings.gemini_api.API_KEY
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API__API_KEY is not set. "
+                "Please set in .env.local or Secret Manager."
+            )
 
-                try:
-                    base_credentials = service_account.Credentials.from_service_account_file(
-                        settings.gcp.CREDENTIALS_PATH
-                    )
-                    # Add required scope for Vertex AI
-                    credentials = base_credentials.with_scopes(["https://www.googleapis.com/auth/cloud-platform"])
-                    logger.info(f"Successfully loaded credentials from: {settings.gcp.CREDENTIALS_PATH}")
-                except Exception as e:
-                    logger.warning(f"Failed to load credentials file: {e}")
-
-        # Initialize google-genai client with Vertex AI mode
-        cls._client = genai.Client(
-            vertexai=True,
-            project=settings.gcp.PROJECT_ID,
-            location=settings.gcp.REGION,
-            credentials=credentials,
-        )
-
-        logger.info("VertexAIProviderFactory initialized.")
+        cls._client = genai.Client(api_key=api_key)
+        logger.info("GeminiAPIProviderFactory initialized successfully.")
 
     @classmethod
-    def start_session(
-        cls,
-        persona_config: PersonaConfig,
-    ) -> VertexAISession:
+    def start_session(cls, persona_config: PersonaConfig) -> GeminiAPISession:
         """
-        새로운 Vertex AI 세션을 시작한다.
+        새로운 Gemini API 세션을 시작한다.
 
         Args:
             persona_config: 페르소나 설정 (모델명, 온도, response_schema 등)
 
         Returns:
-            VertexAISession: 세션 인스턴스
+            GeminiAPISession: 세션 인스턴스
         """
+        from google.genai import types
+
         if cls._client is None:
             cls.initialize()
 
@@ -95,7 +73,7 @@ class VertexAIProviderFactory(LLMProviderFactory):
             response_schema=schema_dict,
         )
 
-        return VertexAISession(
+        return GeminiAPISession(
             client=cls._client,
             model_name=persona_config.model_name,
             config=session_config,
@@ -127,4 +105,4 @@ class VertexAIProviderFactory(LLMProviderFactory):
     @classmethod
     def get_provider_name(cls) -> str:
         """Provider 이름을 반환한다."""
-        return "VERTEX_AI"
+        return "GEMINI_API"

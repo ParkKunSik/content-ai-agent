@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.schemas.models.common.category_item import CategoryItem
 from src.schemas.models.common.etc_content import EtcContent
 from src.schemas.models.common.ko_doc import KoDoc
@@ -78,7 +78,7 @@ class StructuredAnalysisResult(BaseModel):
     @field_validator('categories')
     @classmethod
     def validate_categorys_count(cls, v: list[CategoryItem]) -> list[CategoryItem]:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """카테고리 개수 제한 검증 (최대 20개)"""
@@ -89,7 +89,7 @@ class StructuredAnalysisResult(BaseModel):
     @field_validator('categories')
     @classmethod
     def validate_unique_category_keys(cls, v: list[CategoryItem]) -> list[CategoryItem]:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """카테고리 키 중복 검증"""
@@ -102,7 +102,7 @@ class StructuredAnalysisResult(BaseModel):
     @field_validator('harmful_contents', 'etc_contents', 'categories')
     @classmethod
     def validate_no_content_id_duplication(cls, v, info: ValidationInfo) -> list:
-        if not settings.STRICT_VALIDATION:
+        if not settings.analysis.STRICT_VALIDATION:
             return v
 
         """content_id 중복 방지 검증"""

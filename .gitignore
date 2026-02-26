@@ -27,6 +27,9 @@ ENV/
 # Configuration & Secrets
 .env
 .env.local
+.env.vertex_ai
+.env.openai
+.env.gemini_api
 
 # IDEs
 .idea/

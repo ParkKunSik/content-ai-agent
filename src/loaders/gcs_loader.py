@@ -2,7 +2,7 @@ import logging
 
 from google.cloud import storage
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.loaders.base import BaseContentLoader
 
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ class GCSLoader(BaseContentLoader):
     
     def __init__(self):
         try:
-            self.client = storage.Client(project=settings.GCP_PROJECT_ID)
+            self.client = storage.Client(project=settings.gcp.PROJECT_ID)
         except Exception as e:
             logger.error(f"Failed to initialize GCS Client: {e}")
             self.client = None

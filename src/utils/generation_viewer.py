@@ -42,10 +42,10 @@ class GenerationViewer:
         """
         Provider 이름을 표시용 이름으로 변환
         """
-        from src.core.config import settings
+        from src.core.config.settings import settings
 
         if provider_name is None:
-            provider_name = settings.LLM_PROVIDER.value
+            provider_name = settings.llm_provider.value
 
         provider_display_map = {
             "VERTEX_AI": "Vertex AI",

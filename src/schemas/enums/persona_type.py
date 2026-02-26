@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.llm.enums import ProviderType
 from src.utils.prompt_renderer import PromptRenderer
 
@@ -11,10 +11,10 @@ class PersonaType(Enum):
     Defines model roles, their configuration logic, and generation parameters.
 
     Attributes:
-        vertexai_model_name_getter: A function that retrieves the Vertex AI model name from settings.
+        vertexai_model_name_getter: A function that retrieves the Vertex AI / Gemini API model name from settings.
         openai_model_name_getter: A function that retrieves the OpenAI model name from settings.
         role_description: A human-readable description of the persona's role.
-        vertexai_temperature: Temperature for Vertex AI (Gemini) models.
+        vertexai_temperature: Temperature for Vertex AI / Gemini API (Gemini) models.
         openai_temperature: Temperature for OpenAI (GPT) models.
             - 0.0: Deterministic. Best for technical tasks like token counting.
             - 0.1 - 0.3: Focused and precise. Ideal for data analysis, JSON structuring, and factual summaries.
@@ -23,19 +23,20 @@ class PersonaType(Enum):
 
         Note: OpenAI models tend to interpret temperature more conservatively than Vertex AI,
               so OpenAI temperatures are set slightly lower for equivalent behavior.
+        Note: Gemini API uses the same temperature settings as Vertex AI (same underlying Gemini models).
     """
 
     # 1. Utility Models
     # (vertexai_model_getter, openai_model_getter, role_description, vertexai_temp, openai_temp)
-    COMMON_TOKEN_COUNTER = (lambda s: s.VERTEX_AI_MODEL_PRO, lambda s: s.OPENAI_MODEL_PRO, None, 0.0, 0.0)
+    COMMON_TOKEN_COUNTER = (lambda s: s.vertex_ai.MODEL_ADVANCED, lambda s: s.openai.MODEL_ADVANCED, None, 0.0, 0.0)
 
     # 2. Persona Models
-    # CUSTOMER_FACING_ANALYST: Creative insight (Vertex 0.7 → OpenAI 0.5)
-    CUSTOMER_FACING_ANALYST = (lambda s: s.VERTEX_AI_MODEL_PRO, lambda s: s.OPENAI_MODEL_PRO, "Customer-Facing Data Analyst", 0.7, 0.5)
-    # PRO_DATA_ANALYST: Precise analysis (Vertex 0.1 → OpenAI 0.0)
-    PRO_DATA_ANALYST = (lambda s: s.VERTEX_AI_MODEL_PRO, lambda s: s.OPENAI_MODEL_PRO, "Precise Data Analyst", 0.1, 0.0)
-    # CUSTOMER_FACING_SMART_BOT: Refined summary (Vertex 0.3 → OpenAI 0.2)
-    CUSTOMER_FACING_SMART_BOT = (lambda s: s.VERTEX_AI_MODEL_FLASH, lambda s: s.OPENAI_MODEL_FLASH, "Smart AI Review Analyst", 0.3, 0.2)
+    # CUSTOMER_FACING_ANALYST: Creative insight (Vertex/Gemini 0.7 → OpenAI 0.5)
+    CUSTOMER_FACING_ANALYST = (lambda s: s.vertex_ai.MODEL_ADVANCED, lambda s: s.openai.MODEL_ADVANCED, "Customer-Facing Data Analyst", 0.7, 0.5)
+    # PRO_DATA_ANALYST: Precise analysis (Vertex/Gemini 0.1 → OpenAI 0.0)
+    PRO_DATA_ANALYST = (lambda s: s.vertex_ai.MODEL_ADVANCED, lambda s: s.openai.MODEL_ADVANCED, "Precise Data Analyst", 0.1, 0.0)
+    # CUSTOMER_FACING_SMART_BOT: Refined summary (Vertex/Gemini 0.3 → OpenAI 0.2)
+    CUSTOMER_FACING_SMART_BOT = (lambda s: s.vertex_ai.MODEL_STANDARD, lambda s: s.openai.MODEL_STANDARD, "Smart AI Review Analyst", 0.3, 0.2)
 
     def __init__(
         self,
@@ -58,8 +59,15 @@ class PersonaType(Enum):
 
     def get_model_name_getter(self) -> Callable[[Any], str]:
         """현재 LLM_PROVIDER 설정에 따라 적절한 model_name_getter를 반환한다."""
-        if settings.LLM_PROVIDER == ProviderType.OPENAI:
+        if settings.llm_provider == ProviderType.OPENAI:
             return self.openai_model_name_getter
+        elif settings.llm_provider == ProviderType.GEMINI_API:
+            # Gemini API는 gemini_api 설정 사용
+            return lambda s: (
+                s.gemini_api.MODEL_ADVANCED
+                if self.vertexai_model_name_getter(s) == s.vertex_ai.MODEL_ADVANCED
+                else s.gemini_api.MODEL_STANDARD
+            )
         else:
             # VERTEX_AI 또는 기타 → Vertex AI 사용
             return self.vertexai_model_name_getter
@@ -75,10 +83,10 @@ class PersonaType(Enum):
 
     def get_temperature(self) -> float:
         """현재 LLM_PROVIDER 설정에 따라 적절한 temperature를 반환한다."""
-        if settings.LLM_PROVIDER == ProviderType.OPENAI:
+        if settings.llm_provider == ProviderType.OPENAI:
             return self.openai_temperature
         else:
-            # VERTEX_AI 또는 기타 → Vertex AI 사용
+            # VERTEX_AI, GEMINI_API 또는 기타 → Gemini 모델 사용 (동일한 temperature)
             return self.vertexai_temperature
 
     def get_instruction(self, pm: PromptRenderer, provider: ProviderType = None) -> Optional[str]:
@@ -97,17 +105,17 @@ class PersonaType(Enum):
 
         # Provider 결정 (파라미터 없으면 settings에서)
         if provider is None:
-            provider = settings.LLM_PROVIDER
+            provider = settings.llm_provider
 
         # 소문자 변환: PRO_DATA_ANALYST → pro_data_analyst
         template_name = self.name.lower()
 
         # Provider별 경로: system/openai/pro_data_analyst.j2
-        provider_path = provider.value.lower()  # VERTEX_AI → vertex_ai, OPENAI → openai
+        provider_path = provider.value.lower()  # VERTEX_AI → vertex_ai, GEMINI_API → gemini_api, OPENAI → openai
 
         return pm.render(
             f"system/{provider_path}/{template_name}.j2",
-            agent_id=settings.INTERNAL_AGENT_ID,
+            agent_id=settings.internal.AGENT_ID,
             role=self.role_description
         )
 

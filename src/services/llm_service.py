@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.llm.enums import FinishReason, ProviderType, ResponseFormat
 from src.core.llm.models import LLMResponse, PersonaConfig
 from src.core.llm.registry import ProviderRegistry
@@ -44,7 +44,7 @@ class LLMService:
 
     def _get_provider_type(self) -> ProviderType:
         """현재 설정된 LLM Provider 타입을 반환한다."""
-        return settings.LLM_PROVIDER
+        return settings.llm_provider
 
     async def count_total_tokens(self, contents: List[str]) -> int:
         total = 0

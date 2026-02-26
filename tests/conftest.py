@@ -13,7 +13,7 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if os.path.exists(env_path):
     load_dotenv(env_path, override=True)
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.core.elasticsearch_config import ElasticsearchConfig, es_manager
 from src.services.llm_service import LLMService
 from src.utils.prompt_manager import PromptManager
@@ -43,23 +43,23 @@ def setup_elasticsearch():
         # 초기화되지 않은 경우 초기화 수행
         print("🔧 ES manager 초기화 중...")
         reference_config = ElasticsearchConfig(
-            host=settings.ES_REFERENCE_HOST,
-            port=settings.ES_REFERENCE_PORT,
-            username=settings.ES_REFERENCE_USERNAME,
-            password=settings.ES_REFERENCE_PASSWORD,
-            use_ssl=settings.ES_REFERENCE_USE_SSL,
-            verify_certs=settings.ES_REFERENCE_VERIFY_CERTS,
-            timeout=settings.ES_REFERENCE_TIMEOUT
+            host=settings.elasticsearch.REFERENCE.HOST,
+            port=settings.elasticsearch.REFERENCE.PORT,
+            username=settings.elasticsearch.REFERENCE.USERNAME,
+            password=settings.elasticsearch.REFERENCE.PASSWORD,
+            use_ssl=settings.elasticsearch.REFERENCE.USE_SSL,
+            verify_certs=settings.elasticsearch.REFERENCE.VERIFY_CERTS,
+            timeout=settings.elasticsearch.REFERENCE.TIMEOUT
         )
-        
+
         main_config = ElasticsearchConfig(
-            host=settings.ES_MAIN_HOST,
-            port=settings.ES_MAIN_PORT,
-            username=settings.ES_MAIN_USERNAME,
-            password=settings.ES_MAIN_PASSWORD,
-            use_ssl=settings.ES_MAIN_USE_SSL,
-            verify_certs=settings.ES_MAIN_VERIFY_CERTS,
-            timeout=settings.ES_MAIN_TIMEOUT
+            host=settings.elasticsearch.MAIN.HOST,
+            port=settings.elasticsearch.MAIN.PORT,
+            username=settings.elasticsearch.MAIN.USERNAME,
+            password=settings.elasticsearch.MAIN.PASSWORD,
+            use_ssl=settings.elasticsearch.MAIN.USE_SSL,
+            verify_certs=settings.elasticsearch.MAIN.VERIFY_CERTS,
+            timeout=settings.elasticsearch.MAIN.TIMEOUT
         )
         
         es_manager.initialize(reference_config, main_config)

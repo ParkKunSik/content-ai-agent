@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional
 
-from src.core.config import settings
+from src.core.config.settings import settings
 from src.loaders.base import BaseContentLoader
 from src.loaders.gcs_loader import GCSLoader
 from src.loaders.local_file_loader import LocalFileLoader
@@ -37,7 +37,7 @@ class RequestContentLoader:
             return self.gcs_loader
         
         # Case 2: Local File System (only in local environment)
-        if settings.ENV == "local":
+        if settings.profile.ENV == "local":
             return self.local_loader
         
         # Case 3: Invalid Scenario
@@ -50,7 +50,7 @@ class RequestContentLoader:
         loader = self._get_loader(source)
         if loader is None:
             raise ValueError(
-                f"Invalid content source for environment '{settings.ENV}': {source}. "
+                f"Invalid content source for environment '{settings.profile.ENV}': {source}. "
                 "Only 'gs://' URIs are supported in production environments."
             )
         
@@ -75,7 +75,7 @@ class RequestContentLoader:
         loader = self._get_loader(source)
         if loader is None:
             raise ValueError(
-                f"Invalid content source for environment '{settings.ENV}': {source}. "
+                f"Invalid content source for environment '{settings.profile.ENV}': {source}. "
                 "Only 'gs://' URIs are supported in production environments."
             )
         
