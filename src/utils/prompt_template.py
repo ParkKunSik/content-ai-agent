@@ -14,8 +14,8 @@ class PromptTemplate(Enum):
     """
 
     # 상세 분석 2단계 템플릿
-    CONTENT_ANALYSIS_STRUCTURING = ("content_analysis_structuring.jinja2")
-    CONTENT_ANALYSIS_SUMMARY_REFINE = ("content_analysis_summary_refine.jinja2")
+    CONTENT_ANALYSIS_STRUCTURING = ("content_analysis_structuring.j2")
+    CONTENT_ANALYSIS_SUMMARY_REFINE = ("content_analysis_summary_refine.j2")
 
     def __init__(self, template_name: str):
         self.template_name = template_name

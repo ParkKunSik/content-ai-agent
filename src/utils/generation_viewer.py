@@ -1,6 +1,8 @@
 import html
 import re
+from typing import List, Optional
 
+from src.schemas.models.common.llm_usage_info import LLMUsageInfo
 from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 
 # PDF 생성을 위한 선택적 임포트
@@ -835,4 +837,770 @@ class GenerationViewer:
 </html>"""
 
         return html_content
-        
+
+    @classmethod
+    def _highlight_keywords_in_summary(cls, text: str, keywords: List[str]) -> str:
+        """
+        요약 텍스트에서 키워드들을 볼드 처리
+        """
+        if not keywords:
+            return text
+
+        result = text
+        for keyword in keywords:
+            if keyword and keyword in result:
+                # 첫 번째 매칭만 볼드 처리 (중복 방지)
+                result = result.replace(keyword, f'<strong>{keyword}</strong>', 1)
+        return result
+
+    @classmethod
+    def generate_detail_html(
+        cls,
+        result: StructuredAnalysisResult,
+        project_id: int,
+        total_items: int,
+        executed_at: str,
+        total_duration: str,
+        content_type_description: str = "고객 의견",
+        provider_name: str = None,
+        llm_usages: Optional[List[LLMUsageInfo]] = None
+    ) -> str:
+        """
+        분석 결과를 상세 뷰어 스타일 HTML로 변환
+        (viewer_compare.html UI 차용 - LLM 사용량, keywords 볼드, 좋은점/참고사항 포함)
+
+        Args:
+            result: 분석 결과 (StructuredAnalysisResult)
+            project_id: 프로젝트 ID
+            total_items: 분석 대상 콘텐츠 수
+            executed_at: 실행 시간
+            total_duration: 총 소요 시간
+            content_type_description: 콘텐츠 타입 설명
+            provider_name: Provider 이름
+            llm_usages: LLM 사용량 정보 리스트
+        """
+        provider_display = cls._get_provider_display_name(provider_name)
+
+        # Keywords를 적용한 요약
+        summary_with_keywords = cls._highlight_keywords_in_summary(
+            result.summary,
+            result.keywords if hasattr(result, 'keywords') and result.keywords else []
+        )
+
+        # LLM 사용량 통계 계산
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cost = 0.0
+        total_duration_ms = 0
+
+        if llm_usages:
+            for usage in llm_usages:
+                total_input_tokens += usage.input_tokens or 0
+                total_output_tokens += usage.output_tokens or 0
+                total_cost += usage.total_cost or 0.0
+                total_duration_ms += usage.duration_ms or 0
+
+        html_content = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분석 결과 - 프로젝트 {project_id}</title>
+    <style>
+        body {{
+            font-family: "Amazon Ember", Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            color: #0F1111;
+        }}
+
+        .header {{
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #D5D9D9;
+        }}
+
+        .meta-info {{
+            font-size: 12px;
+            color: #565959;
+            margin-bottom: 10px;
+        }}
+
+        .provider-badge {{
+            display: inline-block;
+            padding: 4px 10px;
+            background-color: #4CAF50;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }}
+
+        h1 {{
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }}
+
+        /* LLM 사용량 섹션 */
+        .llm-usage-section {{
+            background-color: #F7FAFA;
+            border: 1px solid #D5D9D9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }}
+
+        .llm-usage-title {{
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #0F1111;
+        }}
+
+        .llm-usage-items {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
+        .llm-usage-item {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background-color: #fff;
+            border-radius: 6px;
+            font-size: 13px;
+            border: 1px solid #E3E6E6;
+        }}
+
+        .usage-step {{
+            font-weight: 600;
+            color: #0F1111;
+        }}
+
+        .usage-model {{
+            color: #007185;
+            font-family: monospace;
+        }}
+
+        .usage-details {{
+            display: flex;
+            gap: 16px;
+            color: #565959;
+        }}
+
+        .usage-tokens {{
+            color: #0F1111;
+        }}
+
+        .usage-cost {{
+            color: #067D62;
+            font-weight: 600;
+        }}
+
+        .usage-duration {{
+            color: #565959;
+        }}
+
+        .llm-usage-total {{
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #D5D9D9;
+            font-size: 13px;
+        }}
+
+        .usage-total-row {{
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }}
+
+        .usage-total-label {{
+            font-weight: 600;
+        }}
+
+        .usage-total-value {{
+            font-family: monospace;
+        }}
+
+        /* 인사이트 섹션 */
+        .insights-section {{
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }}
+
+        @media (max-width: 600px) {{
+            .insights-section {{
+                flex-direction: column;
+            }}
+        }}
+
+        .insights-box {{
+            flex: 1;
+            padding: 14px;
+            border-radius: 8px;
+        }}
+
+        .insights-box.good-points {{
+            background-color: #F0FFF4;
+            border: 1px solid #067D62;
+        }}
+
+        .insights-box.caution-points {{
+            background-color: #FFFAF0;
+            border: 1px solid #C7511F;
+        }}
+
+        .insights-title {{
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }}
+
+        .insights-title.good {{
+            color: #067D62;
+        }}
+
+        .insights-title.caution {{
+            color: #C7511F;
+        }}
+
+        .insights-list {{
+            margin: 0;
+            padding-left: 18px;
+            font-size: 13px;
+            line-height: 1.7;
+        }}
+
+        .insights-list li {{
+            margin-bottom: 6px;
+        }}
+
+        /* 요약 섹션 */
+        .summary-section {{
+            margin-bottom: 24px;
+            padding: 16px;
+            background-color: #F7FAFA;
+            border-radius: 8px;
+            line-height: 1.7;
+            font-size: 14px;
+        }}
+
+        .summary-section strong {{
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .ai-badge {{
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: #E3E6E6;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }}
+
+        .learn-more {{
+            font-size: 14px;
+            font-weight: 700;
+            margin: 20px 0 10px 0;
+        }}
+
+        /* 카테고리 그리드 */
+        .category-grid {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 30px;
+        }}
+
+        .category-item {{
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #fff;
+            border: 1px solid #D5D9D9;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }}
+
+        .category-item:hover {{
+            background-color: #F7FAFA;
+            border-color: #008296;
+        }}
+
+        .category-item.positive {{
+            border-color: #067D62;
+        }}
+
+        .category-item.negative {{
+            border-color: #CC0C39;
+        }}
+
+        .category-icon {{
+            margin-right: 8px;
+            font-size: 16px;
+        }}
+
+        .positive .category-icon {{
+            color: #067D62;
+        }}
+
+        .negative .category-icon {{
+            color: #CC0C39;
+        }}
+
+        .neutral .category-icon {{
+            color: #565959;
+        }}
+
+        .category-name {{
+            color: #007185;
+            font-size: 14px;
+            margin-right: 4px;
+        }}
+
+        .category-count {{
+            color: #565959;
+            font-size: 14px;
+        }}
+
+        /* 카테고리 상세 */
+        .category-detail {{
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #F7FAFA;
+            border-radius: 8px;
+            border: 1px solid #D5D9D9;
+        }}
+
+        .category-detail.active {{
+            display: block;
+        }}
+
+        .detail-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #D5D9D9;
+        }}
+
+        .detail-title {{
+            font-size: 18px;
+            font-weight: 700;
+        }}
+
+        .close-btn {{
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #565959;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .close-btn:hover {{
+            color: #0F1111;
+        }}
+
+        .sentiment-counts {{
+            font-size: 14px;
+            color: #565959;
+            margin-bottom: 12px;
+        }}
+
+        .sentiment-counts .positive-text {{
+            color: #067D62;
+        }}
+
+        .sentiment-counts .negative-text {{
+            color: #CC0C39;
+        }}
+
+        .category-summary {{
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }}
+
+        .category-summary strong {{
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .highlights-section {{
+            margin-top: 16px;
+        }}
+
+        .highlight-item {{
+            margin-bottom: 12px;
+            padding: 12px;
+            background-color: #fff;
+            border-radius: 4px;
+            border-left: 3px solid #067D62;
+        }}
+
+        .highlight-keyword {{
+            font-weight: 700;
+            margin-bottom: 4px;
+        }}
+
+        .highlight-text {{
+            color: #565959;
+            font-size: 13px;
+            line-height: 1.5;
+        }}
+
+        .highlight-text strong {{
+            font-weight: 900;
+            color: #0F1111;
+        }}
+
+        .read-more {{
+            color: #007185;
+            text-decoration: none;
+            font-size: 13px;
+            margin-left: 4px;
+        }}
+
+        .read-more:hover {{
+            color: #C7511F;
+            text-decoration: underline;
+        }}
+
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #D5D9D9;
+            font-size: 12px;
+            color: #565959;
+        }}
+
+        /* 모달 스타일 */
+        .modal-overlay {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }}
+
+        .modal-overlay.active {{
+            display: flex;
+        }}
+
+        .modal-content {{
+            background-color: #fff;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }}
+
+        .modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #D5D9D9;
+            background-color: #F7FAFA;
+            flex-shrink: 0;
+        }}
+
+        .modal-title {{
+            font-size: 16px;
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .modal-close {{
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #565959;
+        }}
+
+        .modal-close:hover {{
+            color: #0F1111;
+        }}
+
+        .modal-body {{
+            padding: 20px;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #0F1111;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            flex-grow: 1;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="meta-info">
+            프로젝트 ID: {project_id} | 분석 콘텐츠 수: {total_items}개 | 생성일시: {executed_at} | 처리시간: {total_duration}
+            <span class="provider-badge">{provider_display}</span>
+        </div>
+    </div>
+
+    <h1>{content_type_description}</h1>
+"""
+
+        # LLM 사용량 섹션
+        if llm_usages:
+            html_content += """
+    <div class="llm-usage-section">
+        <div class="llm-usage-title">📊 LLM 사용량</div>
+        <div class="llm-usage-items">
+"""
+            for usage in llm_usages:
+                step_name = f"Step {usage.step}" if usage.step else "Unknown"
+                model_name = usage.model or "Unknown"
+                tokens = f"{usage.input_tokens:,} / {usage.output_tokens:,}"
+                cost = f"${usage.total_cost:.4f}" if usage.total_cost else "-"
+                duration = f"{usage.duration_ms:,}ms" if usage.duration_ms else "-"
+
+                html_content += f"""            <div class="llm-usage-item">
+                <span class="usage-step">{step_name}</span>
+                <span class="usage-model">{model_name}</span>
+                <div class="usage-details">
+                    <span class="usage-tokens">🔢 {tokens}</span>
+                    <span class="usage-cost">💰 {cost}</span>
+                    <span class="usage-duration">⏱️ {duration}</span>
+                </div>
+            </div>
+"""
+
+            html_content += f"""        </div>
+        <div class="llm-usage-total">
+            <div class="usage-total-row">
+                <span class="usage-total-label">총 토큰</span>
+                <span class="usage-total-value">{total_input_tokens:,} (입력) + {total_output_tokens:,} (출력) = {total_input_tokens + total_output_tokens:,}</span>
+            </div>
+            <div class="usage-total-row">
+                <span class="usage-total-label">총 비용</span>
+                <span class="usage-total-value usage-cost">${total_cost:.4f}</span>
+            </div>
+            <div class="usage-total-row">
+                <span class="usage-total-label">총 소요시간</span>
+                <span class="usage-total-value">{total_duration_ms:,}ms ({total_duration_ms / 1000:.1f}초)</span>
+            </div>
+        </div>
+    </div>
+"""
+
+        # 요약 섹션 (키워드 볼드 처리)
+        html_content += f"""
+    <div class="summary-section">
+        {summary_with_keywords}
+        <span class="ai-badge">AI 분석</span>
+    </div>
+"""
+
+        # 좋은점 / 참고사항 섹션
+        good_points = result.good_points if hasattr(result, 'good_points') and result.good_points else []
+        caution_points = result.caution_points if hasattr(result, 'caution_points') and result.caution_points else []
+
+        if good_points or caution_points:
+            html_content += """
+    <div class="insights-section">
+"""
+            if good_points:
+                html_content += """        <div class="insights-box good-points">
+            <div class="insights-title good">👍 좋은 점</div>
+            <ul class="insights-list">
+"""
+                for point in good_points:
+                    html_content += f"""                <li>{point}</li>
+"""
+                html_content += """            </ul>
+        </div>
+"""
+
+            if caution_points:
+                html_content += """        <div class="insights-box caution-points">
+            <div class="insights-title caution">⚠️ 참고 사항</div>
+            <ul class="insights-list">
+"""
+                for point in caution_points:
+                    html_content += f"""                <li>{point}</li>
+"""
+                html_content += """            </ul>
+        </div>
+"""
+            html_content += """    </div>
+"""
+
+        # 카테고리 그리드
+        html_content += """
+    <div class="learn-more">카테고리별 상세 분석</div>
+    <div class="category-grid">
+"""
+
+        categories = result.categories
+        for idx, category in enumerate(categories):
+            sentiment = category.sentiment_type.value if hasattr(category.sentiment_type, 'value') else str(category.sentiment_type)
+            category_display = category.display_highlight
+            pos_count = len(category.positive_contents)
+            neg_count = len(category.negative_contents)
+
+            if sentiment == 'positive':
+                icon = '✓'
+            elif sentiment == 'negative':
+                icon = '✗'
+            else:
+                icon = '●'
+
+            html_content += f"""        <div class="category-item {sentiment}" onclick="toggleCategory({idx})">
+            <span class="category-icon">{icon}</span>
+            <span class="category-name">{category_display}</span>
+            <span class="category-count">({pos_count + neg_count})</span>
+        </div>
+"""
+
+        html_content += """    </div>
+"""
+
+        # 카테고리 상세 정보
+        for idx, category in enumerate(categories):
+            category_name = category.name
+            category_display = category.display_highlight
+            pos_count = len(category.positive_contents)
+            neg_count = len(category.negative_contents)
+            highlights = category.highlights
+
+            # 카테고리 요약에 키워드 볼드 처리
+            cat_keywords = category.keywords if hasattr(category, 'keywords') and category.keywords else []
+            category_summary_with_keywords = cls._highlight_keywords_in_summary(category.summary, cat_keywords)
+
+            html_content += f"""    <div id="category-{idx}" class="category-detail">
+        <div class="detail-header">
+            <div class="detail-title">{category_display}</div>
+            <button class="close-btn" onclick="toggleCategory({idx})">×</button>
+        </div>
+        <div class="sentiment-counts">
+            {pos_count + neg_count}명의 고객이 "<strong>{category_name}</strong>"을(를) 언급
+            <span class="positive-text">{pos_count}개 긍정</span>
+            <span class="negative-text">{neg_count}개 부정</span>
+        </div>
+        <div class="category-summary">
+            {category_summary_with_keywords}
+        </div>
+"""
+
+            if highlights:
+                html_content += """        <div class="highlights-section">
+"""
+                for h_idx, highlight in enumerate(highlights[:4]):
+                    keyword = highlight.keyword
+                    text = highlight.highlight
+                    content = highlight.content if hasattr(highlight, 'content') and highlight.content else text
+                    highlight_id = f"highlight-{idx}-{h_idx}"
+
+                    display_text = text
+                    if len(display_text) > 150:
+                        display_text = display_text[:150] + '...'
+
+                    text_with_bold = cls._highlight_keyword_in_text(display_text, keyword)
+                    escaped_content = html.escape(content, quote=True)
+                    escaped_keyword = html.escape(keyword, quote=True)
+
+                    html_content += f"""            <div class="highlight-item" id="{highlight_id}" data-keyword="{escaped_keyword}" data-content="{escaped_content}">
+                <div class="highlight-keyword">"{keyword}"</div>
+                <div class="highlight-text">{text_with_bold} <a href="#" class="read-more" onclick="openModalFromElement('{highlight_id}'); return false;">자세히 보기 ›</a></div>
+            </div>
+"""
+                html_content += """        </div>
+"""
+
+            html_content += """    </div>
+"""
+
+        # 모달
+        html_content += """
+    <!-- 원본 콘텐츠 모달 -->
+    <div id="content-modal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">원본 콘텐츠</div>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+"""
+
+        # Footer
+        html_content += f"""
+    <div class="footer">
+        Generated by Content AI Agent | Wadiz {provider_display}<br>
+        분석 완료: {executed_at}
+    </div>
+
+    <script>
+        function toggleCategory(index) {{
+            const detail = document.getElementById(`category-${{index}}`);
+            const isActive = detail.classList.contains('active');
+
+            document.querySelectorAll('.category-detail').forEach(el => {{
+                el.classList.remove('active');
+            }});
+
+            if (!isActive) {{
+                detail.classList.add('active');
+                detail.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+            }}
+        }}
+
+        function openModalFromElement(elementId) {{
+            const element = document.getElementById(elementId);
+            const keyword = element.dataset.keyword;
+            const content = element.dataset.content;
+            document.getElementById('modal-title').innerText = '"' + keyword + '" 원본 콘텐츠';
+            document.getElementById('modal-body').textContent = content;
+            document.getElementById('content-modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }}
+
+        function closeModal(event) {{
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('content-modal').classList.remove('active');
+            document.body.style.overflow = '';
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                closeModal();
+            }}
+        }});
+    </script>
+</body>
+</html>"""
+
+        return html_content

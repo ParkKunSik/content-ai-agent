@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 
 from src.core.config.settings import settings
 from src.schemas.enums.project_type import ProjectType
@@ -53,7 +53,8 @@ class PromptManager:
         project_id: int,
         project_type: ProjectType,
         content_type: str,
-        analysis_content_items: List[AnalysisContentItem]
+        analysis_content_items: List[AnalysisContentItem],
+        previous_result: Optional[StructuredAnalysisResult] = None
     ) -> str:
         """
         상세 분석 프롬프트 생성 (구조화 및 추출).
@@ -63,6 +64,7 @@ class PromptManager:
             project_type: 프로젝트 타입
             content_type: 콘텐츠 타입 (문자열)
             analysis_content_items: 분석 대상 콘텐츠 아이템 리스트
+            previous_result: 기존 분석 결과 (순차 청킹 시 통합용)
         """
         template = PromptTemplate.CONTENT_ANALYSIS_STRUCTURING.get_template(self._renderer)
         content_items_json = json.dumps(
@@ -74,6 +76,14 @@ class PromptManager:
         # Schema description 추출 (OpenAI 템플릿에서만 사용, Vertex AI는 무시)
         schema_description = extract_schema_description(StructuredAnalysisResult)
 
+        # 기존 결과를 JSON으로 변환 (keywords 제외 - Step2에서 재생성)
+        previous_result_json = None
+        if previous_result:
+            previous_result_json = previous_result.model_dump_json(
+                exclude={"keywords"},
+                exclude_none=True
+            )
+
         return self._renderer.render_with_template(
             template,
             project_id=project_id,
@@ -81,7 +91,9 @@ class PromptManager:
             content_type=content_type,
             content_items=content_items_json,
             max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_ANALYSIS,
-            schema_description=schema_description
+            schema_description=schema_description,
+            previous_result=previous_result,
+            previous_result_json=previous_result_json
         )
 
     def get_content_analysis_summary_refine_prompt(
