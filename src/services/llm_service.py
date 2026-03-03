@@ -177,11 +177,20 @@ class LLMService:
         project_id: int,
         project_type: ProjectType,
         content_items: List[ContentItem],
-        content_type: Optional[ExternalContentType] = None
+        content_type: Optional[ExternalContentType] = None,
+        previous_result: Optional[StructuredAnalysisResult] = None
     ) -> Tuple[StructuredAnalysisResult, LLMUsageInfo]:
         """
         상세 분석 수행 (Main Analysis) - Phase 2 세션 기반 검증 적용
         PRO_DATA_ANALYST 페르소나를 사용하여 콘텐츠를 구조화하고 심층 분석합니다.
+
+        Args:
+            project_id: 프로젝트 ID
+            project_type: 프로젝트 타입
+            content_items: 분석 대상 콘텐츠 (새 콘텐츠)
+            content_type: 콘텐츠 타입
+            previous_result: 기존 분석 결과 (순차 청킹 시 통합용)
+                            있으면 기존 + 새 콘텐츠를 통합한 결과 출력
 
         Returns:
             Tuple[StructuredAnalysisResult, LLMUsageInfo]: 분석 결과와 LLM 사용 정보
@@ -192,7 +201,8 @@ class LLMService:
             project_id=project_id,
             project_type=project_type,
             content_type=content_type.value if content_type else "ALL",
-            analysis_content_items=analysis_items
+            analysis_content_items=analysis_items,
+            previous_result=previous_result
         )
 
         persona_type = PersonaType.PRO_DATA_ANALYST
