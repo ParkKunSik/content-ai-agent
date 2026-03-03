@@ -21,11 +21,13 @@ from src.schemas.models.es.content_analysis_result import (
     ContentAnalysisResultDocument,
     ContentAnalysisResultState,
 )
+from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import CategorySummaryItem, StructuredAnalysisSummary
 from src.services.es_content_analysis_result_service import ESContentAnalysisResultService
 from src.services.es_content_retrieval_service import ESContentRetrievalService
 from src.services.llm_service import LLMService
 from src.services.request_content_loader import RequestContentLoader
+from src.utils.llm_usage_aggregator import merge_llm_usage_lists
 from src.utils.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -88,7 +90,8 @@ class AgentOrchestrator:
         project_type: ProjectType,
         contents: List[ContentItem],
         analysis_mode: AnalysisMode,
-        content_type: Optional[ExternalContentType] = None
+        content_type: Optional[ExternalContentType] = None,
+        previous_result: Optional[StructuredAnalysisResult] = None
     ) -> Tuple[ContentAnalysisResultDataV1, List[LLMUsageInfo]]:
         """
         Internal 2-step analysis logic.
@@ -97,11 +100,15 @@ class AgentOrchestrator:
 
         Args:
             contents: List of ContentItem objects (content_id required for traceability)
+            previous_result: 기존 분석 결과 (순차 청킹 시 통합용)
+                            LLM이 기존 + 새 콘텐츠를 통합한 결과 출력
 
         Returns:
             Tuple[ContentAnalysisResultDataV1, List[LLMUsageInfo]]: 분석 결과와 LLM 사용 정보 목록
         """
         logger.info(f"Executing core analysis for Project: {project_id}, Mode: {analysis_mode}, Content Type: {content_type}")
+        if previous_result:
+            logger.info(f"With previous result: {len(previous_result.categories)} categories (Integration Mode)")
 
         llm_usages: List[LLMUsageInfo] = []
 
@@ -114,7 +121,8 @@ class AgentOrchestrator:
             project_id=project_id,
             project_type=project_type,
             content_items=content_items,
-            content_type=content_type
+            content_type=content_type,
+            previous_result=previous_result
         )
         llm_usages.append(structuring_usage)
         logger.info(f"Step 1 completed. Categories found: {len(base_analysis.categories)}, Duration: {structuring_usage.duration_ms}ms")
@@ -215,8 +223,12 @@ class AgentOrchestrator:
     ) -> StructuredAnalysisRefineResult:
         """
         Performs project-based analysis and saves the result to Elasticsearch.
+        Supports sequential chunking by using previous analysis result as context.
         """
         logger.info(f"Starting project analysis for Project: {project_id}, Content Type: {content_type}, Mode: {analysis_mode}")
+
+        # 0. Provider 타입 결정 (조회 및 저장 모두에 사용)
+        provider_type = self._get_current_provider_type()
 
         # 1. ES에서 콘텐츠 조회
         logger.info(f"Retrieving content from ES for project {project_id}")
@@ -235,25 +247,39 @@ class AgentOrchestrator:
         baseline_content_id = self.select_baseline_content_id(content_items)
         logger.info(f"Selected baseline_content_id: {baseline_content_id}")
 
-        # 3. 분석 수행
-        result_v1, llm_usages = await self.analysis(
+        # 3. 기존 분석 결과 조회 (순차 청킹용 - 청크0)
+        existing_doc = await self.es_result_service.get_result_by_provider(
+            str(project_id), content_type, provider_type
+        )
+        previous_result: Optional[StructuredAnalysisResult] = None
+        existing_llm_usages: List[LLMUsageInfo] = []
+
+        if existing_doc and existing_doc.result:
+            previous_result = existing_doc.result.meta_data
+            existing_llm_usages = existing_doc.llm_usages or []
+            logger.info(f"Found existing analysis result (version: {existing_doc.version}, categories: {len(previous_result.categories) if previous_result else 0})")
+        else:
+            logger.info("No existing analysis result found, starting fresh analysis")
+
+        # 4. 분석 수행 (with previous_result for sequential chunking)
+        result_v1, new_llm_usages = await self.analysis(
             project_id=project_id,
             project_type=project_type,
             contents=content_items,
             analysis_mode=analysis_mode,
-            content_type=content_type
+            content_type=content_type,
+            previous_result=previous_result
         )
 
-        # 4. 분석 결과 저장 (프로젝트 분석 모드에서만 수행)
+        # 5. LLM 사용량 합산 (step + model 동일 시 합산)
+        llm_usages = merge_llm_usage_lists(existing_llm_usages, new_llm_usages)
+        logger.info(f"Merged LLM usages: {len(existing_llm_usages)} existing + {len(new_llm_usages)} new = {len(llm_usages)} total")
+
+        # 6. 분석 결과 저장 (프로젝트 분석 모드에서만 수행)
         try:
-            # Provider 타입 결정
-            provider_type = self._get_current_provider_type()
             logger.info(f"Saving analysis result to ES for project {project_id}, provider: {provider_type.name}")
 
-            # 기존 문서 조회 (버전, created_at 유지용)
-            existing_doc = await self.es_result_service.get_result_by_provider(
-                str(project_id), content_type, provider_type
-            )
+            # 버전 결정 (기존 문서가 있으면 +1)
             next_version = existing_doc.version + 1 if existing_doc else 1
 
             # 문서 생성 (기존 문서가 있으면 created_at 유지)
