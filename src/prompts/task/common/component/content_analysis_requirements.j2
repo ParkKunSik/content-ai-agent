@@ -1,0 +1,198 @@
+{#
+    [공통 분석 요구사항] - content_analysis_requirements.j2
+
+    단일 프로젝트/Multi-Project 분석 모두에서 사용하는 공통 규칙.
+
+    사용처:
+    - content_analysis_structuring_optimized.j2
+    - multi_project_content_analysis_structuring.j2
+
+    ---
+
+    ### 0. 프로젝트 맥락 파악 (최우선 - 가장 먼저 수행)
+    개별 콘텐츠 분석 전에 먼저 프로젝트 맥락을 파악:
+    - **프로젝트 목적 파악**: 이 프로젝트가 제공하는 가치/서비스는 무엇인가?
+    - **타겟 사용자 니즈 파악**: 어떤 문제를 해결하려는 사용자들인가?
+    - **평가 기준 설정**: 감정은 **프로젝트의 가치 제안에 대한 태도**를 기준으로 평가
+
+    **예시 (악필 교정 프로젝트)**:
+    - "악필이라 부끄럽다" → 참여 동기 표현 = **긍정** (0.7)
+    - "교정 방법이 효과가 없다" → 서비스에 대한 불만 = **부정** (0.3)
+
+    **예시 (배송 서비스)**:
+    - "배송이 늦어서 화가 났다" → 서비스에 대한 불만 = **부정** (0.2)
+    - "빠른 배송, 행복해요!" → 서비스에 대한 만족 = **긍정** (0.9)
+
+    ### 1. 카테고리 클러스터링
+    - **주제 그룹화**: 유사한 주제를 의미있는 카테고리로 그룹화 (의미가 같지만 표현만 다른 콘텐츠도 하나로 통합)
+      * 예시: "배송 빠름", "빠른 배송", "배송 속도 만족" → "배송 속도"로 통합
+    - **명확한 명명**: 사용자가 이해할 수 있는 설명적인 이름 사용
+    - **언어 일관성**: 콘텐츠와 동일한 언어로 카테고리명 작성
+    - **품질 기준**: 여러 아이템이 주제를 공유할 때만 카테고리 생성
+    - **빈도 집중**: 자주 언급되는 측면에 우선순위 부여
+    - **핵심 규칙 - ID 누락 금지**:
+      - 각 입력 id는 반드시 하나의 위치에만 포함: 카테고리(positive 또는 negative), harmful_contents, 또는 etc_contents
+      - 출력 전 검증: 입력 개수 = Σ(카테고리 콘텐츠) + harmful + etc
+      - 클러스터링 중 어떤 입력 id도 누락하지 않음
+
+    ### 2. 감정 분석 (프로젝트 가치 기준)
+    - **평가 대상**: 사용자의 개인 상태가 아닌 **프로젝트의 가치 제안에 대한 태도** 분석
+    - **핵심 구분**:
+      - 개인 상태 설명 (문제/니즈) ≠ 프로젝트에 대한 부정
+      - 참여 동기/기대감 표현 = 프로젝트에 대한 긍정
+      - 서비스/제품 불만족 = 프로젝트에 대한 부정
+    - **점수**: 0.0 = 프로젝트 가치에 대해 가장 부정, 1.0 = 가장 긍정
+
+    - **프로젝트 맥락 인식 예시**:
+      - "악필이라 부끄럽다" (악필 교정 프로젝트) → 참여 동기 = **0.7** (긍정)
+      - "교정 효과가 미미하다" → 서비스 불만족 = **0.3** (부정)
+      - "참여하고 싶다" / "기대됩니다" → 긍정적 기대 = **0.6** (긍정)
+
+    - **분류 규칙**:
+      - **판단 기준**: 프로젝트 가치/서비스에 대한 사용자의 태도 (개인 상황이 아님)
+      - **복합 감정 처리**: "답답하지만 이 프로젝트가 도움될 것 같다" → 0.7 (긍정 - 프로젝트에 대한 긍정적 기대)
+      - **positive_contents**: 점수 ≥ 0.5 (0.5는 긍정으로 분류)
+      - **negative_contents**: 점수 < 0.5
+      - **핵심**: 각 id는 한 번만 분류 - positive/negative 간 중복 불가
+
+    - **카테고리 sentiment_type**: 평균 점수 기준 (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
+
+    ### 3. 카테고리 키 생성
+    - **규칙**: name의 공백을 '_'로 대체 (대소문자 유지, 기타 가공 없음)
+
+    ### 4. 하이라이트 추출
+    - **대표 인용문**: 원문에서 그대로 추출 (요약/의역 금지)
+    - **원본 키워드**: 하이라이트 텍스트에서만 추출 (새 용어 생성 금지)
+    - **콘텐츠 추적**: 각 하이라이트를 출처 id에 연결
+    - **이미지 우선**: has_image가 true인 콘텐츠 우선 선택
+
+    ### 5. 유해 콘텐츠 처리
+    - **식별**: 욕설, 비방, 혐오 표현 등
+    - **완전 제외**: 분류 및 감정 분석에서 제외
+    - **추적**: harmful_contents 배열에 id 기록
+
+    ### 6. 기타 콘텐츠 처리 (기준 완화)
+    - **엄격한 제외 기준**: 정말로 기여하지 않는 콘텐츠만 제외
+      - 프로젝트와 완전히 무관한 내용 (스팸, 주제 벗어남)
+      - 무의미한 반복 (완전히 동일한 중복)
+      - 프로젝트 관련 내용 없는 순수 인사말만
+    - **제외하지 말 것**:
+      - 단순 참여 의사 표현 ("참여합니다", "신청합니다") → 참여/관심 카테고리로 분류 (중립~긍정)
+      - 짧지만 프로젝트 관련 내용 → 적절한 카테고리에 포함
+      - 관심이나 기대의 표현 → 적절한 카테고리에 포함
+    - **기록**: etc_contents에 id와 제외 이유 저장 (진정으로 기여 불가한 콘텐츠만)
+
+    ### 7. 요약 생성
+    - **포괄적 개요**: 모든 주요 주제 포함
+    - **데이터 기반**: 실제 콘텐츠 패턴에 기반한 결론
+    - **전문적 어조**: 객관적, 분석적 언어
+    - **길이 제약 없음**: 정확성에 집중 (정제는 2단계에서)
+
+    ### 8. 키워드 추출
+    - **핵심 용어 추출**: 각 요약(메인 및 카테고리)에서 추출
+    - **원문 그대로**: 요약에 작성된 그대로 추출
+
+    ### 9. 인사이트 추출
+
+    #### 좋은 점
+    - 완성된 문장 형태 (~입니다, ~합니다)
+    - 구체적, 증거 기반, 실행 가능
+
+    #### 참고 사항
+    - 치명적이지 않지만 주목할 만한 포인트
+    - 건설적 표현, 반복 패턴 기반
+#}
+
+### 0. Project Context Understanding (CRITICAL - Do First)
+Before analyzing individual content, understand the project context:
+- **Identify project purpose**: What value/service does this project provide?
+- **Identify target user needs**: What problem are users trying to solve?
+- **Set evaluation baseline**: Sentiment should be evaluated based on **attitude toward the project's value proposition**, not the user's personal state
+
+**Example (Handwriting Correction Project)**:
+- "My handwriting is terrible, I'm embarrassed" → Expresses participation motivation = **Positive** (0.7)
+- "The correction method doesn't work" → Dissatisfaction with the service = **Negative** (0.3)
+
+**Example (Delivery Service)**:
+- "Delivery was late, I'm angry" → Dissatisfaction with service = **Negative** (0.2)
+- "Fast delivery, happy!" → Satisfaction with service = **Positive** (0.9)
+
+### 1. Category Clustering
+- **Theme grouping**: Group similar topics into meaningful categories (including content with same meaning but different wording)
+  * Example: "Fast delivery", "Quick shipping", "Speedy delivery" → unified as "Delivery Speed"
+- **Clear naming**: Use descriptive names users can understand
+- **Language Consistency**: Use the same language as the content for category names
+- **Quality threshold**: Only create categories when multiple items share themes
+- **Frequency focus**: Prioritize commonly mentioned aspects
+- **CRITICAL - No ID Left Behind**:
+  - Each input id MUST appear in exactly ONE location: a category (positive or negative), harmful_contents, or etc_contents
+  - Before output, verify: input_count = Σ(category contents) + harmful + etc
+  - Never skip or lose any input id during clustering
+
+### 2. Sentiment Analysis (Project Value-Based Evaluation)
+- **Evaluation target**: Analyze sentiment toward **the project's value proposition**, not the user's personal state or text emotion
+- **Key distinction**:
+  - Personal state description (problem/need) ≠ Negative toward project
+  - Participation motivation/expectation = Positive toward project
+  - Service/product dissatisfaction = Negative toward project
+
+- **Project context-aware examples**:
+  - "My handwriting is terrible" (in handwriting correction project) → Participation motivation = **0.7** (positive)
+  - "The correction effect is minimal" → Service dissatisfaction = **0.3** (negative)
+  - "I want to participate" / "Looking forward to it" → Positive expectation = **0.6** (positive)
+
+- **Scoring**: 0.0 = most negative toward project value, 1.0 = most positive toward project value
+
+- **Classification Rules**:
+  - **Judgment Criteria**: User's attitude toward the project's value/service, NOT their personal situation
+  - **Mixed emotion handling**: "I'm frustrated but this project can help" → 0.7 (positive - positive expectation toward project)
+  - **positive_contents**: Score ≥ 0.5 (0.5 is classified as positive)
+  - **negative_contents**: Score < 0.5
+  - **CRITICAL**: Each id classified only once - no duplicates between positive/negative
+
+- **Category sentiment_type**: Based on average score (negative: <0.45, positive: ≥0.55, neutral: 0.45~0.55)
+
+### 3. Category Key Generation
+- **Rule**: Replace spaces with '_' in name (preserve case, no other processing)
+
+### 4. Highlight Extraction
+- **Representative quotes**: Extract verbatim from source (no summarizing/paraphrasing)
+- **Original keywords**: Extract from highlight text only (no new terms)
+- **Content traceability**: Link each highlight to its source id
+- **Image priority**: Prioritize content where has_image is true
+
+### 5. Harmful Content Processing
+- **Identify**: Profanity, abuse, slander, hate speech
+- **Exclude completely**: From categorization and sentiment analysis
+- **Track**: Record ids in harmful_contents array
+
+### 6. Other Content Processing
+- **Strict exclusion criteria**: Only exclude content that is TRULY non-contributory
+  - Completely irrelevant to the project (e.g., spam, off-topic)
+  - Meaningless repetition (exact duplicates)
+  - Pure greeting without any project-related content
+- **DO NOT exclude**:
+  - Simple participation expressions ("참여합니다", "신청합니다") → Categorize as participation/interest (neutral~positive)
+  - Short but project-relevant content → Include in appropriate category
+  - Expressions of interest or expectation → Include in appropriate category
+- **Record**: Store id and exclusion reason in etc_contents (only for truly non-contributory content)
+
+### 7. Summary Generation
+- **Comprehensive overview**: Cover all major themes
+- **Data-driven**: Base conclusions on actual content patterns
+- **Professional tone**: Objective, analytical language
+- **No length constraints**: Focus on accuracy (refinement in Step 2)
+
+### 8. Keywords Extraction
+- **Extract key terms**: From each summary (main and category)
+- **Original text only**: Exactly as written in summary
+
+### 9. Insights Extraction
+
+#### Good Points
+- Complete sentences ending with proper verb forms
+- Concrete, evidence-based, actionable
+
+#### Caution Points
+- Non-critical but noteworthy
+- Constructive framing, based on recurring patterns

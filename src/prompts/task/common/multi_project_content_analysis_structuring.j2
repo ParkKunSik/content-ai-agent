@@ -1,0 +1,91 @@
+{% extends "task/base.j2" %}
+
+{% block content %}
+{#
+    Multi-Project 배치 분석 프롬프트 (Step 1: Structuring)
+
+    핵심 특징:
+    1. 입력이 프로젝트 배열 형태
+    2. 출력도 프로젝트별 결과 배열 형태
+    3. 각 프로젝트별 previous_result 병합 지원
+    4. 프로젝트 간 분석 결과 혼동 방지 지침 강화
+
+    공통 모듈:
+    - component/content_analysis_requirements.j2: 분석 요구사항 (0~9번)
+    - component/merge_results_strategy.j2: 병합 전략
+
+    ---
+
+    # 작업: Multi-Project 배치 콘텐츠 분석
+
+    **여러 프로젝트**의 콘텐츠 아이템을 분석하고 **각 프로젝트에 대해 독립적으로** 구조화된 인사이트를 생성합니다.
+
+    ## 핵심 규칙
+
+    1. **프로젝트 격리**: 각 프로젝트는 반드시 독립적으로 분석해야 합니다. 프로젝트 간 콘텐츠나 인사이트를 절대 혼합하지 마십시오.
+    2. **입출력 매칭**: 출력 배열은 입력과 정확히 동일한 프로젝트들을 **동일한 순서**로 포함해야 합니다.
+    3. **프로젝트별 제약**: 모든 단일 프로젝트 분석 규칙을 각 프로젝트에 동일하게 적용합니다.
+
+    ## 입력 데이터 구조
+    프로젝트 배열을 포함하는 JSON 객체
+    (input_schema_description 변수로 동적 주입 - 3개 Provider 공통)
+
+    ## 프로젝트별 분석 요구사항
+    (공통 모듈 _analysis_requirements.j2 참조)
+
+    ## 이전 결과 병합 전략 (프로젝트별)
+    `previous_result`가 있는 프로젝트의 경우:
+    (공통 모듈 _merge_strategy.j2 참조)
+
+    ## 출력 형식
+    제공된 JSON 스키마를 준수하는 유효한 JSON 객체
+    **모든 제약사항(최대 개수, 길이 제한)은 스키마에 정의됨**
+    (output_schema_description 블록 참조 - OpenAI만 사용)
+#}
+
+# Task: Multi-Project Batch Content Analysis
+
+Analyze content items from **multiple projects** and generate structured insights for **each project independently**.
+
+## CRITICAL RULES
+
+1. **Project Isolation**: Each project MUST be analyzed independently. Never mix content or insights between projects.
+2. **Input-Output Matching**: Output array must contain exactly the same projects as input, in the **same order**.
+3. **Per-Project Constraints**: Apply all single-project analysis rules to each project.
+
+## Input Data Structure
+
+You will receive a JSON object with projects array.
+
+{{ input_schema_description }}
+
+## Analysis Requirements Per Project
+
+{% include "task/common/component/content_analysis_requirements.j2" %}
+
+## Previous Result Merge Strategy (Per Project)
+
+If a project has `previous_result`:
+
+{% include "task/common/component/merge_results_strategy.j2" %}
+
+## Output Format
+
+Output must be a valid JSON object adhering to the provided JSON schema.
+**All constraints (max counts, length limits) are defined in the schema.**
+
+{% block output_schema_description %}{% endblock %}
+
+{% block json_response_rule %}{% endblock %}
+
+## Projects to Analyze
+
+{{ projects_json }}
+
+**CRITICAL**:
+- Output one result per input project, in the **same order**
+- Each project's result must follow the StructuredAnalysisResult schema exactly
+- If previous_result exists for a project, merge according to the strategy above
+- Follow all constraints defined in the JSON schema
+
+{% endblock %}

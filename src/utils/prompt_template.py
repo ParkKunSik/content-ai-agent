@@ -13,9 +13,13 @@ class PromptTemplate(Enum):
     각 템플릿은 (template_name)으로 정의되며, provider별로 다른 경로에서 로드됩니다.
     """
 
-    # 상세 분석 2단계 템플릿
+    # 상세 분석 2단계 템플릿 (단일 프로젝트)
     CONTENT_ANALYSIS_STRUCTURING = ("content_analysis_structuring.j2")
     CONTENT_ANALYSIS_SUMMARY_REFINE = ("content_analysis_summary_refine.j2")
+
+    # Multi-Project 배치 분석 2단계 템플릿
+    MULTI_PROJECT_CONTENT_ANALYSIS_STRUCTURING = ("multi_project_content_analysis_structuring.j2")
+    MULTI_PROJECT_CONTENT_ANALYSIS_SUMMARY_REFINE = ("multi_project_content_analysis_summary_refine.j2")
 
     def __init__(self, template_name: str):
         self.template_name = template_name

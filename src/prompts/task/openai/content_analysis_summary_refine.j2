@@ -1,7 +1,7 @@
 {% extends "task/common/content_analysis_summary_refine.j2" %}
 {#
     OpenAI:
-    - schema_description: 응답 스키마 가이드 추가
+    - output_schema_description: 응답 스키마 가이드 추가
     - writing_style: 빈 블록 (톤/문체는 system prompt CUSTOMER_FACING_ANALYST에서 관리)
 #}
 
@@ -9,6 +9,6 @@
 {# 톤/문체 관련 지시는 system prompt (CUSTOMER_FACING_ANALYST)에서 관리 #}
 {% endblock %}
 
-{% block schema_description %}
-{{ schema_description }}
+{% block output_schema_description %}
+{{ output_schema_description }}
 {% endblock %}

@@ -447,8 +447,8 @@ async def test_gemini_api_sequential_chunking_simulation(setup_elasticsearch):
     with switch_llm_provider(ProviderType.GEMINI_API):
         result, usages = await _run_sequential_chunking_simulation(
             provider_name="gemini_api"
-            , project_id=313767
-            , content_type=ExternalContentType.SUGGESTION
+            , project_id=309305
+            , content_type=ExternalContentType.SATISFACTION
             , chunk_size=100
             , max_chunks=3
         )

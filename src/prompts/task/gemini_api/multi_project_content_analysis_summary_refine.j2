@@ -1,0 +1,14 @@
+{% extends "task/common/multi_project_content_analysis_summary_refine.j2" %}
+{% from 'task/json_format.j2' import json_response_rule %}
+{#
+    Gemini API: JSON 형식 지시
+    - writing_style: 빈 블록 (톤/문체는 system prompt에서 관리)
+#}
+
+{% block writing_style %}
+{# 톤/문체 관련 지시는 system prompt에서 관리 #}
+{% endblock %}
+
+{% block json_response_rule %}
+{{ json_response_rule() }}
+{% endblock %}
