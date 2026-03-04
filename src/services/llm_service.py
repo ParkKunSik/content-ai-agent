@@ -16,6 +16,10 @@ from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.common.content_item import ContentItem
 from src.schemas.models.common.llm_usage_info import LLMUsageInfo
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.prompt.multi_project_batch_item import MultiProjectBatchItem
+from src.schemas.models.prompt.multi_project_summary_item import MultiProjectSummaryItem
+from src.schemas.models.prompt.response.multi_project_analysis_result import MultiProjectAnalysisResult
+from src.schemas.models.prompt.response.multi_project_refined_result import MultiProjectRefinedResult
 from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
 from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
@@ -280,6 +284,107 @@ class LLMService:
             input_tokens=llm_response.usage.prompt_tokens,
             output_tokens=llm_response.usage.completion_tokens,
             duration_ms=duration_ms
+        )
+
+        return result, usage_info
+
+    async def multi_project_structure_analysis(
+        self,
+        projects: List[MultiProjectBatchItem]
+    ) -> Tuple[MultiProjectAnalysisResult, LLMUsageInfo]:
+        """
+        Multi-Project 배치 구조화 분석 (Step 1)
+
+        여러 프로젝트를 하나의 LLM 호출로 처리하여 토큰 효율성을 극대화합니다.
+
+        Args:
+            projects: 분석 대상 프로젝트 배열 (각 프로젝트별 content_items, previous_result 포함)
+
+        Returns:
+            Tuple[MultiProjectAnalysisResult, LLMUsageInfo]: 분석 결과와 LLM 사용 정보
+        """
+        prompt = self.prompt_manager.get_multi_project_analysis_structuring_prompt(projects)
+
+        persona_type = PersonaType.PRO_DATA_ANALYST
+        start_time = time.time()
+
+        async def response_generator():
+            return self._generate_raw_with_text(
+                prompt, persona_type,
+                mime_type=MimeType.APPLICATION_JSON,
+                response_schema=MultiProjectAnalysisResult
+            )
+
+        result, llm_response = await self.validation_handler.validate_with_retry_and_usage(
+            response_generator=response_generator,
+            model_class=MultiProjectAnalysisResult,
+            error_context="multi_project_structure_analysis"
+        )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        usage_info = create_llm_usage_info(
+            step=1,
+            model=persona_type.get_model_name(),
+            input_tokens=llm_response.usage.prompt_tokens,
+            output_tokens=llm_response.usage.completion_tokens,
+            duration_ms=duration_ms
+        )
+
+        logger.info(
+            f"Multi-project Step 1 completed: {len(projects)} projects, "
+            f"{usage_info.input_tokens}/{usage_info.output_tokens} tokens"
+        )
+
+        return result, usage_info
+
+    async def multi_project_refine_analysis(
+        self,
+        projects: List[MultiProjectSummaryItem],
+        persona_type: PersonaType
+    ) -> Tuple[MultiProjectRefinedResult, LLMUsageInfo]:
+        """
+        Multi-Project 배치 요약 정제 (Step 2)
+
+        여러 프로젝트의 분석 결과를 하나의 LLM 호출로 정제합니다.
+
+        Args:
+            projects: 정제 대상 프로젝트 리스트 (Step 1 결과 기반)
+            persona_type: 정제 페르소나 (예: CUSTOMER_FACING_SMART_BOT)
+
+        Returns:
+            Tuple[MultiProjectRefinedResult, LLMUsageInfo]: 정제된 결과와 LLM 사용 정보
+        """
+        prompt = self.prompt_manager.get_multi_project_analysis_refine_prompt(projects)
+
+        start_time = time.time()
+
+        async def response_generator():
+            return self._generate_raw_with_text(
+                prompt, persona_type,
+                mime_type=MimeType.APPLICATION_JSON,
+                response_schema=MultiProjectRefinedResult
+            )
+
+        result, llm_response = await self.validation_handler.validate_with_retry_and_usage(
+            response_generator=response_generator,
+            model_class=MultiProjectRefinedResult,
+            error_context="multi_project_refine_analysis"
+        )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        usage_info = create_llm_usage_info(
+            step=2,
+            model=persona_type.get_model_name(),
+            input_tokens=llm_response.usage.prompt_tokens,
+            output_tokens=llm_response.usage.completion_tokens,
+            duration_ms=duration_ms
+        )
+
+        logger.info(
+            f"Multi-project Step 2 completed: {len(projects)} projects, "
+            f"{usage_info.input_tokens}/{usage_info.output_tokens} tokens"
         )
 
         return result, usage_info

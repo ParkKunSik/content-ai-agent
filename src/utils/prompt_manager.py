@@ -168,9 +168,9 @@ class PromptManager:
             separators=(',', ':')
         )
 
-        # Schema description 추출
-        input_schema_description = extract_schema_description(MultiProjectBatchItem)
-        output_schema_description = extract_schema_description(MultiProjectAnalysisResult)
+        # Schema description 추출 (Multi-Project는 중첩이 깊어 max_depth 증가 필요)
+        input_schema_description = extract_schema_description(MultiProjectBatchItem, max_depth=8)
+        output_schema_description = extract_schema_description(MultiProjectAnalysisResult, max_depth=8)
 
         return self._renderer.render_with_template(
             template,
@@ -200,9 +200,9 @@ class PromptManager:
             separators=(',', ':')
         )
 
-        # Schema description 추출 (Multi-Project Refine은 input_schema_description 필요)
-        input_schema_description = extract_schema_description(MultiProjectSummaryItem)
-        output_schema_description = extract_schema_description(MultiProjectRefinedResult)
+        # Schema description 추출 (Multi-Project는 중첩이 깊어 max_depth 증가 필요)
+        input_schema_description = extract_schema_description(MultiProjectSummaryItem, max_depth=8)
+        output_schema_description = extract_schema_description(MultiProjectRefinedResult, max_depth=8)
 
         return self._renderer.render_with_template(
             template,
