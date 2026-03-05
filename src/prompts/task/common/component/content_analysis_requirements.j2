@@ -9,6 +9,12 @@
 
     ---
 
+    ### 0-Pre. 입력 데이터 전처리 (분석 전 필수)
+    **중복 ID 제거**: 분석 시작 전 입력 데이터에서 중복 content_id를 제거
+    - **중복 발생 가능**: 동일한 content_id가 입력에 여러 번 포함될 수 있음
+    - **처리 방식**: 동일 id가 여러 번 나타나면 **마지막 항목만 사용**
+    - **순서**: 전처리 완료 후 분석 진행 (중복 제거된 고유 id 집합으로 작업)
+
     ### 0. 프로젝트 맥락 파악 (최우선 - 가장 먼저 수행)
     개별 콘텐츠 분석 전에 먼저 프로젝트 맥락을 파악:
     - **프로젝트 목적 파악**: 이 프로젝트가 제공하는 가치/서비스는 무엇인가?
@@ -102,6 +108,12 @@
     - 치명적이지 않지만 주목할 만한 포인트
     - 건설적 표현, 반복 패턴 기반
 #}
+
+### 0-Pre. Input Data Preprocessing (REQUIRED Before Analysis)
+**Duplicate ID Removal**: Remove duplicate content_ids from input data before starting analysis
+- **Duplicates may exist**: The same content_id can appear multiple times in input
+- **Resolution**: If the same id appears multiple times, **use only the LAST occurrence**
+- **Order**: Complete preprocessing first, then proceed with analysis (work with deduplicated unique id set)
 
 ### 0. Project Context Understanding (CRITICAL - Do First)
 Before analyzing individual content, understand the project context:
