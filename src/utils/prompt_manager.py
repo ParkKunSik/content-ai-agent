@@ -4,6 +4,10 @@ from typing import List, Optional
 from src.core.config.settings import settings
 from src.schemas.enums.project_type import ProjectType
 from src.schemas.models.prompt.analysis_content_item import AnalysisContentItem
+from src.schemas.models.prompt.multi_project_batch_item import MultiProjectBatchItem
+from src.schemas.models.prompt.multi_project_summary_item import MultiProjectSummaryItem
+from src.schemas.models.prompt.response.multi_project_analysis_result import MultiProjectAnalysisResult
+from src.schemas.models.prompt.response.multi_project_refined_result import MultiProjectRefinedResult
 from src.schemas.models.prompt.response.structured_analysis_refined_summary import StructuredAnalysisRefinedSummary
 from src.schemas.models.prompt.response.structured_analysis_result import StructuredAnalysisResult
 from src.schemas.models.prompt.structured_analysis_summary import StructuredAnalysisSummary
@@ -74,7 +78,8 @@ class PromptManager:
         )
 
         # Schema description 추출 (OpenAI 템플릿에서만 사용, Vertex AI는 무시)
-        schema_description = extract_schema_description(StructuredAnalysisResult)
+        input_schema_description = extract_schema_description(AnalysisContentItem)
+        output_schema_description = extract_schema_description(StructuredAnalysisResult)
 
         # 기존 결과를 JSON으로 변환 (keywords 제외 - Step2에서 재생성)
         previous_result_json = None
@@ -91,7 +96,8 @@ class PromptManager:
             content_type=content_type,
             content_items=content_items_json,
             max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_ANALYSIS,
-            schema_description=schema_description,
+            input_schema_description=input_schema_description,
+            output_schema_description=output_schema_description,
             previous_result=previous_result,
             previous_result_json=previous_result_json
         )
@@ -116,7 +122,7 @@ class PromptManager:
         raw_analysis_data = refine_content_items.model_dump_json(exclude_none=True)
 
         # Schema description 추출 (OpenAI 템플릿에서만 사용, Vertex AI는 무시)
-        schema_description = extract_schema_description(StructuredAnalysisRefinedSummary)
+        output_schema_description = extract_schema_description(StructuredAnalysisRefinedSummary)
 
         return self._renderer.render_with_template(
             template,
@@ -127,5 +133,83 @@ class PromptManager:
             max_main_summary_chars=self.MAX_MAIN_SUMMARY_CHARS,
             max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS,
             max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_REFINE,
-            schema_description=schema_description
+            output_schema_description=output_schema_description
+        )
+
+    # ========== Multi-Project 배치 분석 ==========
+
+    def get_multi_project_analysis_structuring_prompt(
+        self,
+        projects: List[MultiProjectBatchItem]
+    ) -> str:
+        """
+        Multi-Project 배치 분석 프롬프트 생성 (Step 1: 구조화 및 추출).
+
+        Args:
+            projects: 분석 대상 프로젝트 리스트
+        """
+        template = PromptTemplate.MULTI_PROJECT_CONTENT_ANALYSIS_STRUCTURING.get_template(self._renderer)
+
+        # 프로젝트 데이터를 JSON으로 변환
+        projects_data = []
+        for project in projects:
+            project_dict = project.model_dump(exclude_none=True)
+            # previous_result가 있으면 keywords 제외
+            if project.previous_result:
+                project_dict['previous_result'] = project.previous_result.model_dump(
+                    exclude={"keywords"},
+                    exclude_none=True
+                )
+            projects_data.append(project_dict)
+
+        projects_json = json.dumps(
+            {"projects": projects_data},
+            ensure_ascii=False,
+            separators=(',', ':')
+        )
+
+        # Schema description 추출 (Multi-Project는 중첩이 깊어 max_depth 증가 필요)
+        input_schema_description = extract_schema_description(MultiProjectBatchItem, max_depth=8)
+        output_schema_description = extract_schema_description(MultiProjectAnalysisResult, max_depth=8)
+
+        return self._renderer.render_with_template(
+            template,
+            projects_json=projects_json,
+            max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_ANALYSIS,
+            input_schema_description=input_schema_description,
+            output_schema_description=output_schema_description
+        )
+
+    def get_multi_project_analysis_refine_prompt(
+        self,
+        projects: List[MultiProjectSummaryItem]
+    ) -> str:
+        """
+        Multi-Project 배치 요약 정제 프롬프트 생성 (Step 2: 요약 최적화).
+
+        Args:
+            projects: 정제 대상 프로젝트 리스트
+        """
+        template = PromptTemplate.MULTI_PROJECT_CONTENT_ANALYSIS_SUMMARY_REFINE.get_template(self._renderer)
+
+        # 프로젝트 데이터를 JSON으로 변환
+        projects_data = [p.model_dump(exclude_none=True) for p in projects]
+        projects_json = json.dumps(
+            {"projects": projects_data},
+            ensure_ascii=False,
+            separators=(',', ':')
+        )
+
+        # Schema description 추출 (Multi-Project는 중첩이 깊어 max_depth 증가 필요)
+        input_schema_description = extract_schema_description(MultiProjectSummaryItem, max_depth=8)
+        output_schema_description = extract_schema_description(MultiProjectRefinedResult, max_depth=8)
+
+        return self._renderer.render_with_template(
+            template,
+            projects_json=projects_json,
+            max_main_summary_chars=self.MAX_MAIN_SUMMARY_CHARS,
+            max_category_summary_chars=self.MAX_CATEGORY_SUMMARY_CHARS,
+            max_insight_item_chars=self.MAX_INSIGHT_ITEM_CHARS_REFINE,
+            input_schema_description=input_schema_description,
+            output_schema_description=output_schema_description
         )

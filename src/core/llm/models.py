@@ -14,6 +14,7 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    thinking_tokens: int = 0  # Gemini 2.5 Pro thinking tokens (별도 과금)
 
 
 @dataclass

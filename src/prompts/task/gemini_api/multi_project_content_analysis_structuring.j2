@@ -1,0 +1,7 @@
+{% extends "task/common/multi_project_content_analysis_structuring.j2" %}
+{% from 'task/json_format.j2' import json_response_rule %}
+{# Gemini API: JSON 형식 지시가 필요하므로 json_response_rule 블록 override #}
+
+{% block json_response_rule %}
+{{ json_response_rule() }}
+{% endblock %}

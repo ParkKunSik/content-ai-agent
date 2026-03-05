@@ -19,6 +19,10 @@ class LLMUsageInfo(BaseModel):
         default=0,
         description="출력 토큰 수"
     )
+    thinking_tokens: int = Field(
+        default=0,
+        description="Thinking 토큰 수 (Gemini 2.5 Pro 등, output 요금으로 별도 과금)"
+    )
     duration_ms: int = Field(
         default=0,
         description="소요 시간 (밀리초)"
@@ -31,6 +35,10 @@ class LLMUsageInfo(BaseModel):
     output_cost: Optional[float] = Field(
         default=None,
         description="출력 토큰 비용 (USD)"
+    )
+    thinking_cost: Optional[float] = Field(
+        default=None,
+        description="Thinking 토큰 비용 (USD, output 요금 적용)"
     )
     total_cost: Optional[float] = Field(
         default=None,

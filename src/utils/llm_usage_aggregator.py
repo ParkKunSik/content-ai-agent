@@ -37,9 +37,11 @@ def merge_llm_usages(
                 model=existing.model,
                 input_tokens=existing.input_tokens + new_usage.input_tokens,
                 output_tokens=existing.output_tokens + new_usage.output_tokens,
+                thinking_tokens=existing.thinking_tokens + new_usage.thinking_tokens,
                 duration_ms=existing.duration_ms + new_usage.duration_ms,
                 input_cost=_safe_add(existing.input_cost, new_usage.input_cost),
                 output_cost=_safe_add(existing.output_cost, new_usage.output_cost),
+                thinking_cost=_safe_add(existing.thinking_cost, new_usage.thinking_cost),
                 total_cost=_safe_add(existing.total_cost, new_usage.total_cost),
             )
             result.append(merged_usage)

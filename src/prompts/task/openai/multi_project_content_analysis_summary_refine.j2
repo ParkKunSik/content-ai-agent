@@ -1,9 +1,14 @@
-{% extends "task/common/content_analysis_structuring_optimized.j2" %}
+{% extends "task/common/multi_project_content_analysis_summary_refine.j2" %}
 {#
     OpenAI: output_schema_description 블록을 override하여 응답 스키마 가이드 추가
     - input_schema_description: common에서 직접 출력 (3개 Provider 공통)
     - output_schema_description: OpenAI만 필요 (Vertex AI/Gemini는 response_schema로 별도 전송)
+    - writing_style: 빈 블록 (톤/문체는 system prompt에서 관리)
 #}
+
+{% block writing_style %}
+{# 톤/문체 관련 지시는 system prompt에서 관리 #}
+{% endblock %}
 
 {% block output_schema_description %}
 {{ output_schema_description }}

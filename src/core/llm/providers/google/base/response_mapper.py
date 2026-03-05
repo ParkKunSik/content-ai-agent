@@ -72,14 +72,27 @@ class GoogleGenAIResponseMapper:
 
     @classmethod
     def _extract_usage(cls, response: "types.GenerateContentResponse") -> TokenUsage:
-        """응답에서 토큰 사용량을 추출한다."""
+        """응답에서 토큰 사용량을 추출한다.
+
+        Note:
+            Gemini 2.5 Pro는 thinking이 기본 활성화되어 있으며,
+            thinking_tokens는 output 요금으로 별도 과금됩니다.
+            - Gemini API: candidates_token_count에 thinking tokens 포함
+            - Vertex AI: candidates_token_count에 thinking tokens 미포함 (별도 필드)
+        """
         try:
             if hasattr(response, "usage_metadata") and response.usage_metadata:
                 usage = response.usage_metadata
+                thinking_tokens = getattr(usage, "thoughts_token_count", 0) or 0
+
+                if thinking_tokens > 0:
+                    logger.debug(f"Thinking tokens used: {thinking_tokens}")
+
                 return TokenUsage(
                     prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
                     completion_tokens=getattr(usage, "candidates_token_count", 0) or 0,
                     total_tokens=getattr(usage, "total_token_count", 0) or 0,
+                    thinking_tokens=thinking_tokens,
                 )
         except Exception as e:
             logger.debug(f"Failed to extract usage: {e}")

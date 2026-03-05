@@ -31,16 +31,18 @@ class LLMUsageInfo(BaseModel):
     model: str = Field(description="모델명")
     input_tokens: int = Field(default=0, description="입력 토큰 수")
     output_tokens: int = Field(default=0, description="출력 토큰 수")
+    thinking_tokens: int = Field(default=0, description="Thinking 토큰 수 (Gemini 2.5 Pro 등)")
     duration_ms: int = Field(default=0, description="소요 시간 (밀리초)")
     input_cost: Optional[float] = Field(default=None, description="입력 토큰 비용 (USD)")
     output_cost: Optional[float] = Field(default=None, description="출력 토큰 비용 (USD)")
+    thinking_cost: Optional[float] = Field(default=None, description="Thinking 토큰 비용 (USD)")
     total_cost: Optional[float] = Field(default=None, description="총 비용 (USD)")
 
     @computed_field
     @property
     def total_tokens(self) -> int:
-        """총 토큰 수"""
-        return self.input_tokens + self.output_tokens
+        """총 토큰 수 (thinking 포함)"""
+        return self.input_tokens + self.output_tokens + (self.thinking_tokens or 0)
 
 
 # === 분석 결과 모델 ===
@@ -145,7 +147,9 @@ class LLMUsageSummary:
     total_tokens: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    total_thinking_tokens: int = 0
     total_cost: Optional[float] = None
+    total_thinking_cost: Optional[float] = None
     total_duration_ms: int = 0
 
 
@@ -262,7 +266,9 @@ class ProviderStats:
     total_tokens: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    total_thinking_tokens: int = 0
     total_cost: float = 0.0
+    total_thinking_cost: float = 0.0
     total_duration_ms: int = 0
     avg_tokens_per_project: float = 0.0
     avg_cost_per_project: float = 0.0

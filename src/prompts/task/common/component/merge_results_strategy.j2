@@ -1,0 +1,67 @@
+{#
+    [공통 병합 전략] - merge_results_strategy.j2
+
+    이전 분석 결과와 새 콘텐츠를 병합하는 전략.
+
+    사용처:
+    - content_analysis_structuring_optimized.j2
+    - multi_project_content_analysis_structuring.j2
+
+    ---
+
+    ### 병합 전략
+
+    **중요**: 먼저 새 콘텐츠를 독립적으로 분석한 후, 두 결과를 지능적으로 병합합니다.
+
+    1. **새 콘텐츠 독립 분석**:
+       - 새 콘텐츠 아이템을 독립적으로 분석
+       - 주제, 감정, 인사이트 식별
+
+    2. **카테고리 병합** (지능적 통합):
+       - **유사 카테고리 병합**: 유사한 주제의 카테고리 통합 (의미는 같지만 표현만 다른 경우 포함)
+         * 예시: "배송 속도" ↔ "빠른 배송" ↔ "신속한 배송" → 하나로 병합
+       - **새 카테고리 추가**: 새로운 주제 → 새 카테고리
+       - **중복 통합**: 유사한 주제 → 콘텐츠가 결합된 하나의 카테고리
+
+    3. **콘텐츠 통합 (핵심 - ID 손실 금지)**:
+       - **ID 보존**: 이전 결과의 모든 ID는 반드시 출력에 유지
+       - **ID 추가**: 신규 콘텐츠의 모든 ID는 반드시 출력에 추가
+       - **검증**: 병합 개수 = 이전 개수 + 신규 개수 (손실 불허)
+       - positive_contents, negative_contents 결합, 최적 하이라이트 선택
+
+    4. **통합 요약 및 인사이트 생성**:
+       - 전체 콘텐츠를 총체적으로 반영한 새 요약 생성
+       - 통합 분석을 기반으로 good_points와 caution_points 재평가
+
+    5. **하이라이트 선별**:
+       - 통합 풀에서 가장 대표적인 하이라이트 선택
+
+    6. **제약 사항 준수**: 분석 요구사항의 모든 제약을 동일하게 적용
+#}
+
+**IMPORTANT**: Analyze new content independently first, then intelligently merge both results.
+
+1. **Analyze new content independently**:
+   - Analyze new content items as standalone
+   - Identify themes, sentiments, and insights
+
+2. **Category merging** (intelligent consolidation):
+   - **Merge similar categories**: Combine categories with similar themes (including expression variants with same meaning but different wording)
+     * Example: "Delivery Speed" ↔ "Fast Shipping" ↔ "Quick Delivery" → merge into one
+   - **Add distinct categories**: New themes → new categories
+   - **Consolidate overlapping**: Similar topics → ONE category with combined content
+
+3. **Content consolidation (CRITICAL - No ID Loss)**:
+   - **ID Preservation**: Every ID from previous result MUST remain in output
+   - **ID Addition**: Every ID from new content MUST be added to output
+   - **Verification**: merged_count = previous_count + new_count (no loss allowed)
+   - Combine positive_contents, negative_contents, select best highlights
+
+4. **Generate unified summaries and insights**:
+   - Create NEW summary reflecting ALL content holistically
+   - Re-evaluate good_points and caution_points based on combined analysis
+
+5. **Highlight selection**:
+   - Select most representative highlights from combined pool
+
+6. **Constraints compliance**: Apply all constraints from Analysis Requirements identically

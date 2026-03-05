@@ -82,8 +82,12 @@ class CategoryItem(BaseModel):
 
     highlights: Annotated[
         list[HighlightItem],
-        Field(default_factory=list, description="Array of key highlights (preserve source language, no translation)"),
-        KoDoc("핵심 하이라이트 배열 (원문 언어 유지, 번역 금지)")
+        Field(
+            default_factory=list,
+            max_length=4,
+            description="Array of key highlights (max 4, preserve source language, no translation)"
+        ),
+        KoDoc("핵심 하이라이트 배열 (최대 4개, 원문 언어 유지, 번역 금지)")
     ]
 
     @field_validator('key')

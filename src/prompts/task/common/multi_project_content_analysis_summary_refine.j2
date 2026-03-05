@@ -1,0 +1,80 @@
+{% extends "task/base.j2" %}
+
+{% block content %}
+{#
+    Multi-Project 배치 정제 프롬프트 (Step 2: Summary Refinement)
+
+    핵심 특징:
+    1. 입력이 프로젝트별 분석 결과 배열 형태
+    2. 출력도 프로젝트별 정제 결과 배열 형태
+    3. 프로젝트 간 요약/인사이트 혼동 방지 지침 강화
+    4. 공통 정제 규칙은 단일 프로젝트와 동일
+
+    ---
+
+    # 작업: Multi-Project 배치 요약 정제 및 길이 최적화
+
+    **여러 프로젝트**의 분석 데이터 요약 길이를 최적화합니다.
+
+    ## 핵심 규칙
+
+    1. **프로젝트 격리**: 각 프로젝트는 반드시 독립적으로 정제해야 합니다. 프로젝트 간 요약이나 인사이트를 절대 혼합하지 마십시오.
+    2. **입출력 매칭**: 출력 배열은 입력과 정확히 동일한 프로젝트들을 **동일한 순서**로 포함해야 합니다.
+    3. **프로젝트별 제약**: 모든 단일 프로젝트 정제 규칙을 각 프로젝트에 동일하게 적용합니다.
+
+    ## 입력 데이터 구조
+    프로젝트별 분석 결과 배열을 포함하는 JSON 객체
+    (input_schema_description 변수로 동적 주입 - 다수 결과 보장 필요)
+
+    ## 프로젝트별 정제 요구사항
+    (공통 모듈 component/summary_refinement_requirements.j2 참조)
+
+    ## 출력 형식
+    제공된 JSON 스키마를 준수하는 유효한 JSON 객체
+    **모든 제약사항(최대 개수, 길이 제한)은 스키마에 정의됨**
+    (output_schema_description 블록 참조 - OpenAI만 사용)
+#}
+
+# Task: Multi-Project Batch Summary Refinement and Length Optimization
+
+Optimize the summary lengths of analysis data from **multiple projects** for **each project independently**.
+
+## CRITICAL RULES
+
+1. **Project Isolation**: Each project MUST be refined independently. Never mix summaries or insights between projects.
+2. **Input-Output Matching**: Output array must contain exactly the same projects as input, in the **same order**.
+3. **Per-Project Constraints**: Apply all single-project refinement rules to each project.
+
+## Input Data Structure
+
+You will receive a JSON object with projects array containing analysis results.
+
+{{ input_schema_description }}
+
+## Refinement Requirements Per Project
+
+{% include "task/common/component/summary_refinement_requirements.j2" %}
+
+## Output Format
+
+Output must be a valid JSON object adhering to the provided JSON schema.
+**All constraints (max counts, length limits) are defined in the schema.**
+
+{% block output_schema_description %}{% endblock %}
+
+{% block json_response_rule %}{% endblock %}
+
+{% block writing_style %}{% endblock %}
+
+## Projects to Refine
+
+{{ projects_json }}
+
+**CRITICAL**:
+- Output one result per input project, in the **same order**
+- Each project's result must follow the RefinedAnalysisResult schema exactly
+- **Character limits**: Strictly enforce {{ max_main_summary_chars }}-character main summary, {{ max_category_summary_chars }}-character category summaries
+- **Preserve data integrity**: Keep key values exactly as provided, including original casing (do not modify)
+- **Complete paragraphs**: Write summaries as cohesive narratives, not bullet points or abbreviated style
+
+{% endblock %}

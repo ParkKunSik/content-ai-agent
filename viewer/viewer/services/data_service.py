@@ -293,19 +293,25 @@ class ViewerDataService:
                 return None
 
             # 합계 계산
-            total_input = sum(u.get("input_tokens", 0) for u in llm_usages)
-            total_output = sum(u.get("output_tokens", 0) for u in llm_usages)
-            total_duration = sum(u.get("duration_ms", 0) for u in llm_usages)
+            total_input = sum(u.get("input_tokens", 0) or 0 for u in llm_usages)
+            total_output = sum(u.get("output_tokens", 0) or 0 for u in llm_usages)
+            total_thinking = sum(u.get("thinking_tokens", 0) or 0 for u in llm_usages)
+            total_duration = sum(u.get("duration_ms", 0) or 0 for u in llm_usages)
 
             # 비용 합계 (None이 아닌 값만)
             costs = [u.get("total_cost") for u in llm_usages if u.get("total_cost") is not None]
             total_cost = sum(costs) if costs else None
 
+            thinking_costs = [u.get("thinking_cost") for u in llm_usages if u.get("thinking_cost") is not None]
+            total_thinking_cost = sum(thinking_costs) if thinking_costs else None
+
             return LLMUsageSummary(
-                total_tokens=total_input + total_output,
+                total_tokens=total_input + total_output + total_thinking,
                 total_input_tokens=total_input,
                 total_output_tokens=total_output,
+                total_thinking_tokens=total_thinking,
                 total_cost=total_cost,
+                total_thinking_cost=total_thinking_cost,
                 total_duration_ms=total_duration
             )
         except Exception as e:
@@ -389,9 +395,12 @@ class ViewerDataService:
             # 모든 문서의 llm_usages 조회 (scroll API 사용)
             total_input = 0
             total_output = 0
+            total_thinking = 0
             total_cost = 0.0
+            total_thinking_cost = 0.0
             total_duration = 0
             has_cost = False
+            has_thinking_cost = False
 
             # scroll로 모든 문서 조회
             response = self.client.search(
@@ -411,11 +420,16 @@ class ViewerDataService:
                         for usage in llm_usages:
                             total_input += usage.get("input_tokens", 0) or 0
                             total_output += usage.get("output_tokens", 0) or 0
+                            total_thinking += usage.get("thinking_tokens", 0) or 0
                             total_duration += usage.get("duration_ms", 0) or 0
                             cost = usage.get("total_cost")
                             if cost is not None:
                                 total_cost += cost
                                 has_cost = True
+                            thinking_cost = usage.get("thinking_cost")
+                            if thinking_cost is not None:
+                                total_thinking_cost += thinking_cost
+                                has_thinking_cost = True
 
                 # 다음 scroll 페이지
                 response = self.client.scroll(scroll_id=scroll_id, scroll="2m")
@@ -427,7 +441,7 @@ class ViewerDataService:
             except Exception:
                 pass
 
-            total_tokens = total_input + total_output
+            total_tokens = total_input + total_output + total_thinking
 
             return ProviderStats(
                 provider=provider_name,
@@ -435,7 +449,9 @@ class ViewerDataService:
                 total_tokens=total_tokens,
                 total_input_tokens=total_input,
                 total_output_tokens=total_output,
+                total_thinking_tokens=total_thinking,
                 total_cost=total_cost if has_cost else 0.0,
+                total_thinking_cost=total_thinking_cost if has_thinking_cost else 0.0,
                 total_duration_ms=total_duration,
                 avg_tokens_per_project=total_tokens / project_count if project_count > 0 else 0,
                 avg_cost_per_project=total_cost / project_count if project_count > 0 else 0,
