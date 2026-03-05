@@ -87,18 +87,34 @@ class OpenAIResponseMapper:
 
     @classmethod
     def _extract_usage(cls, response: Any) -> TokenUsage:
-        """응답에서 토큰 사용량을 추출한다."""
+        """응답에서 토큰 사용량을 추출한다.
+
+        Note:
+            O-시리즈 모델(o3, o3-mini, o4-mini 등)은 reasoning tokens를 사용하며,
+            이는 output tokens 요금으로 별도 과금됩니다.
+            reasoning_tokens는 usage.output_tokens_details.reasoning_tokens에서 추출합니다.
+        """
         try:
             if hasattr(response, "usage") and response.usage:
                 usage = response.usage
+
+                # O-시리즈 모델의 reasoning_tokens 추출
+                reasoning_tokens = 0
+                if hasattr(usage, "output_tokens_details") and usage.output_tokens_details:
+                    reasoning_tokens = getattr(usage.output_tokens_details, "reasoning_tokens", 0) or 0
+
+                if reasoning_tokens > 0:
+                    logger.debug(f"Reasoning tokens used: {reasoning_tokens}")
+
                 return TokenUsage(
                     prompt_tokens=getattr(usage, "input_tokens", 0) or 0,
                     completion_tokens=getattr(usage, "output_tokens", 0) or 0,
                     total_tokens=getattr(usage, "total_tokens", 0) or 0,
+                    thinking_tokens=reasoning_tokens,  # OpenAI reasoning_tokens → thinking_tokens
                 )
         except Exception as e:
             logger.debug(f"Failed to extract usage: {e}")
-        return TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+        return TokenUsage()
 
     @classmethod
     def _extract_parsed(cls, response: Any) -> Any:

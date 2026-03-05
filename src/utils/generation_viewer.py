@@ -890,6 +890,7 @@ class GenerationViewer:
         # LLM 사용량 통계 계산
         total_input_tokens = 0
         total_output_tokens = 0
+        total_thinking_tokens = 0
         total_cost = 0.0
         total_duration_ms = 0
 
@@ -897,6 +898,7 @@ class GenerationViewer:
             for usage in llm_usages:
                 total_input_tokens += usage.input_tokens or 0
                 total_output_tokens += usage.output_tokens or 0
+                total_thinking_tokens += usage.thinking_tokens or 0
                 total_cost += usage.total_cost or 0.0
                 total_duration_ms += usage.duration_ms or 0
 
@@ -996,6 +998,11 @@ class GenerationViewer:
 
         .usage-tokens {{
             color: #0F1111;
+        }}
+
+        .usage-thinking {{
+            color: #8B5CF6;
+            font-weight: 500;
         }}
 
         .usage-cost {{
@@ -1386,22 +1393,34 @@ class GenerationViewer:
                 cost = f"${usage.total_cost:.4f}" if usage.total_cost else "-"
                 duration = f"{usage.duration_ms:,}ms" if usage.duration_ms else "-"
 
+                # Thinking tokens 표시 (Gemini 2.5 Pro 등)
+                thinking_tokens_html = ""
+                if usage.thinking_tokens and usage.thinking_tokens > 0:
+                    thinking_cost_str = f" (${usage.thinking_cost:.4f})" if usage.thinking_cost else ""
+                    thinking_tokens_html = f"""
+                    <span class="usage-thinking">🧠 {usage.thinking_tokens:,}{thinking_cost_str}</span>"""
+
                 html_content += f"""            <div class="llm-usage-item">
                 <span class="usage-step">{step_name}</span>
                 <span class="usage-model">{model_name}</span>
                 <div class="usage-details">
-                    <span class="usage-tokens">🔢 {tokens}</span>
+                    <span class="usage-tokens">🔢 {tokens}</span>{thinking_tokens_html}
                     <span class="usage-cost">💰 {cost}</span>
                     <span class="usage-duration">⏱️ {duration}</span>
                 </div>
             </div>
 """
 
+            # Thinking tokens 총계 표시 (Gemini 2.5 Pro 등)
+            thinking_tokens_total_html = ""
+            if total_thinking_tokens > 0:
+                thinking_tokens_total_html = f" + {total_thinking_tokens:,} (thinking)"
+
             html_content += f"""        </div>
         <div class="llm-usage-total">
             <div class="usage-total-row">
                 <span class="usage-total-label">총 토큰</span>
-                <span class="usage-total-value">{total_input_tokens:,} (입력) + {total_output_tokens:,} (출력) = {total_input_tokens + total_output_tokens:,}</span>
+                <span class="usage-total-value">{total_input_tokens:,} (입력) + {total_output_tokens:,} (출력){thinking_tokens_total_html} = {total_input_tokens + total_output_tokens + total_thinking_tokens:,}</span>
             </div>
             <div class="usage-total-row">
                 <span class="usage-total-label">총 비용</span>
@@ -1600,6 +1619,452 @@ class GenerationViewer:
             }}
         }});
     </script>
+</body>
+</html>"""
+
+        return html_content
+
+    @staticmethod
+    def generate_usage_statistics_html(
+        llm_usages: List[LLMUsageInfo],
+        title: str = "LLM 사용량 통계",
+        provider_name: str = None,
+        executed_at: str = None,
+        wall_clock_duration_ms: int = None,
+        concurrent_limit: int = None,
+        total_projects: int = None,
+        total_content_items: int = None,
+        per_project_stats: List[dict] = None
+    ) -> str:
+        """
+        LLM 사용량 통계를 보여주는 HTML 생성
+
+        Args:
+            llm_usages: LLMUsageInfo 리스트
+            title: 페이지 제목
+            provider_name: Provider 이름
+            executed_at: 실행 시각
+            wall_clock_duration_ms: 실제 경과 시간 (밀리초)
+            concurrent_limit: 동시 실행 수
+            total_projects: 총 프로젝트 수
+            total_content_items: 총 콘텐츠 수
+            per_project_stats: 프로젝트별 통계 리스트
+
+        Returns:
+            HTML 문자열
+        """
+        # 토큰/비용 합산
+        total_input_tokens = sum(u.input_tokens or 0 for u in llm_usages)
+        total_output_tokens = sum(u.output_tokens or 0 for u in llm_usages)
+        total_thinking_tokens = sum(u.thinking_tokens or 0 for u in llm_usages)
+        total_cost = sum(u.total_cost or 0.0 for u in llm_usages)
+        llm_total_duration_ms = sum(u.duration_ms or 0 for u in llm_usages)
+
+        # 비용 세부 합산
+        total_input_cost = sum(u.input_cost or 0.0 for u in llm_usages)
+        total_output_cost = sum(u.output_cost or 0.0 for u in llm_usages)
+        total_thinking_cost = sum(u.thinking_cost or 0.0 for u in llm_usages)
+
+        # 시간 포맷팅
+        def format_duration(ms: int) -> str:
+            if ms is None:
+                return "-"
+            total_seconds = ms / 1000
+            hours = int(total_seconds // 3600)
+            minutes = int((total_seconds % 3600) // 60)
+            secs = int(total_seconds % 60)
+            millis = int((total_seconds - int(total_seconds)) * 1000)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
+        # 병렬 효율 계산
+        parallelism_efficiency = ""
+        if wall_clock_duration_ms and wall_clock_duration_ms > 0 and llm_total_duration_ms > 0:
+            efficiency = llm_total_duration_ms / wall_clock_duration_ms
+            parallelism_efficiency = f"{efficiency:.1f}x"
+
+        # Provider 표시명
+        provider_display = GenerationViewer._get_provider_display_name(provider_name)
+
+        html_content = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #0F1111;
+            line-height: 1.6;
+            padding: 24px;
+        }}
+
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+
+        .header {{
+            background: linear-gradient(135deg, #232F3E 0%, #37475A 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }}
+
+        .header h1 {{
+            font-size: 24px;
+            margin-bottom: 12px;
+        }}
+
+        .header-meta {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 14px;
+            opacity: 0.9;
+        }}
+
+        .header-meta span {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+
+        .provider-badge {{
+            background: #FF9900;
+            color: #0F1111;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 12px;
+        }}
+
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }}
+
+        .stat-card {{
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }}
+
+        .stat-card h3 {{
+            font-size: 14px;
+            color: #565959;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .stat-value {{
+            font-size: 28px;
+            font-weight: 700;
+            color: #0F1111;
+        }}
+
+        .stat-value.cost {{
+            color: #067D62;
+        }}
+
+        .stat-value.thinking {{
+            color: #8B5CF6;
+        }}
+
+        .stat-detail {{
+            font-size: 13px;
+            color: #565959;
+            margin-top: 8px;
+        }}
+
+        .usage-table {{
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }}
+
+        .usage-table h3 {{
+            font-size: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+
+        th, td {{
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #E7E7E7;
+        }}
+
+        th {{
+            background: #F7F7F7;
+            font-weight: 600;
+            color: #565959;
+            font-size: 12px;
+            text-transform: uppercase;
+        }}
+
+        tr:hover {{
+            background: #FAFAFA;
+        }}
+
+        .token-badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }}
+
+        .token-badge.input {{
+            background: #E3F2FD;
+            color: #1565C0;
+        }}
+
+        .token-badge.output {{
+            background: #E8F5E9;
+            color: #2E7D32;
+        }}
+
+        .token-badge.thinking {{
+            background: #EDE7F6;
+            color: #7C3AED;
+        }}
+
+        .cost-cell {{
+            color: #067D62;
+            font-weight: 600;
+        }}
+
+        .project-stats {{
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }}
+
+        .project-stats h3 {{
+            font-size: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .project-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }}
+
+        .project-item {{
+            background: #F7F7F7;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .project-id {{
+            font-weight: 600;
+            color: #0F1111;
+        }}
+
+        .project-count {{
+            font-size: 13px;
+            color: #565959;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{title}</h1>
+            <div class="header-meta">
+                <span class="provider-badge">{provider_display}</span>"""
+
+        if executed_at:
+            html_content += f"""
+                <span>📅 {executed_at}</span>"""
+
+        if total_projects:
+            html_content += f"""
+                <span>📁 {total_projects}개 프로젝트</span>"""
+
+        if total_content_items:
+            html_content += f"""
+                <span>📝 {total_content_items:,}건 콘텐츠</span>"""
+
+        if concurrent_limit:
+            html_content += f"""
+                <span>⚡ 동시 실행 {concurrent_limit}개</span>"""
+
+        html_content += """
+            </div>
+        </div>
+
+        <div class="stats-grid">"""
+
+        # 토큰 통계 카드
+        html_content += f"""
+            <div class="stat-card">
+                <h3>🔢 총 토큰</h3>
+                <div class="stat-value">{total_input_tokens + total_output_tokens + total_thinking_tokens:,}</div>
+                <div class="stat-detail">
+                    입력: {total_input_tokens:,} | 출력: {total_output_tokens:,}"""
+
+        if total_thinking_tokens > 0:
+            html_content += f""" | Thinking: {total_thinking_tokens:,}"""
+
+        html_content += """
+                </div>
+            </div>"""
+
+        # 비용 통계 카드
+        html_content += f"""
+            <div class="stat-card">
+                <h3>💰 총 비용</h3>
+                <div class="stat-value cost">${total_cost:.4f}</div>
+                <div class="stat-detail">
+                    입력: ${total_input_cost:.4f} | 출력: ${total_output_cost:.4f}"""
+
+        if total_thinking_cost > 0:
+            html_content += f""" | Thinking: ${total_thinking_cost:.4f}"""
+
+        html_content += """
+                </div>
+            </div>"""
+
+        # 시간 통계 카드
+        if wall_clock_duration_ms:
+            html_content += f"""
+            <div class="stat-card">
+                <h3>⏱️ 실행 시간</h3>
+                <div class="stat-value">{format_duration(wall_clock_duration_ms)}</div>
+                <div class="stat-detail">
+                    LLM 호출 합계: {format_duration(llm_total_duration_ms)}"""
+
+            if parallelism_efficiency:
+                html_content += f""" | 병렬 효율: {parallelism_efficiency}"""
+
+            html_content += """
+                </div>
+            </div>"""
+
+        # Thinking 토큰 카드 (있는 경우만)
+        if total_thinking_tokens > 0:
+            thinking_ratio = (total_thinking_tokens / total_output_tokens * 100) if total_output_tokens > 0 else 0
+            html_content += f"""
+            <div class="stat-card">
+                <h3>🧠 Thinking 토큰</h3>
+                <div class="stat-value thinking">{total_thinking_tokens:,}</div>
+                <div class="stat-detail">
+                    출력 대비 {thinking_ratio:.1f}% | 비용: ${total_thinking_cost:.4f}
+                </div>
+            </div>"""
+
+        html_content += """
+        </div>"""
+
+        # LLM 사용량 상세 테이블
+        html_content += """
+        <div class="usage-table">
+            <h3>📊 LLM 호출 상세</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Step</th>
+                        <th>모델</th>
+                        <th>입력 토큰</th>
+                        <th>출력 토큰</th>"""
+
+        if total_thinking_tokens > 0:
+            html_content += """
+                        <th>Thinking 토큰</th>"""
+
+        html_content += """
+                        <th>비용</th>
+                        <th>소요 시간</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+
+        for usage in llm_usages:
+            step_name = f"Step {usage.step}" if usage.step else "-"
+            model_name = usage.model or "-"
+            cost = f"${usage.total_cost:.4f}" if usage.total_cost else "-"
+            duration = f"{usage.duration_ms:,}ms" if usage.duration_ms else "-"
+
+            html_content += f"""
+                    <tr>
+                        <td>{step_name}</td>
+                        <td>{model_name}</td>
+                        <td><span class="token-badge input">{usage.input_tokens:,}</span></td>
+                        <td><span class="token-badge output">{usage.output_tokens:,}</span></td>"""
+
+            if total_thinking_tokens > 0:
+                thinking_display = f'<span class="token-badge thinking">{usage.thinking_tokens:,}</span>' if usage.thinking_tokens else "-"
+                html_content += f"""
+                        <td>{thinking_display}</td>"""
+
+            html_content += f"""
+                        <td class="cost-cell">{cost}</td>
+                        <td>{duration}</td>
+                    </tr>"""
+
+        html_content += """
+                </tbody>
+            </table>
+        </div>"""
+
+        # 프로젝트별 통계 (있는 경우)
+        if per_project_stats:
+            html_content += """
+        <div class="project-stats">
+            <h3>📁 프로젝트별 통계</h3>
+            <div class="project-grid">"""
+
+            for stat in per_project_stats:
+                project_id = stat.get("project_id", "-")
+                content_count = stat.get("content_count", 0)
+                categories_count = stat.get("categories_count", 0)
+
+                html_content += f"""
+                <div class="project-item">
+                    <span class="project-id">{project_id}</span>
+                    <span class="project-count">{content_count}건 / {categories_count}카테고리</span>
+                </div>"""
+
+            html_content += """
+            </div>
+        </div>"""
+
+        html_content += """
+    </div>
 </body>
 </html>"""
 

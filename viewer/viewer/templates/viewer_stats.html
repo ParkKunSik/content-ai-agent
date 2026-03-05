@@ -358,10 +358,22 @@
                             <span class="stats-label">출력 토큰</span>
                             <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_output_tokens) }}</span>
                         </div>
+                        {% if stats.vertex_ai.total_thinking_tokens and stats.vertex_ai.total_thinking_tokens > 0 %}
+                        <div class="stats-item">
+                            <span class="stats-label">Thinking 토큰</span>
+                            <span class="stats-value" style="color: #8B5CF6;">{{ "{:,}".format(stats.vertex_ai.total_thinking_tokens) }}</span>
+                        </div>
+                        {% endif %}
                         <div class="stats-item">
                             <span class="stats-label">총 비용</span>
                             <span class="stats-value">${{ "%.4f"|format(stats.vertex_ai.total_cost) }}</span>
                         </div>
+                        {% if stats.vertex_ai.total_thinking_cost and stats.vertex_ai.total_thinking_cost > 0 %}
+                        <div class="stats-item">
+                            <span class="stats-label">Thinking 비용</span>
+                            <span class="stats-value" style="color: #8B5CF6;">${{ "%.4f"|format(stats.vertex_ai.total_thinking_cost) }}</span>
+                        </div>
+                        {% endif %}
                         <div class="stats-item">
                             <span class="stats-label">총 소요시간</span>
                             <span class="stats-value">{{ "{:,}".format(stats.vertex_ai.total_duration_ms) }}ms</span>
@@ -401,10 +413,22 @@
                             <span class="stats-label">출력 토큰</span>
                             <span class="stats-value">{{ "{:,}".format(stats.openai.total_output_tokens) }}</span>
                         </div>
+                        {% if stats.openai.total_thinking_tokens and stats.openai.total_thinking_tokens > 0 %}
+                        <div class="stats-item">
+                            <span class="stats-label">Reasoning 토큰</span>
+                            <span class="stats-value" style="color: #8B5CF6;">{{ "{:,}".format(stats.openai.total_thinking_tokens) }}</span>
+                        </div>
+                        {% endif %}
                         <div class="stats-item">
                             <span class="stats-label">총 비용</span>
                             <span class="stats-value">${{ "%.4f"|format(stats.openai.total_cost) }}</span>
                         </div>
+                        {% if stats.openai.total_thinking_cost and stats.openai.total_thinking_cost > 0 %}
+                        <div class="stats-item">
+                            <span class="stats-label">Reasoning 비용</span>
+                            <span class="stats-value" style="color: #8B5CF6;">${{ "%.4f"|format(stats.openai.total_thinking_cost) }}</span>
+                        </div>
+                        {% endif %}
                         <div class="stats-item">
                             <span class="stats-label">총 소요시간</span>
                             <span class="stats-value">{{ "{:,}".format(stats.openai.total_duration_ms) }}ms</span>

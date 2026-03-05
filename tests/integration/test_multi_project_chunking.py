@@ -6,6 +6,7 @@ Multi-Project 배치 분석 통합 테스트
 2. 프로젝트별 독립 청킹 및 완료 제외 로직
 3. Provider별 테스트 (Vertex AI, Gemini API, OpenAI)
 4. 결과 출력 (JSON + HTML)
+5. 특정 기간 데이터 기반 테스트 데이터 셋 생성
 
 설계 문서: documents/multi-project-batch-analysis-test-design.md
 """
@@ -48,6 +49,7 @@ class MultiProjectTestItem:
     project_id: int
     project_type: ProjectType
     content_type: ExternalContentType
+    content_items: Optional[List[ContentItem]] = None  # pre-loaded 콘텐츠 (기간 기반 테스트용)
 
 
 @dataclass
@@ -56,6 +58,7 @@ class MultiProjectTestInput:
     projects: List[MultiProjectTestItem]
     chunk_size: int = 100
     max_chunks: Optional[int] = None
+    max_items_per_project: Optional[int] = None  # 프로젝트당 최대 콘텐츠 수
 
 
 @dataclass
@@ -115,6 +118,27 @@ def _format_duration(seconds: float) -> str:
     secs = total_seconds % 60
     milliseconds = int((seconds - int(seconds)) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{milliseconds:03d}"
+
+
+def _convert_kst_to_utc(kst_datetime_str: str) -> str:
+    """
+    KST(한국 표준시) 문자열을 UTC 문자열로 변환.
+
+    Args:
+        kst_datetime_str: KST 일시 문자열 (ISO 8601 형식: YYYY-MM-DDTHH:MM:SS)
+                          예시: "2026-03-04T09:00:00"
+
+    Returns:
+        UTC 일시 문자열 (ISO 8601 형식)
+        예시: "2026-03-04T00:00:00" (KST 09:00 → UTC 00:00)
+
+    Note:
+        KST = UTC + 9시간
+        따라서 KST에서 9시간을 빼면 UTC가 됨
+    """
+    kst_dt = datetime.strptime(kst_datetime_str, '%Y-%m-%dT%H:%M:%S')
+    utc_dt = kst_dt - timedelta(hours=9)
+    return utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
 
 
 @contextmanager
@@ -195,6 +219,186 @@ async def _load_project_content_items(
 
 
 # ============================================================
+# 기간 기반 테스트 데이터 셋 생성
+# ============================================================
+
+async def _generate_test_dataset_from_period(
+    start_date: str,
+    end_date: str,
+    max_items_per_project: Optional[int] = None
+) -> List[MultiProjectTestItem]:
+    """
+    특정 기간 동안 생성된 데이터를 기반으로 테스트 데이터 셋 생성.
+
+    모든 ExternalContentType에 대해 조회 후 { project_id, project_type, content_type } 단위로 그룹핑.
+    body 필드를 함께 조회하여 content_items를 pre-load합니다.
+
+    Args:
+        start_date: 시작 일시 (UTC, ISO 8601 형식: YYYY-MM-DDTHH:MM:SS)
+                    예시: "2026-02-24T15:00:00" (KST 2026-02-25T00:00:00)
+        end_date: 종료 일시 (UTC, ISO 8601 형식: YYYY-MM-DDTHH:MM:SS)
+                  예시: "2026-03-04T14:59:59" (KST 2026-03-04T23:59:59)
+        max_items_per_project: 프로젝트당 최대 아이템 수 (None이면 제한 없음)
+
+    Returns:
+        List[MultiProjectTestItem]: 테스트 대상 프로젝트 리스트 (content_items 포함)
+
+    Note:
+        각 provider 테스트에서 _convert_kst_to_utc()를 사용하여 KST→UTC 변환 후 전달하세요.
+
+    Examples:
+        # KST 시간을 UTC로 변환하여 전달
+        start_utc = _convert_kst_to_utc("2026-02-25T00:00:00")  # KST
+        end_utc = _convert_kst_to_utc("2026-03-04T23:59:59")    # KST
+        await _generate_test_dataset_from_period(
+            start_date=start_utc,
+            end_date=end_utc,
+            max_items_per_project=50
+        )
+    """
+    from collections import defaultdict
+    from src.core.elasticsearch_config import es_manager
+
+    print(f"\n{'='*80}")
+    print(f"기간 기반 테스트 데이터 셋 생성")
+    print(f"{'='*80}")
+    print(f"기간 (UTC): {start_date} ~ {end_date}")
+    print(f"프로젝트당 최대 아이템: {max_items_per_project or '제한 없음'}")
+
+    es_client = es_manager.reference_client
+    test_items: List[MultiProjectTestItem] = []
+
+    # 모든 ExternalContentType에 대해 조회
+    for content_type in ExternalContentType:
+        internal_types = content_type.to_internal()
+        index_pattern = internal_types[0].index_pattern
+
+        print(f"\n>>> {content_type.value} 조회 중 (인덱스: {index_pattern})")
+
+        # groupsubcode 조건 생성
+        if internal_types[0].uses_groupsubcode:
+            groupsubcodes = [t.name for t in internal_types]
+            content_filter = {"terms": {"groupsubcode.keyword": groupsubcodes}}
+        else:
+            content_filter = None
+
+        # ES 쿼리: body 포함 조회
+        must_conditions = [
+            {
+                "range": {
+                    "createdat": {  # ES 필드명: createdat (언더스코어 없음)
+                        "gte": start_date,
+                        "lte": end_date
+                    }
+                }
+            }
+        ]
+        if content_filter:
+            must_conditions.append(content_filter)
+
+        search_query = {
+            "query": {
+                "bool": {
+                    "must": must_conditions
+                }
+            },
+            "size": 10000,  # 최대 10000건 조회
+            "sort": [{"seq": {"order": "asc"}}],
+            "_source": ["seq", "body", "campaignid", "groupsubcode"]
+        }
+
+        try:
+            response = es_client.search(index=index_pattern, body=search_query)
+            hits = response["hits"]["hits"]
+
+            print(f"   - 조회된 문서: {len(hits)}건")
+
+            # 프로젝트별로 그룹핑
+            project_contents: Dict[int, List[ContentItem]] = defaultdict(list)
+
+            for hit in hits:
+                source = hit["_source"]
+                seq_val = source.get("seq")
+                if seq_val is None:
+                    continue
+
+                content_id = int(seq_val)
+                content_text = source.get("body", "")
+                campaign_id = source.get("campaignid")
+                groupsubcode = source.get("groupsubcode", "")
+
+                # 빈 콘텐츠 제외
+                if not content_text or not content_text.strip():
+                    continue
+
+                # campaign_id를 int로 변환
+                try:
+                    project_id = int(campaign_id)
+                except (ValueError, TypeError):
+                    continue
+
+                content_item = ContentItem(
+                    content_id=content_id,
+                    content=content_text.strip(),
+                    has_image=(groupsubcode == "PHOTO_REVIEW")
+                )
+                project_contents[project_id].append(content_item)
+
+            # 프로젝트별 테스트 아이템 생성
+            for project_id, contents in project_contents.items():
+                # max_items_per_project 적용
+                if max_items_per_project:
+                    contents = contents[:max_items_per_project]
+
+                # 최소 1개 이상의 콘텐츠가 있는 프로젝트만
+                if not contents:
+                    continue
+
+                test_items.append(MultiProjectTestItem(
+                    project_id=project_id,
+                    project_type=ProjectType.FUNDING_AND_PREORDER,  # 기본값 (펀딩/프리오더)
+                    content_type=content_type,
+                    content_items=contents
+                ))
+
+            print(f"   - 생성된 프로젝트: {len(project_contents)}개")
+
+        except Exception as e:
+            print(f"   ⚠️ 조회 실패: {e}")
+            continue
+
+    print(f"\n총 테스트 대상 프로젝트: {len(test_items)}개")
+    return test_items
+
+
+async def _load_project_content_items_with_limit(
+    project_id: int,
+    project_type: ProjectType,
+    content_type: ExternalContentType,
+    max_items: Optional[int] = None
+) -> List[ContentItem]:
+    """
+    ES에서 프로젝트 콘텐츠 로드 (최대 개수 제한 지원)
+
+    Args:
+        project_id: 프로젝트 ID
+        project_type: 프로젝트 타입
+        content_type: 콘텐츠 타입
+        max_items: 최대 아이템 수 (None이면 제한 없음)
+
+    Returns:
+        List[ContentItem]: 콘텐츠 아이템 리스트
+    """
+    content_items = await _load_project_content_items(project_id, project_type, content_type)
+
+    if max_items and len(content_items) > max_items:
+        content_items = content_items[:max_items]
+        print(f"   - {max_items}개로 슬라이스됨")
+
+    return content_items
+
+
+# ============================================================
 # Multi-Project 청킹 시뮬레이션
 # ============================================================
 
@@ -221,6 +425,7 @@ async def _run_multi_project_chunking_simulation(
     print(f"프로젝트 수: {len(test_input.projects)}")
     print(f"청크 크기: {test_input.chunk_size}")
     print(f"최대 청크: {test_input.max_chunks or '전체'}")
+    print(f"프로젝트당 최대 콘텐츠: {test_input.max_items_per_project or '전체'}")
 
     # ============================================================
     # 1. 초기화: 프로젝트별 데이터 로드 및 청크 분할
@@ -230,11 +435,17 @@ async def _run_multi_project_chunking_simulation(
     project_states: List[ProjectChunkingState] = []
 
     for item in test_input.projects:
-        content_items = await _load_project_content_items(
-            item.project_id,
-            item.project_type,
-            item.content_type
-        )
+        # pre-loaded content_items가 있으면 사용, 없으면 ES에서 조회
+        if item.content_items:
+            content_items = item.content_items
+            print(f"   - 프로젝트 {item.project_id}: pre-loaded {len(content_items)}건 사용")
+        else:
+            content_items = await _load_project_content_items_with_limit(
+                item.project_id,
+                item.project_type,
+                item.content_type,
+                max_items=test_input.max_items_per_project
+            )
 
         if not content_items:
             print(f"   ⚠️ 프로젝트 {item.project_id}: 데이터 없음, 건너뜀")
@@ -610,4 +821,149 @@ async def test_openai_multi_project_simulation(setup_elasticsearch):
         await _execute_multi_project_test(
             provider_name="openai",
             test_input=DEFAULT_TEST_INPUT
+        )
+
+
+# ============================================================
+# 기간 기반 테스트 데이터 셋 Provider별 테스트
+# ============================================================
+
+# 테스트 기간 설정 (KST 기준)
+# 형식: ISO 8601 (YYYY-MM-DDTHH:MM:SS)
+# 예시:
+#   - "2026-03-01T00:00:00" ~ "2026-03-04T23:59:59" (특정 기간)
+#   - "2026-03-04T09:00:00" ~ "2026-03-04T18:00:00" (당일 업무 시간)
+# 주의: 각 provider 테스트에서 KST→UTC 변환 후 전달 필요
+PERIOD_TEST_MAX_ITEMS = 50  # 프로젝트당 최대 50개
+PERIOD_TEST_MAX_PROJECTS = 50  # 최대 50개 프로젝트만 테스트
+
+
+async def _execute_period_based_multi_project_test(
+    provider_name: str,
+    start_date: str,
+    end_date: str,
+    max_items_per_project: int = PERIOD_TEST_MAX_ITEMS,
+    max_projects: int = PERIOD_TEST_MAX_PROJECTS
+):
+    """
+    기간 기반 테스트 데이터 셋을 사용한 테스트 공통 로직
+
+    Args:
+        provider_name: Provider 이름
+        start_date: 시작 일시 (UTC, ISO 8601 형식: YYYY-MM-DDTHH:MM:SS)
+                    예시: "2026-02-28T15:00:00" (KST 2026-03-01T00:00:00)
+        end_date: 종료 일시 (UTC, ISO 8601 형식: YYYY-MM-DDTHH:MM:SS)
+                  예시: "2026-03-04T14:59:59" (KST 2026-03-04T23:59:59)
+        max_items_per_project: 프로젝트당 최대 콘텐츠 수 (기본값: 50)
+        max_projects: 테스트할 최대 프로젝트 수 (기본값: 5)
+
+    Note:
+        start_date, end_date는 UTC 기준입니다.
+        각 provider 테스트에서 _convert_kst_to_utc()를 사용하여 KST→UTC 변환 후 전달하세요.
+
+    Examples:
+        # KST 시간을 UTC로 변환하여 전달
+        start_kst = "2026-03-01T00:00:00"
+        end_kst = "2026-03-04T23:59:59"
+        await _execute_period_based_multi_project_test(
+            provider_name="vertex_ai",
+            start_date=_convert_kst_to_utc(start_kst),
+            end_date=_convert_kst_to_utc(end_kst),
+            max_items_per_project=100,
+            max_projects=10
+        )
+    """
+    # 1. 테스트 데이터 셋 생성
+    test_items = await _generate_test_dataset_from_period(
+        start_date=start_date,
+        end_date=end_date,
+        max_items_per_project=max_items_per_project
+    )
+
+    if not test_items:
+        pytest.skip(f"기간 {start_date} ~ {end_date}에 테스트 데이터가 없습니다.")
+
+    # 2. 최대 프로젝트 수로 슬라이스
+    if len(test_items) > max_projects:
+        test_items = test_items[:max_projects]
+        print(f"테스트 프로젝트 수를 {max_projects}개로 제한")
+
+    # 3. 테스트 입력 구성
+    test_input = MultiProjectTestInput(
+        projects=test_items,
+        chunk_size=50,
+        max_chunks=None,  # 전체 처리
+        max_items_per_project=max_items_per_project
+    )
+
+    # 4. 테스트 실행
+    await _execute_multi_project_test(
+        provider_name=provider_name,
+        test_input=test_input
+    )
+
+
+@pytest.mark.asyncio
+async def test_period_based_multi_project_simulation(setup_elasticsearch):
+    """기본 Provider로 기간 기반 Multi-Project 테스트"""
+    # KST 기간 설정 (예: 최근 7일)
+    start_kst = "2026-02-25T00:00:00"
+    end_kst = "2026-03-04T23:59:59"
+
+    provider_name = settings.llm_provider.value.lower()
+    await _execute_period_based_multi_project_test(
+        provider_name=provider_name,
+        start_date=_convert_kst_to_utc(start_kst),
+        end_date=_convert_kst_to_utc(end_kst)
+    )
+
+
+@pytest.mark.asyncio
+async def test_period_based_vertexai_multi_project_simulation(setup_elasticsearch):
+    """Vertex AI Provider 기간 기반 Multi-Project 테스트"""
+    # KST 기간 설정 (예: 최근 7일)
+    start_kst = "2026-02-25T00:00:00"
+    end_kst = "2026-03-04T23:59:59"
+
+    with switch_llm_provider(ProviderType.VERTEX_AI):
+        await _execute_period_based_multi_project_test(
+            provider_name="vertex_ai",
+            start_date=_convert_kst_to_utc(start_kst),
+            end_date=_convert_kst_to_utc(end_kst)
+        )
+
+
+@pytest.mark.asyncio
+async def test_period_based_gemini_api_multi_project_simulation(setup_elasticsearch):
+    """Gemini API Provider 기간 기반 Multi-Project 테스트"""
+    if not settings.gemini_api.API_KEY:
+        pytest.skip("GEMINI_API__API_KEY가 설정되지 않았습니다.")
+
+    # KST 기간 설정 (예: 최근 7일)
+    start_kst = "2026-02-13T09:00:00"
+    end_kst = "2026-02-13T13:00:00"
+
+    with switch_llm_provider(ProviderType.GEMINI_API):
+        await _execute_period_based_multi_project_test(
+            provider_name="gemini_api",
+            start_date=_convert_kst_to_utc(start_kst),
+            end_date=_convert_kst_to_utc(end_kst)
+        )
+
+
+@pytest.mark.asyncio
+async def test_period_based_openai_multi_project_simulation(setup_elasticsearch):
+    """OpenAI Provider 기간 기반 Multi-Project 테스트"""
+    if not settings.openai.API_KEY:
+        pytest.skip("OPENAI_API_KEY가 설정되지 않았습니다.")
+
+    # KST 기간 설정 (예: 최근 7일)
+    start_kst = "2026-02-25T00:00:00"
+    end_kst = "2026-03-04T23:59:59"
+
+    with switch_llm_provider(ProviderType.OPENAI):
+        await _execute_period_based_multi_project_test(
+            provider_name="openai",
+            start_date=_convert_kst_to_utc(start_kst),
+            end_date=_convert_kst_to_utc(end_kst)
         )

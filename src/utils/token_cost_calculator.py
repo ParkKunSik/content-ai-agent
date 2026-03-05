@@ -9,16 +9,16 @@ from src.schemas.models.common.llm_usage_info import LLMUsageInfo
 
 TOKEN_COST_CURRENCY = "USD"
 
-# Provider별 모델 가격 테이블
+# Provider별 모델 가격 테이블 (2026년 3월 기준)
 MODEL_PRICING_TABLE = {
-    # Google Vertex AI / Gemini 모델
+    # Google Vertex AI / Gemini 모델 (최신 가격)
     "gemini_2_5_pro": {
         "input_cost_per_million": 1.25,
-        "output_cost_per_million": 5.00
+        "output_cost_per_million": 10.00,  # thinking tokens도 output 요금 적용
     },
     "gemini_2_5_flash": {
-        "input_cost_per_million": 0.10,
-        "output_cost_per_million": 0.40
+        "input_cost_per_million": 0.30,
+        "output_cost_per_million": 2.50,
     },
     "gemini_3_pro_preview": {
         "input_cost_per_million": 1.50,
@@ -188,8 +188,9 @@ def aggregate_token_usage(*usages: dict) -> dict:
 def calculate_cost(
     input_tokens: int,
     output_tokens: int,
-    model_name: str
-) -> Tuple[float, float, float]:
+    model_name: str,
+    thinking_tokens: int = 0
+) -> Tuple[float, float, float, float]:
     """
     토큰 수와 모델명으로 비용을 계산합니다.
 
@@ -197,9 +198,10 @@ def calculate_cost(
         input_tokens: 입력 토큰 수
         output_tokens: 출력 토큰 수
         model_name: 모델명
+        thinking_tokens: Thinking 토큰 수 (output 요금으로 과금)
 
     Returns:
-        Tuple[input_cost, output_cost, total_cost]
+        Tuple[input_cost, output_cost, thinking_cost, total_cost]
     """
     model_costs = resolve_model_pricing(model_name)
 
@@ -208,9 +210,11 @@ def calculate_cost(
 
     input_cost = round((input_tokens / 1_000_000) * input_cost_per_million, 6)
     output_cost = round((output_tokens / 1_000_000) * output_cost_per_million, 6)
-    total_cost = round(input_cost + output_cost, 6)
+    # Thinking tokens는 output 요금으로 과금됨
+    thinking_cost = round((thinking_tokens / 1_000_000) * output_cost_per_million, 6)
+    total_cost = round(input_cost + output_cost + thinking_cost, 6)
 
-    return input_cost, output_cost, total_cost
+    return input_cost, output_cost, thinking_cost, total_cost
 
 
 def create_llm_usage_info(
@@ -219,6 +223,7 @@ def create_llm_usage_info(
     input_tokens: int,
     output_tokens: int,
     duration_ms: int,
+    thinking_tokens: int = 0,
     calculate_costs: bool = True
 ) -> LLMUsageInfo:
     """
@@ -230,6 +235,7 @@ def create_llm_usage_info(
         input_tokens: 입력 토큰 수
         output_tokens: 출력 토큰 수
         duration_ms: 소요 시간 (밀리초)
+        thinking_tokens: Thinking 토큰 수 (Gemini 2.5 Pro 등)
         calculate_costs: 비용 계산 여부 (기본값: True)
 
     Returns:
@@ -237,11 +243,12 @@ def create_llm_usage_info(
     """
     input_cost: Optional[float] = None
     output_cost: Optional[float] = None
+    thinking_cost: Optional[float] = None
     total_cost: Optional[float] = None
 
     if calculate_costs and input_tokens > 0:
-        input_cost, output_cost, total_cost = calculate_cost(
-            input_tokens, output_tokens, model
+        input_cost, output_cost, thinking_cost, total_cost = calculate_cost(
+            input_tokens, output_tokens, model, thinking_tokens
         )
 
     return LLMUsageInfo(
@@ -249,8 +256,10 @@ def create_llm_usage_info(
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        thinking_tokens=thinking_tokens,
         duration_ms=duration_ms,
         input_cost=input_cost,
         output_cost=output_cost,
+        thinking_cost=thinking_cost,
         total_cost=total_cost
     )

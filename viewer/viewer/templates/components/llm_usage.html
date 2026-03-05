@@ -13,6 +13,13 @@
                 <span class="usage-tokens">
                     In: {{ "{:,}".format(usage.input_tokens) }} / Out: {{ "{:,}".format(usage.output_tokens) }}
                 </span>
+                {# Thinking tokens (Gemini 2.5 Pro 등) - None이 아니고 0보다 클 때만 표시 #}
+                {% if usage.thinking_tokens and usage.thinking_tokens > 0 %}
+                <span class="usage-thinking">
+                    Thinking: {{ "{:,}".format(usage.thinking_tokens) }}
+                    {% if usage.thinking_cost is not none %}(${{ "%.4f"|format(usage.thinking_cost) }}){% endif %}
+                </span>
+                {% endif %}
                 {% if usage.total_cost is not none %}
                 <span class="usage-cost">${{ "%.4f"|format(usage.total_cost) }}</span>
                 {% endif %}
@@ -25,13 +32,18 @@
     {# 합계 #}
     {% set total_input = llm_usages|sum(attribute='input_tokens') %}
     {% set total_output = llm_usages|sum(attribute='output_tokens') %}
-    {% set total_tokens = total_input + total_output %}
+    {# thinking_tokens는 None일 수 있으므로 필터링 후 합산 #}
+    {% set thinking_list = llm_usages|selectattr('thinking_tokens')|list %}
+    {% set total_thinking = thinking_list|sum(attribute='thinking_tokens') if thinking_list else 0 %}
+    {% set total_tokens = total_input + total_output + total_thinking %}
     {% set total_duration = llm_usages|sum(attribute='duration_ms') %}
     {% set costs = llm_usages|selectattr('total_cost')|list %}
     <div class="llm-usage-total">
         <div class="usage-total-tokens">
             <strong>합계:</strong> {{ "{:,}".format(total_tokens) }} tokens
-            <span class="usage-tokens-detail">(In: {{ "{:,}".format(total_input) }} / Out: {{ "{:,}".format(total_output) }})</span>
+            <span class="usage-tokens-detail">
+                (In: {{ "{:,}".format(total_input) }} / Out: {{ "{:,}".format(total_output) }}{% if total_thinking > 0 %} / Thinking: {{ "{:,}".format(total_thinking) }}{% endif %})
+            </span>
         </div>
         <div class="usage-total-metrics">
             {% if costs %}
