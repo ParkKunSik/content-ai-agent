@@ -13,6 +13,12 @@
 
     **중요**: 먼저 새 콘텐츠를 독립적으로 분석한 후, 두 결과를 지능적으로 병합합니다.
 
+    0. **중복 ID 전처리 (병합 전 필수)**:
+       - **중복 발생 가능**: 이전 결과(previous_result)와 새 콘텐츠에 동일한 content_id가 존재할 수 있음
+       - **처리 방식**: 동일 id가 양쪽에 있으면 **새 콘텐츠의 것으로 대체** (이전 결과에서 제거)
+       - **이유**: 업데이트된 콘텐츠가 다시 분석 대상으로 들어온 경우이므로 최신 분석 반영
+       - **순서**: 중복 제거 후 병합 진행
+
     1. **새 콘텐츠 독립 분석**:
        - 새 콘텐츠 아이템을 독립적으로 분석
        - 주제, 감정, 인사이트 식별
@@ -24,9 +30,9 @@
        - **중복 통합**: 유사한 주제 → 콘텐츠가 결합된 하나의 카테고리
 
     3. **콘텐츠 통합 (핵심 - ID 손실 금지)**:
-       - **ID 보존**: 이전 결과의 모든 ID는 반드시 출력에 유지
+       - **ID 보존**: 이전 결과의 모든 ID는 반드시 출력에 유지 (중복 제거된 것 제외)
        - **ID 추가**: 신규 콘텐츠의 모든 ID는 반드시 출력에 추가
-       - **검증**: 병합 개수 = 이전 개수 + 신규 개수 (손실 불허)
+       - **검증**: 병합 개수 = (이전 개수 - 중복 개수) + 신규 개수 (손실 불허)
        - positive_contents, negative_contents 결합, 최적 하이라이트 선택
 
     4. **통합 요약 및 인사이트 생성**:
@@ -41,6 +47,12 @@
 
 **IMPORTANT**: Analyze new content independently first, then intelligently merge both results.
 
+0. **Duplicate ID Preprocessing (REQUIRED Before Merging)**:
+   - **Duplicates may exist**: The same content_id can exist in both previous_result AND new content
+   - **Resolution**: If the same id exists in both, **replace with new content's version** (remove from previous result)
+   - **Reason**: Updated content has been resubmitted for analysis, so use the latest analysis
+   - **Order**: Complete duplicate removal first, then proceed with merging
+
 1. **Analyze new content independently**:
    - Analyze new content items as standalone
    - Identify themes, sentiments, and insights
@@ -52,9 +64,9 @@
    - **Consolidate overlapping**: Similar topics → ONE category with combined content
 
 3. **Content consolidation (CRITICAL - No ID Loss)**:
-   - **ID Preservation**: Every ID from previous result MUST remain in output
+   - **ID Preservation**: Every ID from previous result MUST remain in output (except duplicates removed)
    - **ID Addition**: Every ID from new content MUST be added to output
-   - **Verification**: merged_count = previous_count + new_count (no loss allowed)
+   - **Verification**: merged_count = (previous_count - duplicate_count) + new_count (no loss allowed)
    - Combine positive_contents, negative_contents, select best highlights
 
 4. **Generate unified summaries and insights**:
