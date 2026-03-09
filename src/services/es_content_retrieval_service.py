@@ -77,46 +77,129 @@ class ESContentRetrievalService:
             logger.info(f"ES response hits count: {len(hits)}")
             if hits:
                 logger.info(f"Sample hit source keys: {hits[0]['_source'].keys()}")
-            
-            content_items = []
-            
-            for hit in hits:
-                source = hit["_source"]
-                
-                # ES 필드 매핑
-                # seq는 integer로 가정. 없으면 0 또는 예외 처리?
-                # ContentItem.content_id는 int 필수.
-                seq_val = source.get("seq")
-                if seq_val is None:
-                    # seq가 없으면 _id를 시도하되, int 변환 가능해야 함
-                    try:
-                        content_id = int(hit["_id"])
-                    except (ValueError, TypeError):
-                        logger.warning(f"Skipping document without valid seq or numeric _id: {hit['_id']}")
-                        continue
-                else:
-                    content_id = int(seq_val)
 
-                content_text = source.get("body", "")
-                groupsubcode = source.get("groupsubcode", "")
-                
-                # 빈 콘텐츠 제외
-                if content_text and content_text.strip():
-                    content_item = ContentItem(
-                        content_id=content_id,
-                        content=content_text.strip(),
-                        has_image=(groupsubcode == "PHOTO_REVIEW")
-                    )
-                    content_items.append(content_item)
-            
+            content_items = self._convert_hits_to_content_items(hits)
+
             logger.info(
                 f"Retrieved {len(content_items)} valid contents for project {project_id}, "
                 f"type {content_type.value} from {index_pattern} "
                 f"(total hits: {response['hits']['total']['value']})"
             )
-            
+
             return content_items
             
         except Exception as e:
             logger.error(f"Failed to retrieve contents for project {project_id}: {e}")
             raise RuntimeError(f"ES content retrieval failed: {e}")
+
+    async def get_funding_preorder_project_contents_after(
+        self,
+        project_id: int,
+        content_type: ExternalContentType,
+        after_content_id: int,
+        size: int = 2000
+    ) -> List[ContentItem]:
+        """
+        baseline_content_id 이후의 콘텐츠만 조회 (증분 분석용)
+
+        Args:
+            project_id: 프로젝트 ID
+            content_type: 콘텐츠 타입
+            after_content_id: 이 ID보다 큰 content_id만 조회
+            size: 조회할 문서 수
+
+        Returns:
+            List[ContentItem]: baseline 이후 콘텐츠 리스트
+        """
+        try:
+            # 1. 외부 타입을 내부 타입으로 변환
+            internal_types = content_type.to_internal()
+            index_pattern = internal_types[0].index_pattern
+
+            # 2. 기존 쿼리 조건 가져오기
+            base_query = InternalContentType.get_combined_query_conditions(
+                internal_types, project_id
+            )
+
+            # 3. range 조건 추가 (seq > after_content_id)
+            query = {
+                "bool": {
+                    "must": [
+                        base_query,
+                        {"range": {"seq": {"gt": after_content_id}}}
+                    ]
+                }
+            }
+
+            logger.info(
+                f"Executing incremental ES search on {index_pattern}, "
+                f"after_content_id={after_content_id}"
+            )
+
+            # 4. ES 조회 실행
+            response = self.client.search(
+                index=index_pattern,
+                body={
+                    "query": query,
+                    "size": size,
+                    "sort": [{"seq": {"order": "asc"}}],
+                    "_source": ["seq", "body", "groupsubcode", "campaignid", "created_at"]
+                }
+            )
+
+            # 5. ContentItem 리스트로 변환
+            hits = response["hits"]["hits"]
+            logger.info(f"Incremental ES response hits count: {len(hits)}")
+
+            content_items = self._convert_hits_to_content_items(hits)
+
+            logger.info(
+                f"Retrieved {len(content_items)} incremental contents for project {project_id}, "
+                f"type {content_type.value}, after_content_id={after_content_id}"
+            )
+
+            return content_items
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve incremental contents: {e}")
+            raise RuntimeError(f"ES incremental content retrieval failed: {e}")
+
+    def _convert_hits_to_content_items(self, hits: List[dict]) -> List[ContentItem]:
+        """
+        ES 검색 결과를 ContentItem 리스트로 변환 (공통 함수)
+
+        Args:
+            hits: ES 검색 결과의 hits 리스트
+
+        Returns:
+            List[ContentItem]: 변환된 ContentItem 리스트
+        """
+        content_items = []
+
+        for hit in hits:
+            source = hit["_source"]
+
+            # ES 필드 매핑
+            seq_val = source.get("seq")
+            if seq_val is None:
+                try:
+                    content_id = int(hit["_id"])
+                except (ValueError, TypeError):
+                    logger.warning(f"Skipping document without valid seq: {hit['_id']}")
+                    continue
+            else:
+                content_id = int(seq_val)
+
+            content_text = source.get("body", "")
+            groupsubcode = source.get("groupsubcode", "")
+
+            # 빈 콘텐츠 제외
+            if content_text and content_text.strip():
+                content_item = ContentItem(
+                    content_id=content_id,
+                    content=content_text.strip(),
+                    has_image=(groupsubcode == "PHOTO_REVIEW")
+                )
+                content_items.append(content_item)
+
+        return content_items

@@ -12,4 +12,7 @@ class ProjectAnalysisRequest(BaseModel):
         default=AnalysisMode.REVIEW_BOT,
         description="분석 모드/페르소나"
     )
-    force_refresh: bool = Field(default=True, description="기존 분석 결과 무시하고 새로 분석")
+    refresh: bool = Field(
+        default=False,
+        description="True: 전체 콘텐츠 재분석, False: baseline 이후만 증분 분석"
+    )
