@@ -53,22 +53,24 @@ async def analysis(request: AnalyzeRequest):
 async def funding_preorder_project_analysis(request: ProjectAnalysisRequest):
     """
     프로젝트 기반 콘텐츠 분석 API
-    
+
     - Elasticsearch에서 프로젝트 콘텐츠 조회
     - AI 분석 수행
-    - force_refresh 옵션: 향후 캐시 기능을 위한 placeholder
+    - refresh: True=전체 재분석, False=baseline 이후 증분 분석
     """
     try:
         logger.info(
             f"Project analysis requested - Project: {request.project_id}, "
-            f"Type: FUNDING_AND_PREORDER, Content Type: {request.content_type}"
+            f"Type: FUNDING_AND_PREORDER, Content Type: {request.content_type}, "
+            f"Refresh: {request.refresh}"
         )
-        
+
         # 오케스트레이터를 통한 분석 수행
         analysis_result = await orchestrator.funding_preorder_project_analysis(
             project_id=request.project_id,
             content_type=request.content_type,
-            analysis_mode=request.analysis_mode
+            analysis_mode=request.analysis_mode,
+            refresh=request.refresh
         )
         
         logger.info(f"Project analysis completed successfully for project {request.project_id}")

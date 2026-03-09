@@ -210,56 +210,89 @@ class AgentOrchestrator:
         self,
         project_id: int,
         content_type: ExternalContentType,
-        analysis_mode: AnalysisMode
+        analysis_mode: AnalysisMode,
+        refresh: bool = False
     ) -> StructuredAnalysisRefineResult:
-        return await self.project_analysis(project_id, ProjectType.FUNDING_AND_PREORDER, content_type, analysis_mode)
+        return await self.project_analysis(
+            project_id, ProjectType.FUNDING_AND_PREORDER, content_type, analysis_mode, refresh
+        )
 
     async def project_analysis(
         self,
         project_id: int,
         project_type: ProjectType,
         content_type: ExternalContentType,
-        analysis_mode: AnalysisMode
+        analysis_mode: AnalysisMode,
+        refresh: bool = False
     ) -> StructuredAnalysisRefineResult:
         """
         Performs project-based analysis and saves the result to Elasticsearch.
         Supports sequential chunking by using previous analysis result as context.
+
+        Args:
+            refresh: True = 전체 콘텐츠 재분석, False = baseline 이후만 증분 분석
         """
-        logger.info(f"Starting project analysis for Project: {project_id}, Content Type: {content_type}, Mode: {analysis_mode}")
+        logger.info(f"Starting project analysis for Project: {project_id}, Content Type: {content_type}, Mode: {analysis_mode}, Refresh: {refresh}")
 
         # 0. Provider 타입 결정 (조회 및 저장 모두에 사용)
         provider_type = self._get_current_provider_type()
 
-        # 1. ES에서 콘텐츠 조회
-        logger.info(f"Retrieving content from ES for project {project_id}")
-        content_items = await self.es_content_service.get_funding_preorder_project_contents(
-            project_id=project_id,
-            content_type=content_type
-        )
-
-        if not content_items:
-            logger.warning(f"No content found for project {project_id} with content type {content_type}")
-            raise ValueError(f"프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
-
-        logger.info(f"Retrieved {len(content_items)} content items from ES")
-
-        # 2. baseline_content_id 선정
-        baseline_content_id = self.select_baseline_content_id(content_items)
-        logger.info(f"Selected baseline_content_id: {baseline_content_id}")
-
-        # 3. 기존 분석 결과 조회 (순차 청킹용 - 청크0)
+        # 1. 기존 분석 결과 조회 (증분 분석 여부 판단 및 순차 청킹용)
         existing_doc = await self.es_result_service.get_result_by_provider(
             str(project_id), content_type, provider_type
         )
         previous_result: Optional[StructuredAnalysisResult] = None
         existing_llm_usages: List[LLMUsageInfo] = []
+        existing_baseline_content_id: Optional[int] = None
 
         if existing_doc and existing_doc.result:
             previous_result = existing_doc.result.meta_data
             existing_llm_usages = existing_doc.llm_usages or []
-            logger.info(f"Found existing analysis result (version: {existing_doc.version}, categories: {len(previous_result.categories) if previous_result else 0})")
+            existing_baseline_content_id = existing_doc.baseline_content_id
+            logger.info(
+                f"Found existing analysis result (version: {existing_doc.version}, "
+                f"categories: {len(previous_result.categories) if previous_result else 0}, "
+                f"baseline_content_id: {existing_baseline_content_id})"
+            )
         else:
-            logger.info("No existing analysis result found, starting fresh analysis")
+            logger.info("No existing analysis result found, will perform full analysis")
+
+        # 2. ES에서 콘텐츠 조회 (refresh 여부에 따라 전체/증분 분기)
+        if refresh or existing_baseline_content_id is None:
+            # 전체 조회: refresh=True 이거나 기존 분석 결과가 없는 경우
+            logger.info(f"Retrieving ALL content from ES for project {project_id} (refresh={refresh})")
+            content_items = await self.es_content_service.get_funding_preorder_project_contents(
+                project_id=project_id,
+                content_type=content_type
+            )
+            # 전체 조회 시 previous_result 초기화 (재분석이므로)
+            if refresh:
+                previous_result = None
+                existing_llm_usages = []
+        else:
+            # 증분 조회: baseline_content_id 이후만 조회
+            logger.info(f"Retrieving INCREMENTAL content from ES for project {project_id} (after_content_id={existing_baseline_content_id})")
+            content_items = await self.es_content_service.get_funding_preorder_project_contents_after(
+                project_id=project_id,
+                content_type=content_type,
+                after_content_id=existing_baseline_content_id
+            )
+
+        if not content_items:
+            if refresh or existing_baseline_content_id is None:
+                # 전체 조회인데 콘텐츠가 없으면 에러
+                logger.warning(f"No content found for project {project_id} with content type {content_type}")
+                raise ValueError(f"프로젝트 {project_id}의 {content_type} 콘텐츠를 찾을 수 없습니다.")
+            else:
+                # 증분 조회인데 새 콘텐츠가 없으면 기존 결과 반환
+                logger.info(f"No new content found after baseline_content_id={existing_baseline_content_id}, returning existing result")
+                return existing_doc.result.data
+
+        logger.info(f"Retrieved {len(content_items)} content items from ES")
+
+        # 3. baseline_content_id 선정 (현재 조회된 콘텐츠 기준)
+        baseline_content_id = self.select_baseline_content_id(content_items)
+        logger.info(f"Selected baseline_content_id: {baseline_content_id}")
 
         # 4. 분석 수행 (with previous_result for sequential chunking)
         result_v1, new_llm_usages = await self.analysis(
@@ -324,26 +357,9 @@ class AgentOrchestrator:
         """
         분석 콘텐츠 목록에서 baseline_content_id 선정
 
-        선정 기준:
-        1. updated_at 또는 created_at 중 가장 최신 날짜의 content_id
-        2. 시간 정보가 없으면 가장 큰 content_id
+        선정 기준: 가장 큰 content_id (증분 분석 시 이 ID 이후부터 조회)
         """
         if not contents:
             return None
 
-        # 시간 정보가 있는 콘텐츠 필터링
-        contents_with_time = [
-            c for c in contents
-            if c.updated_at is not None or c.created_at is not None
-        ]
-
-        if contents_with_time:
-            # 시간 기준 정렬 (updated_at 우선, 없으면 created_at)
-            def get_latest_time(c: ContentItem) -> datetime:
-                return c.updated_at or c.created_at
-
-            latest = max(contents_with_time, key=get_latest_time)
-            return latest.content_id
-        else:
-            # 시간 정보 없으면 가장 큰 content_id
-            return max(c.content_id for c in contents)
+        return max(c.content_id for c in contents)
